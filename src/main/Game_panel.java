@@ -17,6 +17,9 @@ public class Game_panel extends JPanel implements Runnable{  //has all the funct
 	final int screenWidth = tileSize*maxScreenCol; //760 pixels
 	final int screenHeight = tileSize*maxScreenRow; // 576 pixels
 	
+	int hopCounter = 0;  
+	int hopInterval = 15;   // The "pause" duration (approx 1/4 second at 60fps)
+	int hopDistance = 40;   // How far the bird jumps in one go
 	//FPS
 	int fps = 60;
 	
@@ -45,37 +48,7 @@ public class Game_panel extends JPanel implements Runnable{  //has all the funct
 	}
 	
 	@Override
-	
-	//SLEEP
-	/*public void run() {
 		
-		double drawInterval = 1000000000 / fps; // 0.01666 seconds
-		double nextDrawTime =  System.nanoTime() + drawInterval;
-		
-		while(game_thread != null) {
-			
-			update();
-			repaint();
-			
-			try {
-				double remainigTime = nextDrawTime - System.nanoTime();
-				remainigTime = remainigTime/1000000;
-				
-				if(remainigTime < 0) {
-					remainigTime = 0;
-				}
-				
-				Thread.sleep((long) remainigTime);
-				nextDrawTime += drawInterval;
-			}
-			catch(InterruptedException e) {
-				e.printStackTrace();
-			}
-		}
-	}
-	*/
-	
-	
 	//DELTA
 	public void run() {
 		double drawInterval = 1000000000 / fps; 
@@ -96,27 +69,57 @@ public class Game_panel extends JPanel implements Runnable{  //has all the funct
 	}
 	
 	public void update() {
-		if(KeyH.upPressed == true) {
-			playerY -=playerSpeed;
-		}
-		else if(KeyH.downPressed == true) {
-			playerY +=playerSpeed;			
-		}
-		else if(KeyH.leftPressed == true) {
-			playerX -=playerSpeed;			
-		}
-		else if(KeyH.rightPressed == true) {
-			playerX +=playerSpeed;			
-		}
+    // Only bounce if the timer has cooled down
+    	if (hopCounter <= 0) {
+        	boolean moved = false;
+
+        // Using separate 'if' statements for diagonal or independent movement
+        	if (KeyH.upPressed) {
+            	playerY -= hopDistance; // Use hopDistance for bigger jumps
+            	moved = true;
+        	} 
+        	if (KeyH.downPressed) {
+            	playerY += hopDistance;
+            	moved = true;
+        	} 
+        	if (KeyH.leftPressed) {
+            	playerX -= hopDistance;
+            	moved = true;
+        	} 
+        	if (KeyH.rightPressed) {
+            	playerX += hopDistance;
+            	moved = true;
+        	}
+
+    	    // Reset the rhythmic timer if we moved
+    	    if (moved) {
+    	        hopCounter = hopInterval; 
+    	    }
+    	} else {
+    	    // Count down every frame (60 times per second)
+    	    hopCounter--;
+    	}
 	}
 	
 	public void paintComponent(Graphics g) {
-		super.paintComponent(g);
-		Graphics2D q2 = (Graphics2D)g;
-		
-		q2.setColor(Color.white);
-		q2.fillRect(playerX, playerY, tileSize, tileSize);
-		q2.dispose();
+    	super.paintComponent(g);
+    	Graphics2D g2 = (Graphics2D) g;
+
+    	int w = 48;
+    	int h = 48;
+
+    // Visual trick: Squash when landing/waiting, stretch when jumping
+    	if (hopCounter > 0) {
+    	    h = 35; // Squashed (on the ground waiting)
+    	    w = 55;
+    	} else {
+    	    h = 55; // Stretched (ready to jump)
+    	    w = 40;
+    	}
+
+    	g2.setColor(Color.WHITE);
+    	// Adjust Y so it looks like it's standing on the same "floor"
+    	g2.fillRect(playerX, playerY + (48 - h), w, h); 
+    	g2.dispose(); // Good practice for Graphics2D
 	}
-	
 }
