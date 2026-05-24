@@ -1,60 +1,75 @@
-import './style.css'
-import javascriptLogo from './assets/javascript.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import { setupCounter } from './counter.js'
+import Phaser from 'phaser';
+import './style.css';
 
-document.querySelector('#app').innerHTML = `
-<section id="center">
-  <div class="hero">
-    <img src="${heroImg}" class="base" width="170" height="179">
-    <img src="${javascriptLogo}" class="framework" alt="JavaScript logo"/>
-    <img src="${viteLogo}" class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/main.js</code> and save to test <code>HMR</code></p>
-  </div>
-  <button id="counter" type="button" class="counter"></button>
-</section>
+const config = {
+    type: Phaser.AUTO,
+    width: 800,
+    height: 600,
+    parent: 'app',
+    backgroundColor: '#121212',
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 300 }, // Pulls the bird down
+            debug: false
+        }
+    },
+    scene: {
+        preload: preload,
+        create: create,
+        update: update
+    }
+};
 
-<div class="ticks"></div>
+const game = new Phaser.Game(config);
+let player;
+let keys; // Changed from 'cursors' to 'keys'
 
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#documentation-icon"></use></svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank">
-          <img class="logo" src="${viteLogo}" alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript" target="_blank">
-          <img class="button-icon" src="${javascriptLogo}" alt="">
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#social-icon"></use></svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li><a href="https://github.com/vitejs/vite" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg>GitHub</a></li>
-      <li><a href="https://chat.vite.dev/" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#discord-icon"></use></svg>Discord</a></li>
-      <li><a href="https://x.com/vite_js" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#x-icon"></use></svg>X.com</a></li>
-      <li><a href="https://bsky.app/profile/vite.dev" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#bluesky-icon"></use></svg>Bluesky</a></li>
-    </ul>
-  </div>
-</section>
+function preload() {
+    this.load.image('bird_right', 'resource/player/Angry_bird_right.png'); 
+    this.load.image('bird_left', 'resource/player/Angry_bird_left.png'); 
+    this.load.image('bird_back', 'resource/player/Angry_bird_back.png'); 
+}
 
-<div class="ticks"></div>
-<section id="spacer"></section>
-`
+function create() {
+    player = this.physics.add.sprite(400, 100, 'bird_right');
 
-setupCounter(document.querySelector('#counter'))
+    player.setBounce(0.8);
+    player.setCollideWorldBounds(true);
+    
+    // 1. Wire up the WASD keys!
+    keys = this.input.keyboard.addKeys('W,A,S,D');
+}
+
+function update() {
+    // --- WASD MOVEMENT ---
+    
+    // A = Left, D = Right
+    if (keys.A.isDown) {
+        player.setVelocityX(-200);
+        player.setTexture('bird_left'); 
+    } 
+    else if (keys.D.isDown) {
+        player.setVelocityX(200);
+        player.setTexture('bird_right'); 
+    } 
+    else {
+        player.setVelocityX(0); 
+    }
+
+    // W = Up / Jump
+    if (keys.W.isDown && player.body.blocked.down) {
+        player.setVelocityY(-350);
+        player.setTexture('bird_back'); 
+    }
+    
+    // S = Down / Fast Fall (Smash down if in the air)
+    if (keys.S.isDown && !player.body.blocked.down) {
+        player.setVelocityY(400); 
+    }
+    
+    // Reset to facing right/left when landing
+    if (player.body.blocked.down && player.texture.key === 'bird_back') {
+        player.setTexture('bird_right');
+    }
+}
