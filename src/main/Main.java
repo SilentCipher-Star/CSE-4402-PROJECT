@@ -15,7 +15,7 @@ public class Main {
 		Game_panel game_panel = new Game_panel();
 		window.add(game_panel);
 		window.pack(); //causes the window to fit the preferred size
-		//not specifying the location of the window,
+		//not specifying the location of the window,git remote -v
 		//it will be at the center of the screen
 		window.setLocationRelativeTo(null);
 		window.setVisible(true);
