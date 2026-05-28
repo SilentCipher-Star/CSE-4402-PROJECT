@@ -123,13 +123,6 @@ Game runs on `http://localhost:5173`
 
 ---
 
-## 👥 Team
-
-- **Person 1** — Game logic, backend, Spring Boot API
-- **Person 2** — Visuals, UI, animations, map design
-
----
-
 ## 📸 Screenshots
 
 *Coming soon*
