@@ -1,90 +1,137 @@
 # 🐦 Bird Adventure
 
-A top-down 2D adventure game built with **Phaser.js** (frontend) and **Spring Boot** (backend). Choose your bird, explore a dense forest world, collect eggs, evolve into an overpowered bird, defeat monsters, and escape through the portal!
+A top-down 2D adventure game built with **Phaser.js** (frontend) and **Spring Boot** (backend).
+Choose your bird, explore a dense forest world, collect eggs, evolve into an overpowered bird,
+defeat monsters with unique weapons, and escape through the portal!
 
 ---
 
-## 🎮 Gameplay
+## 🎮 Story
 
-- Navigate through a dense forest map using **WASD** keys
-- **Collect eggs** scattered across the world to earn points and evolve
-- **Fight monsters** using SPACE — they patrol the map and chase you when nearby
-- **Pick up weapons** on the map to upgrade your attack
-- **Evolve your bird** by collecting Golden Eggs — unlock new abilities and bonus hearts
-- **Reach the glowing portal** to escape and complete the level
-- Your score is saved to a live backend database
+Deep in the forest, the birds lived peacefully — their eggs were their most precious treasure.
+One stormy night, shadowy monsters crept through the forest and stole every last egg.
+But the monsters were careless. They left behind broken shells, footprints, and glowing feathers.
+And so the brave bird set out alone into the deep dark forest.
+**Find the eggs. Defeat the monsters. Bring them home.**
+
+---
+
+## 🕹️ How to Play
+
+- **WASD** — Move your bird through the forest
+- **SPACE** — Attack with your current weapon
+- **Walk over weapons** — Pick them up automatically
+- **Collect eggs** — Earn points and evolve your bird
+- **Reach the glowing portal** — Escape to complete the level
+- **Avoid monsters** — They patrol and chase you on sight
 
 ---
 
 ## ✅ Features Implemented
 
 ### 🎨 Frontend — Phaser.js + Vite
-- Top-down tile-based world with real pixel art sprites (grass, trees, sand paths, water)
-- Dense forest map — only sand paths are walkable, trees block movement
-- Camera that follows the player smoothly across the world
-- **5 playable birds** to choose from on the menu screen:
-  - 🔥 Ember — Fire burst
-  - ❄️ Frost — Freeze enemies
-  - ⚡ Volt — Chain lightning
-  - 🌑 Shade — Shadow dash
-  - 🌿 Gale — Wind force
-- **Bird animations** — squash and stretch while moving, idle bob when standing still
-- **Egg system** — 4 egg types with unique effects:
-  - 🥚 Normal Egg — +100 points
-  - 🔥 Fire Egg — +200 points
-  - ⚡ Thunder Egg — +300 points
-  - 🌟 Golden Egg — +500 points + triggers evolution
-- **Evolution system** — 3 stages unlocked by Golden Eggs:
-  - Stage 1 — Normal bird
-  - Stage 2 — Faster movement + double attack range
-  - Stage 3 — Overpowered + bonus heart + golden aura
-- **5 weapons** picked up on the map, all triggered with SPACE:
-  - 🔫 Normal — Shockwave hits all enemies in range
-  - 💣 Bomb — Huge explosion, area damage, screen shake
-  - ❄️ Ice — Freezes all enemies in range for 3 seconds
-  - ⚡ Lightning — Chains between 3 closest enemies
-  - 🪃 Boomerang — Hits twice, out and back
-- **Monster AI** — patrol mode + chase mode when player is nearby
-  - ❗ alert indicator when chasing
-  - Wall-aware pathfinding
-  - HP bars above each monster
-  - Death particle burst on kill
-- **HP hearts system** — bird has 3 hearts (4 at stage 3)
-  - Screen shake on damage
-  - Hearts flash when at 1 HP
-  - Game over when hearts reach 0
-- **Live minimap** in bottom left corner showing:
-  - Full world layout
-  - Player position with direction indicator
-  - Monster positions (red = chasing, dark = patrolling)
-  - Egg and weapon locations
-  - Portal location
-  - Camera viewport indicator
-- **HUD** — score, eggs, evolution stage, timer, current weapon, hearts, golden egg progress bar
-- Exit portal with rotating animation — complete the level by reaching it
+
+- **Story cutscene** — 4-panel comic intro with typewriter effect, skip button, and fade transitions
+- **Character select menu** — 5 playable birds with wooden plank UI, sky background and pixel trees
+- **Top-down tile world** — Dense forest map with real pixel art sprites (grass, trees, sand paths)
+- **Camera system** — Smooth follow camera with world bounds
+- **Massive explorable map** — 50×80 tile world, only sand paths are walkable
+- **Bird animations** — Squash and stretch while moving, idle bob when standing still
+- **Directional sprites** — Bird changes sprite based on movement direction
+
+#### 🐦 5 Playable Birds
+| Bird | Ability |
+|---|---|
+| 🔥 Ember | Fire burst |
+| ❄️ Frost | Freeze enemies |
+| ⚡ Volt | Chain lightning |
+| 🌑 Shade | Shadow dash |
+| 🌿 Gale | Wind force |
+
+#### 🥚 Egg System — 4 Types
+| Egg | Points |
+|---|---|
+| 🥚 Normal | +100 |
+| 🔥 Fire Egg | +200 |
+| ⚡ Thunder Egg | +300 |
+| 🌟 Golden Egg | +500 + triggers evolution |
+
+#### 📈 Evolution System — 3 Stages
+- **Stage 1** — Normal bird, standard speed and range
+- **Stage 2** — Faster movement, bigger attack range (unlocked with 1 Golden Egg)
+- **Stage 3** — Overpowered, bonus heart, golden aura (unlocked with 3 Golden Eggs)
+
+#### ⚔️ 5 Weapons — All triggered with SPACE
+| Weapon | Effect |
+|---|---|
+| 🔫 Normal | Shockwave hits all enemies in range |
+| 💣 Bomb | Huge area explosion + screen shake + 2 damage |
+| ❄️ Ice | Freezes all enemies in range for 3 seconds |
+| ⚡ Lightning | Chains between 3 closest enemies |
+| 🪃 Boomerang | Hits twice — out and back |
+
+#### 👹 Monster AI
+- Patrol mode when player is out of range
+- Chase mode with ❗ alert when player is detected
+- Wall-aware movement
+- HP bars above each monster
+- Hit flash on damage
+- Death particle burst on kill
+- Damage player on contact — triggers screen shake and HP loss
+
+#### ❤️ HP Hearts System
+- Bird starts with 3 hearts (4 hearts at Stage 3)
+- Lose 1 heart per monster contact
+- Hearts flash rapidly when at 1 HP
+- Screen shake on every hit
+- Game over when hearts reach 0
+
+#### 🗺️ Live Minimap
+- Bottom left corner — always visible
+- Shows full world layout with tile colours
+- White dot = player position with direction indicator
+- Red dots = monsters (bright red when chasing)
+- Coloured dots = eggs and weapon pickups
+- Purple dot = exit portal
+- White rectangle = current camera viewport
+
+#### 🖥️ HUD
+- Score, egg count, evolution stage
+- Countdown timer (turns red at 30s)
+- Current weapon display
+- Hearts display
+- Golden egg progress bar
 
 ### ☕ Backend — Spring Boot + H2 Database
-- REST API with full CRUD for players and scores
+
+- REST API for player and score management
 - Player profile saved on game start (name + chosen bird)
 - Score saved after every level (score, eggs saved, time taken)
 - Top 10 leaderboard endpoint
 - Evolution stage tracking per player
-- H2 in-memory database (no setup required)
+- H2 in-memory database — no setup required
 - CORS enabled for frontend communication
+
+#### API Endpoints
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/player/create` | Register player |
+| GET | `/api/player/{id}` | Get player data |
+| PUT | `/api/player/{id}/evolve` | Update evolution stage |
+| POST | `/api/score/save` | Save level score |
+| GET | `/api/leaderboard` | Top 10 scores |
 
 ---
 
-## 🚧 Features Coming Soon
+## 🚧 Coming Soon
 
-- 🏆 **Win / Lose screen** — proper end game screen with score breakdown and play again button
-- ❤️ **Sound effects** — egg collect, attack, monster death, portal hum, background music
-- 🗺️ **Level 2** — new map with different theme (Volcano / Cave), faster and stronger monsters
-- 👹 **Boss monster** — unique enemy at end of each level with special attack pattern
-- 🌍 **Multiple worlds** — Forest → Volcano → Storm Sky
-- 💾 **Persistent leaderboard screen** — view top scores in game
-- 🎯 **More egg types** — cursed egg (risk/reward), mystery egg
-- 🔊 **Music** — ambient forest soundtrack per world
-- 📱 **Mobile support** — touch controls for mobile browsers
+- 🏆 Win / Lose screen with score breakdown and play again
+- 🔊 Sound effects — egg collect, attack, monster death, portal hum, music
+- 🗺️ Level 2 — new map (Volcano / Cave theme), faster monsters
+- 👹 Boss monster — unique enemy with special attack pattern
+- 🌍 Multiple worlds — Forest → Volcano → Storm Sky
+- 📊 In-game leaderboard screen
+- 💾 Persistent scores with MySQL
 
 ---
 
@@ -96,7 +143,8 @@ A top-down 2D adventure game built with **Phaser.js** (frontend) and **Spring Bo
 | Build Tool | Vite |
 | Backend | Spring Boot 4 |
 | Database | H2 (in-memory) |
-| Language | JavaScript (frontend) + Java (backend) |
+| Frontend Language | JavaScript |
+| Backend Language | Java 21 |
 
 ---
 
@@ -111,7 +159,7 @@ A top-down 2D adventure game built with **Phaser.js** (frontend) and **Spring Bo
 cd backend
 ./mvnw spring-boot:run
 ```
-Backend runs on `http://localhost:8080`
+Runs on `http://localhost:8080`
 
 ### Frontend
 ```bash
@@ -119,12 +167,11 @@ cd frontend
 npm install
 npm run dev
 ```
-Game runs on `http://localhost:5173`
+Runs on `http://localhost:5173`
 
 ---
 
 ## 📸 Screenshots
-
 *Coming soon*
 
 ---
