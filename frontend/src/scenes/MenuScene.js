@@ -165,10 +165,10 @@ export class MenuScene extends Phaser.Scene {
     playBtn.on('pointerdown', () => {
       const name = this.nameInput.value.trim() || 'Adventurer'
       document.body.removeChild(this.nameInput)
-      this.scene.start('GameScene', {
-        playerName: name,
-        chosenBird: this.selectedBird
-      })
+      this.scene.start('StoryScene', {
+  playerName: name,
+  chosenBird: this.selectedBird
+})
     })
 
     // Pulse play button
