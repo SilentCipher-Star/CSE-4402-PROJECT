@@ -1,12 +1,13 @@
 import Phaser from 'phaser'
-import { MenuScene } from './scenes/MenuScene.js'
-import { GameScene } from './scenes/GameScene.js'
-import { UIScene } from './scenes/UIScene.js'
+import { MenuScene }  from './scenes/MenuScene.js'
+import { StoryScene } from './scenes/StoryScene.js'
+import { GameScene }  from './scenes/GameScene.js'
+import { UIScene }    from './scenes/UIScene.js'
 
 const config = {
   type: Phaser.AUTO,
   parent: 'app',
-  backgroundColor: '#1a1a2e',
+  backgroundColor: '#000000',
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -15,12 +16,9 @@ const config = {
   },
   physics: {
     default: 'arcade',
-    arcade: {
-      gravity: { y: 0 },
-      debug: false
-    }
+    arcade: { gravity: { y: 0 }, debug: false }
   },
-  scene: [MenuScene, GameScene, UIScene]
+  scene: [MenuScene, StoryScene, GameScene, UIScene]
 }
 
 new Phaser.Game(config)
