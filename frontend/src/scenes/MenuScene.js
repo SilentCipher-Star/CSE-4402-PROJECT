@@ -37,9 +37,8 @@ export class MenuScene extends Phaser.Scene {
     this.add.rectangle(0, height - 75,  width, 25,  0x4a7a1a).setOrigin(0)
     this.add.rectangle(0, height - 50,  width, 50,  0x8B5E3C).setOrigin(0)
 
-    // Trees on ground
-    const treeX = [60, 120, 180, 400, 460,
-                   820, 880, 940, 1100, 1160, 1220]
+    // Trees
+    const treeX = [60, 120, 180, 400, 460, 820, 880, 940, 1100, 1160, 1220]
     treeX.forEach(x => {
       this.add.rectangle(x, height - 75, 12, 35, 0x5C3A1E).setOrigin(0.5, 1)
       this.add.triangle(x, height - 108, -28,0, 28,0, 0,-36, 0x2d8a2d)
@@ -51,34 +50,28 @@ export class MenuScene extends Phaser.Scene {
     this.add.rectangle(width/2, 100, 500, 80, 0xC8A25A)
       .setStrokeStyle(5, 0x8B6914)
     this.add.text(width/2, 100, 'BIRD ADVENTURE', {
-      fontSize: '42px',
-      fontFamily: 'Arial Black',
-      color: '#3B1F00',
-      stroke: '#8B6914',
-      strokeThickness: 3
+      fontSize: '42px', fontFamily: 'Arial Black',
+      color: '#3B1F00', stroke: '#8B6914', strokeThickness: 3
     }).setOrigin(0.5)
 
-    // Choose bird label
     this.add.text(width/2, 175, 'Choose your bird', {
-      fontSize: '16px',
-      fontFamily: 'Arial',
-      color: '#1a3a00'
+      fontSize: '16px', fontFamily: 'Arial', color: '#1a3a00'
     }).setOrigin(0.5)
 
     // Bird cards
     const birds = [
-      { name:'Ember', desc:'Fire burst'     },
-      { name:'Frost', desc:'Freeze enemies' },
-      { name:'Volt',  desc:'Lightning'      },
-      { name:'Shade', desc:'Shadow dash'    },
-      { name:'Gale',  desc:'Wind force'     },
-    ]
+  { name:'Scarlet Macaw',    desc:'Vulnerable — Fire burst'              },
+  { name:'Snowy Owl',        desc:'Vulnerable — Freeze enemies'          },
+  { name:'Philippine Eagle', desc:'Critical — Lightning strike'          },
+  { name:'Forest Owlet',     desc:'Endangered — Shadow dash'             },
+  { name:'Bristlefront',     desc:'Critical — Wind force'                },
+]
 
     this.selectedBird = 'Ember'
     this.birdBoxes = []
 
-    const totalW   = birds.length * 170
-    const startX   = width/2 - totalW/2 + 85
+    const totalW = birds.length * 170
+    const startX = width/2 - totalW/2 + 85
 
     birds.forEach((bird, i) => {
       const x = startX + i * 170
@@ -142,6 +135,14 @@ export class MenuScene extends Phaser.Scene {
     `
     document.body.appendChild(this.nameInput)
 
+    // Fix keyboard conflict — disable Phaser key capture when input is focused
+    this.nameInput.addEventListener('focus', () => {
+      this.input.keyboard.disableGlobalCapture()
+    })
+    this.nameInput.addEventListener('blur', () => {
+      this.input.keyboard.enableGlobalCapture()
+    })
+
     // PLAY button
     const playBtn = this.add.rectangle(width/2, 500, 260, 70, 0xC8A25A)
       .setStrokeStyle(4, 0x8B6914)
@@ -166,12 +167,12 @@ export class MenuScene extends Phaser.Scene {
       const name = this.nameInput.value.trim() || 'Adventurer'
       document.body.removeChild(this.nameInput)
       this.scene.start('StoryScene', {
-  playerName: name,
-  chosenBird: this.selectedBird
-})
+        playerName: name,
+        chosenBird: this.selectedBird
+      })
     })
 
-    // Pulse play button
+    // Pulse
     this.tweens.add({
       targets: [playBtn, playText],
       scaleX: 1.03, scaleY: 1.03,
@@ -180,7 +181,7 @@ export class MenuScene extends Phaser.Scene {
 
     // Controls hint
     this.add.text(width/2, 570,
-      'WASD = Move   SPACE = Attack   Reach the portal to escape!', {
+      'WASD = Move   SPACE = Attack   ~ = Terminal   Rescue saplings   Reach the replanting zone!', {
       fontSize: '12px', fontFamily: 'Arial', color: '#2a5a0a'
     }).setOrigin(0.5)
   }
