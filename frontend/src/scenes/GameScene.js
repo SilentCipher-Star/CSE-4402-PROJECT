@@ -176,15 +176,26 @@ export class GameScene extends Phaser.Scene {
         const t = this.mapData[row][col]
         const x = col * this.TILE
         const y = row * this.TILE
-        let key = 'grass'
-        if (t === 1) key = 'tree'
-        if (t === 2) key = 'water'
-        if (t === 3) key = 'wall'
-        if (t === 4) key = 'earth'
-        if (t === 5) key = 'sand'
-        this.add.image(x, y, key)
+
+        // 1. Base layer: Using 'grass01' to match your actual filename!
+        this.add.image(x, y, 'grass01')
           .setOrigin(0)
           .setDisplaySize(this.TILE, this.TILE)
+
+        // 2. Figure out what goes on top
+        let topKey = null
+        if (t === 1) topKey = 'tree'
+        if (t === 2) topKey = 'water'
+        if (t === 3) topKey = 'wall'
+        if (t === 4) topKey = 'earth'
+        if (t === 5) topKey = 'sand'
+
+        // 3. Draw the tree, sand, etc. right over the grass
+        if (topKey) {
+          this.add.image(x, y, topKey)
+            .setOrigin(0)
+            .setDisplaySize(this.TILE, this.TILE)
+        }
       }
     }
   }

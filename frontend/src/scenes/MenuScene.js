@@ -10,7 +10,13 @@ export class MenuScene extends Phaser.Scene {
     this.load.image('bird_back',  'resource/player/Angry_bird_back.png')
     this.load.image('menu_bg',    'resource/tiles/menu_bg.png')
     
-    // (You can still load your other tile PNGs here if needed later)
+    // --- Map Tiles ---
+    this.load.image('grass01', 'resource/tiles/grass01.png')
+    this.load.image('tree',    'resource/tiles/tree.png')
+    this.load.image('wall',    'resource/tiles/wall.png')
+    this.load.image('water',   'resource/tiles/water00.png')
+    this.load.image('sand',    'resource/tiles/sand.png')
+    this.load.image('earth',   'resource/tiles/earth.png')
 
     // --- Custom UI Elements ---
     this.load.image('title_board',  'resource/ui/title_board.png')
@@ -171,8 +177,9 @@ export class MenuScene extends Phaser.Scene {
     })
 
     // 7. Visual Controls Hints
-    this.add.image(width * 0.3, height * 0.94, 'wasd_hint').setScale(0.25)
-    this.add.image(width * 0.5, height * 0.94, 'space_hint').setScale(0.25)
-    this.add.image(width * 0.7, height * 0.94, 'portal_hint').setScale(0.25)
+// 7. Visual Controls Hints (Properly scaled to 0.25!)
+    this.add.image(width * 0.25, height * 0.94, 'wasd_hint').setScale(0.25)
+    this.add.image(width * 0.50, height * 0.94, 'space_hint').setScale(0.25)
+    this.add.image(width * 0.75, height * 0.94, 'portal_hint').setScale(0.25)
   }
 }
