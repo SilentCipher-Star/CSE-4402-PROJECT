@@ -13,30 +13,39 @@ export class MenuScene extends Phaser.Scene {
     this.load.image('water',  'resource/tiles/water00.png')
     this.load.image('sand',   'resource/tiles/sand.png')
     this.load.image('earth',  'resource/tiles/earth.png')
+    //background
+    this.load.image('menu_bg', 'resource/tiles/menu_bg.png')
+
+    // UI Cards
+    this.load.image('card_ember', '/resource/ui/card_ember.png')
+    this.load.image('card_frost', '/resource/ui/card_frost.png')
+    this.load.image('card_volt',  '/resource/ui/card_volt.png')
+    this.load.image('card_shade', '/resource/ui/card_shade.png')
+    this.load.image('card_gale',  '/resource/ui/card_gale.png')
+
+    //UI elements
+    this.load.image('title_board', '/resource/ui/title_board.png')
+    this.load.image('choose_bird_text', '/resource/ui/choose_bird.png')
+    this.load.image('play_button', '/resource/ui/play_button.png')
+    this.load.image('name_label', '/resource/ui/name_label.png')
+    this.load.image('wasd_controls', '/resource/ui/w_a_s_d_move_controls.png')
+    this.load.image('space_attack', '/resource/ui/space_attack.png')
+    this.load.image('reach_portal', '/resource/ui/reach_the_portal_to_escape.png')
   }
 
   create() {
     const { width, height } = this.scale
 
-    // Sky
-    this.add.rectangle(0, 0, width, height, 0x87CEEB).setOrigin(0)
+    // 1. Background Image
+    this.add.image(0, 0, 'menu_bg').setOrigin(0).setDisplaySize(width, height)
 
-    // Clouds
-    const cloudPositions = [
-      {x:100,y:60},{x:300,y:40},{x:550,y:70},
-      {x:800,y:45},{x:1050,y:65},{x:1200,y:50}
-    ]
-    cloudPositions.forEach(c => {
-      this.add.ellipse(c.x, c.y, 100, 35, 0xffffff, 0.9)
-      this.add.ellipse(c.x + 25, c.y - 12, 75, 32, 0xffffff, 0.9)
-      this.add.ellipse(c.x - 25, c.y - 6, 60, 26, 0xffffff, 0.9)
-    })
+    // 2. Title Plank
+   this.add.image(width/2, 90, 'title_board').setScale(0.45)
 
-    // Ground
-    this.add.rectangle(0, height - 100, width, 100, 0x5a8a2a).setOrigin(0)
-    this.add.rectangle(0, height - 75,  width, 25,  0x4a7a1a).setOrigin(0)
-    this.add.rectangle(0, height - 50,  width, 50,  0x8B5E3C).setOrigin(0)
+    // 3. Choose bird label
+    this.add.image(width/2, 180, 'choose_bird_text').setScale(0.25)
 
+<<<<<<< HEAD
     // Trees
     const treeX = [60, 120, 180, 400, 460, 820, 880, 940, 1100, 1160, 1220]
     treeX.forEach(x => {
@@ -66,104 +75,163 @@ export class MenuScene extends Phaser.Scene {
   { name:'Forest Owlet',     desc:'Endangered — Shadow dash'             },
   { name:'Bristlefront',     desc:'Critical — Wind force'                },
 ]
+=======
+    // 4. Bird Cards Setup
+    const birds = [
+      { name: 'Ember', key: 'card_ember' },
+      { name: 'Frost', key: 'card_frost' },
+      { name: 'Volt',  key: 'card_volt' },
+      { name: 'Shade', key: 'card_shade' },
+      { name: 'Gale',  key: 'card_gale' },
+    ]
+>>>>>>> 6fe7974 (Updated main menu UI, added custom play button and controls)
 
-    this.selectedBird = 'Ember'
-    this.birdBoxes = []
+    this.selectedBird = null;
+    this.birdCards = [] // Fixed array name
 
+<<<<<<< HEAD
     const totalW = birds.length * 170
     const startX = width/2 - totalW/2 + 85
+=======
+    // Layout Math
+    const baseScale = 0.14;       
+    const selectedScale = 0.17;   
+    const cardSpacing = 180;      
+    const totalW = (birds.length - 1) * cardSpacing
+    const startX = width / 2 - totalW / 2
+    
+    // Shifted down to 320 for breathing room
+    const yPos = 320;
+>>>>>>> 6fe7974 (Updated main menu UI, added custom play button and controls)
 
+    // 5. Draw the Cards
     birds.forEach((bird, i) => {
-      const x = startX + i * 170
-      const y = 270
+      const x = startX + i * cardSpacing
 
-      const box = this.add.rectangle(x, y, 150, 70, 0xC8A25A)
-        .setStrokeStyle(3, 0x8B6914)
+      const card = this.add.image(x, yPos, bird.key)
+        .setScale(baseScale)
         .setInteractive()
+      
+      // INITIAL SETUP: Every card starts fully bright and normal size!
+      card.setAlpha(1.0)
+      card.setTint(0xffffff)
+      card.birdName = bird.name
 
-      this.add.text(x, y - 10, bird.name, {
-        fontSize: '18px', fontFamily: 'Arial Black', color: '#3B1F00'
-      }).setOrigin(0.5)
-
-      this.add.text(x, y + 16, bird.desc, {
-        fontSize: '12px', fontFamily: 'Arial', color: '#5a3a10'
-      }).setOrigin(0.5)
-
-      box.on('pointerover', () => {
-        if (this.selectedBird !== bird.name) box.setFillStyle(0xB89040)
+      // --- HOVER EFFECTS ---
+      card.on('pointerover', () => {
         this.input.setDefaultCursor('pointer')
+        if (this.selectedBird !== bird.name) {
+            card.setScale(baseScale + 0.015)
+        }
       })
-      box.on('pointerout', () => {
-        if (this.selectedBird !== bird.name) box.setFillStyle(0xC8A25A)
+
+      card.on('pointerout', () => {
         this.input.setDefaultCursor('default')
+        if (this.selectedBird !== bird.name) {
+            card.setScale(baseScale)
+        }
       })
-      box.on('pointerdown', () => {
+
+      // --- CLICK EFFECTS ---
+      card.on('pointerdown', () => {
         this.selectedBird = bird.name
-        this.birdBoxes.forEach(b => b.setFillStyle(0xC8A25A))
-        box.setFillStyle(0x8B6014)
+        
+        // Update size AND brightness for every card based on what was clicked
+        this.birdCards.forEach(c => {
+            if (c.birdName === bird.name) {
+                // The chosen bird gets big and stays bright
+                c.setScale(selectedScale)
+                c.setAlpha(1.0)
+                c.setTint(0xffffff)
+            } else {
+                // The unchosen birds shrink to normal and get dimmed
+                c.setScale(baseScale)
+                c.setAlpha(0.6)
+                c.setTint(0x888888)
+            }
+        })
       })
 
-      this.birdBoxes.push(box)
-      if (i === 0) box.setFillStyle(0x8B6014)
-    })
+      // Push to array so we can update them all later
+      this.birdCards.push(card)
 
-    // Name label
-    this.add.text(width/2, 360, 'Your Name', {
-      fontSize: '14px', fontFamily: 'Arial', color: '#1a3a00'
-    }).setOrigin(0.5)
+      
+    }) // <-- PROPERLY CLOSED THE LOOP HERE!
 
-    // HTML name input
+    // 6. Name Label
+    this.add.image(width/2, 490, 'name_label').setScale(0.18)
+
+    // 7. Name Input Box (The Visual Background)
+    // 7. HTML Name Input (Pure CSS - Beautiful & Game-Ready!)
     this.nameInput = document.createElement('input')
     this.nameInput.type = 'text'
-    this.nameInput.placeholder = 'Enter name...'
+    this.nameInput.placeholder = 'Enter name...' 
     this.nameInput.maxLength = 12
+    
+    // Upgraded CSS for a chunky, stylized game UI look
     this.nameInput.style.cssText = `
       position: absolute;
-      left: 50%; top: 54%;
-      transform: translateX(-50%);
-      background: #fffbe6;
-      border: 2px solid #8B6914;
-      border-radius: 4px;
-      color: #3B1F00;
-      font-size: 16px;
-      padding: 8px 18px;
+      left: 50%; 
+      top: 76%; 
+      transform: translate(-50%, -50%); 
+      background: #FFF8E7; /* Soft cream/parchment color */
+      border: 4px solid #8B6914; /* Thick golden-brown border */
+      border-radius: 12px; /* Smooth rounded corners */
+      box-shadow: 0px 6px 0px rgba(0, 0, 0, 0.4); /* Chunky 3D drop shadow */
+      color: #3B1F00; /* Dark brown text */
+      font-size: 24px; /* Much bigger font! */
+      font-weight: 900;
       text-align: center;
       outline: none;
-      width: 200px;
-      font-family: Arial;
+      width: 260px; /* Wider box */
+      height: 50px; /* Taller box */
+      font-family: 'Arial Black', Impact, sans-serif;
       z-index: 10;
+      transition: all 0.1s ease-in-out; /* Smooth animation for clicking */
     `
+    
+    // Add interactive "Press Down" effects AND fix the keyboard conflict!
+    this.nameInput.addEventListener('focus', () => {
+        this.nameInput.style.borderColor = '#C8A25A'; 
+        this.nameInput.style.transform = 'translate(-50%, -46%)'; 
+        this.nameInput.style.boxShadow = '0px 2px 0px rgba(0, 0, 0, 0.4)'; 
+        this.input.keyboard.disableGlobalCapture(); // Teammate's fix
+    });
+    
+    this.nameInput.addEventListener('blur', () => {
+        this.nameInput.style.borderColor = '#8B6914'; 
+        this.nameInput.style.transform = 'translate(-50%, -50%)'; 
+        this.nameInput.style.boxShadow = '0px 6px 0px rgba(0, 0, 0, 0.4)';
+        this.input.keyboard.enableGlobalCapture(); // Teammate's fix
+    });
+
     document.body.appendChild(this.nameInput)
 
-    // Fix keyboard conflict — disable Phaser key capture when input is focused
-    this.nameInput.addEventListener('focus', () => {
-      this.input.keyboard.disableGlobalCapture()
-    })
-    this.nameInput.addEventListener('blur', () => {
-      this.input.keyboard.enableGlobalCapture()
-    })
-
-    // PLAY button
-    const playBtn = this.add.rectangle(width/2, 500, 260, 70, 0xC8A25A)
-      .setStrokeStyle(4, 0x8B6914)
+    // 8. PLAY Button (Your Custom UI)
+    const playBaseScale = 0.15; 
+    
+    const playBtn = this.add.image(width/2, 605, 'play_button')
+      .setScale(playBaseScale)
       .setInteractive()
 
-    const playText = this.add.text(width/2, 500, 'PLAY', {
-      fontSize: '30px', fontFamily: 'Arial Black',
-      color: '#3B1F00', stroke: '#8B6914', strokeThickness: 2
-    }).setOrigin(0.5)
-
+    // --- HOVER EFFECTS ---
     playBtn.on('pointerover', () => {
-      playBtn.setFillStyle(0x8B6014)
-      playText.setStyle({ color: '#fffbe6' })
       this.input.setDefaultCursor('pointer')
+      playBtn.setTint(0xdddddd) // Slightly darkens the button when hovered
     })
+    
     playBtn.on('pointerout', () => {
-      playBtn.setFillStyle(0xC8A25A)
-      playText.setStyle({ color: '#3B1F00' })
       this.input.setDefaultCursor('default')
+      playBtn.clearTint() // Removes the dark hover tint
     })
+    
+    // --- CLICK EFFECT ---
     playBtn.on('pointerdown', () => {
+      if (!this.selectedBird) {
+        alert("Please choose a bird first!");
+        return;
+      }
+
       const name = this.nameInput.value.trim() || 'Adventurer'
       document.body.removeChild(this.nameInput)
       this.scene.start('StoryScene', {
@@ -172,17 +240,39 @@ export class MenuScene extends Phaser.Scene {
       })
     })
 
+<<<<<<< HEAD
     // Pulse
+=======
+    // --- PULSE ANIMATION ---
+>>>>>>> 6fe7974 (Updated main menu UI, added custom play button and controls)
     this.tweens.add({
-      targets: [playBtn, playText],
-      scaleX: 1.03, scaleY: 1.03,
-      duration: 900, yoyo: true, repeat: -1
+      targets: playBtn,
+      scaleX: playBaseScale + 0.01, // Gently expands larger than its base scale
+      scaleY: playBaseScale + 0.01,
+      duration: 900, 
+      yoyo: true, 
+      repeat: -1
     })
 
+<<<<<<< HEAD
     // Controls hint
     this.add.text(width/2, 570,
       'WASD = Move   SPACE = Attack   ~ = Terminal   Rescue saplings   Reach the replanting zone!', {
       fontSize: '12px', fontFamily: 'Arial', color: '#2a5a0a'
     }).setOrigin(0.5)
+=======
+    // 9. Controls hint
+    const controlsScale = 0.13; // Applies the exact same size to all three images
+    const controlsY = 695;      // Keeps them all perfectly aligned on the same horizontal line
+    
+    // 1. WASD (Shifted to the left)
+    this.add.image(width/2 - 250, controlsY, 'wasd_controls').setScale(controlsScale)
+
+    // 2. SPACE = Attack (Perfectly centered under the Play button)
+    this.add.image(width/2, controlsY, 'space_attack').setScale(controlsScale)
+
+    // 3. Reach Portal (Shifted to the right)
+    this.add.image(width/2 + 250, controlsY, 'reach_portal').setScale(controlsScale)
+>>>>>>> 6fe7974 (Updated main menu UI, added custom play button and controls)
   }
 }
