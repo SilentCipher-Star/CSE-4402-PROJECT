@@ -17,7 +17,7 @@ export class UIScene extends Phaser.Scene {
       fontSize: '16px', fontFamily: 'Arial Black', color: '#ffffff'
     })
 
-    this.eggText = this.add.text(175, 12, '🥚 0', {
+    this.eggText = this.add.text(175, 12, '🌱 0', {
       fontSize: '15px', fontFamily: 'Arial Black', color: '#aaffaa'
     })
 
@@ -47,7 +47,7 @@ export class UIScene extends Phaser.Scene {
     bot.fillStyle(0x000000, 0.5)
     bot.fillRect(0, height - 14, width, 14)
     this.add.text(width / 2, height - 12,
-      'WASD = Move   SPACE = Attack   Walk over weapons to pick up   Reach the portal!', {
+      'spawnWalk over weapons to pick up   Reach the portal!', {
       fontSize: '9px', fontFamily: 'Arial', color: '#445544'
     }).setOrigin(0.5, 0)
 
@@ -55,11 +55,10 @@ export class UIScene extends Phaser.Scene {
     this.goldenBar = this.add.graphics()
 
     // Minimap
-    this.MM_X      = 10
-    this.MM_Y      = height - 14 - 10
-    this.MM_W      = 160
-    this.MM_H      = 120
-    this.MM_BORDER = 2
+   this.MM_X      = width - 170
+this.MM_Y      = height - 14 - 10
+this.MM_W      = 160
+this.MM_H      = 120
 
     const mmBg = this.add.graphics()
     mmBg.fillStyle(0x000000, 0.7)
@@ -215,7 +214,7 @@ export class UIScene extends Phaser.Scene {
     if (!this.gameScene) return
 
     this.scoreText.setText('Score: ' + this.gameScene.score)
-    this.eggText.setText('🥚 ' + this.gameScene.eggsCollected)
+    this.eggText.setText('🌱 ' + this.gameScene.eggsCollected)
 
     const stages = { 1:'⭐ Stage 1', 2:'✨ Stage 2', 3:'🔥 EVOLVED' }
     this.evoText.setText(stages[this.gameScene.evolutionStage] || '⭐ Stage 1')
