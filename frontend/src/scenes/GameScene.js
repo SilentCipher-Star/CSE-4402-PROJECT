@@ -28,15 +28,15 @@ export class GameScene extends Phaser.Scene {
     this.mapData = this.parseMap()
     this.mapRows = this.mapData.length
     this.mapCols = this.mapData[0].length
-    this.worldW = this.mapCols * this.TILE;
-    this.worldH = this.mapRows * this.TILE;
+    this.worldW = this.mapCols * this.TILE
+    this.worldH = this.mapRows * this.TILE
     const birdColors = {
       Ember: 0xFF4500, Frost: 0x00BFFF,
       Volt: 0xFFD700, Shade: 0xBF5FFF, Gale: 0x00FF88
     }
     this.birdColor = birdColors[this.chosenBird] || 0xffffff
-    this.physics.world.setBounds(0, 0, this.worldW, this.worldH);
-    this.cameras.main.setBounds(0, 0, this.worldW, this.worldH);
+    this.physics.world.setBounds(0, 0, this.worldW, this.worldH)
+    this.cameras.main.setBounds(0, 0, this.worldW, this.worldH)
     this.drawWorld()
     this.eggList = []
     this.spawnEggs()
@@ -74,7 +74,6 @@ export class GameScene extends Phaser.Scene {
       repeat: 180  // FIX 1: was 179, needs 180 repeats to count down from 180 to 0
     })
     this.scene.launch('UIScene', { gameScene: this })
-    
     // Terminal setup
     this.terminal = new Terminal(this)
     this.input.keyboard.on('keydown-TILDE', () => {
@@ -83,9 +82,6 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-BACKTICK', () => {
       this.terminal.toggle()
     })
-
-    // Force the camera to use the full screen width and height
-  this.cameras.main.setViewport(0, 0, this.scale.width, this.scale.height);
   }
   parseMap() {
     const raw = [
@@ -175,34 +171,20 @@ export class GameScene extends Phaser.Scene {
     return raw
   }
   drawWorld() {
-    // CHANGE THIS: Set the offset to 0 so it starts at the far left edge
-    const mapOffset = 0; 
-    
     for (let row = 0; row < this.mapRows; row++) {
       for (let col = 0; col < this.mapCols; col++) {
         const t = this.mapData[row][col]
-        const x = (col * this.TILE) + mapOffset
+        const x = col * this.TILE
         const y = row * this.TILE
-
-        // 1. Base layer: Using 'grass01'
-        this.add.image(x, y, 'grass01')
+        let key = 'grass'
+        if (t === 1) key = 'tree'
+        if (t === 2) key = 'water'
+        if (t === 3) key = 'wall'
+        if (t === 4) key = 'earth'
+        if (t === 5) key = 'sand'
+        this.add.image(x, y, key)
           .setOrigin(0)
           .setDisplaySize(this.TILE, this.TILE)
-
-        // 2. Figure out what goes on top
-        let topKey = null
-        if (t === 1) topKey = 'tree'
-        if (t === 2) topKey = 'water'
-        if (t === 3) topKey = 'wall'
-        if (t === 4) topKey = 'earth'
-        if (t === 5) topKey = 'sand'
-
-        // 3. Draw the tree, sand, etc.
-        if (topKey) {
-          this.add.image(x, y, topKey)
-            .setOrigin(0)
-            .setDisplaySize(this.TILE, this.TILE)
-        }
       }
     }
   }
