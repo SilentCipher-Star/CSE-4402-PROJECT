@@ -1,4 +1,4 @@
-package com.birdgame.backend.model;
+package com.angrybirds.backend.model;
 
 import jakarta.persistence.*;
 import lombok.Data;

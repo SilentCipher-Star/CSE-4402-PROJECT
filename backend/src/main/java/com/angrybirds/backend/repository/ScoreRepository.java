@@ -1,6 +1,6 @@
-package com.birdgame.backend.repository;
+package com.angrybirds.backend.repository;
 
-import com.birdgame.backend.model.Score;
+import com.angrybirds.backend.model.Score;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 

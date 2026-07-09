@@ -1,4 +1,4 @@
-package com.birdgame.backend.model;
+package com.angrybirds.backend.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
@@ -13,8 +13,8 @@ public class Player {
     private Long id;
 
     private String name;
-    private String chosenBird;    // "FireBird", "IceBird" etc
-    private int evolutionStage;   // 1, 2, or 3
+    private String chosenBird;
+    private int evolutionStage;
     private int totalEggs;
     private int highScore;
 }

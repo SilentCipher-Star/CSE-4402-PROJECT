@@ -1,6 +1,6 @@
-package com.birdgame.backend.repository;
+package com.angrybirds.backend.repository;
 
-import com.birdgame.backend.model.Player;
+import com.angrybirds.backend.model.Player;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface PlayerRepository extends JpaRepository<Player, Long> {
