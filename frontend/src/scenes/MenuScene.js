@@ -35,13 +35,17 @@ export class MenuScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale
+    const fitWidth = (image, displayWidth) => {
+      image.setDisplaySize(displayWidth, displayWidth * (image.height / image.width))
+      return image
+    }
 
     // 1. Background Image
     this.add.image(0, 0, 'menu_bg').setOrigin(0).setDisplaySize(width, height)
 
     // 2. Titles 
-    this.add.image(width / 2, height * 0.12, 'title_board').setScale(0.5)
-    this.add.image(width / 2, height * 0.23, 'choose_bird').setScale(0.4)
+    fitWidth(this.add.image(width / 2, height * 0.105, 'title_board'), 520)
+    fitWidth(this.add.image(width / 2, height * 0.235, 'choose_bird'), 360)
 
     // 3. Interactive Bird Cards (Perfectly Centered & No Default Selection)
     const birds = ['Ember', 'Frost', 'Volt', 'Shade', 'Gale']
@@ -49,11 +53,11 @@ export class MenuScene extends Phaser.Scene {
     this.selectedBird = null // FIXED: No bird is selected when the game starts!
     this.birdBoxes = []
     
-    const cardScale = 0.14; 
-    const spacing = 180; // Perfect spacing for a 1280px wide screen
-    const totalWidth = spacing * (birds.length - 1);
-    const startX = (width / 2) - (totalWidth / 2);
-    const baseY = height * 0.42
+    const cardScale = 0.125
+    const spacing = 170
+    const totalWidth = spacing * (birds.length - 1)
+    const startX = (width / 2) - (totalWidth / 2)
+    const baseY = height * 0.44
 
     birds.forEach((bird, i) => {
       const x = startX + i * spacing
@@ -66,24 +70,24 @@ export class MenuScene extends Phaser.Scene {
       const updateCardState = () => {
          if (this.selectedBird === null) {
              // NO SELECTION YET: All birds are bright and aligned
-             card.clearTint();
-             card.setScale(cardScale);
-             card.setY(baseY);
+             card.clearTint()
+             card.setScale(cardScale)
+             card.setY(baseY)
          } else if (this.selectedBird === bird) {
              // THIS BIRD IS CHOSEN: Lift it up and keep it bright
-             card.clearTint();
-             card.setScale(cardScale * 1.05);
-             card.setY(baseY - 15);
+             card.clearTint()
+             card.setScale(cardScale * 1.05)
+             card.setY(baseY - 15)
          } else {
              // A DIFFERENT BIRD IS CHOSEN: Darken this one
-             card.setTint(0x555555); 
-             card.setScale(cardScale);
-             card.setY(baseY);
+             card.setTint(0x555555)
+             card.setScale(cardScale)
+             card.setY(baseY)
          }
       }
 
       // Initialize state
-      updateCardState();
+      updateCardState()
 
       card.on('pointerover', () => {
         this.input.setDefaultCursor('pointer')
@@ -106,12 +110,12 @@ export class MenuScene extends Phaser.Scene {
         this.birdBoxes.forEach(b => b.updateState()) // Update all cards
       })
 
-      card.updateState = updateCardState;
+      card.updateState = updateCardState
       this.birdBoxes.push(card)
     })
 
     // 4. Name Label
-    this.add.image(width / 2, height * 0.62, 'name_label').setScale(0.3)
+    fitWidth(this.add.image(width / 2, height * 0.605, 'name_label'), 300)
 
     // 5. HTML Name Input
     this.nameInput = document.createElement('input')
@@ -119,19 +123,19 @@ export class MenuScene extends Phaser.Scene {
     this.nameInput.placeholder = 'Enter name...'
     this.nameInput.maxLength = 12
     this.nameInput.style.cssText = `
-      position: absolute; left: 50%; top: 69%; 
+      position: absolute; left: 50%; top: 67.5%; 
       transform: translate(-50%, -50%);
       background: #fcf6dc; 
-      border: 4px solid #a87b32; /* Thicker, softer brown border */
-      border-radius: 12px; /* Rounded, pill-like corners */
-      box-shadow: 0px 5px 0px rgba(100, 60, 20, 0.9); /* Chunky 3D bottom shadow */
+      border: 3px solid #a87b32;
+      border-radius: 10px;
+      box-shadow: 0px 4px 0px rgba(100, 60, 20, 0.9);
       color: #3B1F00;
-      font-size: 18px;
+      font-size: 14px;
       font-weight: bold;
-      padding: 10px 18px;
+      padding: 6px 13px;
       text-align: center; 
       outline: none;
-      width: 220px; 
+      width: 170px; 
       font-family: 'Arial Black', Arial, sans-serif;
       z-index: 10;
     `
@@ -141,9 +145,8 @@ export class MenuScene extends Phaser.Scene {
     document.body.appendChild(this.nameInput)
 
     // 6. Custom PLAY Button PNG
-    const playBtnScale = 0.12; 
-    const playBtn = this.add.image(width / 2, height * 0.82, 'play_button')
-      .setScale(playBtnScale)
+    const playBtnWidth = 175
+    const playBtn = fitWidth(this.add.image(width / 2, height * 0.835, 'play_button'), playBtnWidth)
       .setInteractive()
 
     playBtn.on('pointerover', () => {
@@ -169,17 +172,16 @@ export class MenuScene extends Phaser.Scene {
     // Pulsing Animation
     this.tweens.add({
       targets: playBtn,
-      scaleX: playBtnScale * 1.15, 
-      scaleY: playBtnScale * 1.15,
+      displayWidth: playBtnWidth * 1.06,
+      displayHeight: playBtn.height * (playBtnWidth / playBtn.width) * 1.06,
       duration: 600, 
       yoyo: true, 
       repeat: -1
     })
 
     // 7. Visual Controls Hints
-// 7. Visual Controls Hints (Properly scaled to 0.25!)
-    this.add.image(width * 0.25, height * 0.94, 'wasd_hint').setScale(0.25)
-    this.add.image(width * 0.50, height * 0.94, 'space_hint').setScale(0.25)
-    this.add.image(width * 0.75, height * 0.94, 'portal_hint').setScale(0.25)
+    fitWidth(this.add.image(width * 0.25, height * 0.93, 'wasd_hint'), 240)
+    fitWidth(this.add.image(width * 0.50, height * 0.93, 'space_hint'), 240)
+    fitWidth(this.add.image(width * 0.75, height * 0.93, 'portal_hint'), 240)
   }
 }
