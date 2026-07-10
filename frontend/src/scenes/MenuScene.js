@@ -115,38 +115,60 @@ export class MenuScene extends Phaser.Scene {
     })
 
     // 4. Name Label
-    fitWidth(this.add.image(width / 2, height * 0.63, 'name_label'), 300)
+    fitWidth(this.add.image(width / 2, height * 0.64, 'name_label'), 390)
 
     // 5. HTML Name Input
+    const inputGameX = width / 2
+    const inputGameY = height * 0.715
+
     this.nameInput = document.createElement('input')
     this.nameInput.type = 'text'
     this.nameInput.placeholder = 'Enter name...'
     this.nameInput.maxLength = 12
     this.nameInput.style.cssText = `
-      position: absolute; left: 50%; top: 69%; 
+      position: absolute;
       transform: translate(-50%, -50%);
       background: #fcf6dc; 
       border: 3px solid #a87b32;
       border-radius: 10px;
       box-shadow: 0px 4px 0px rgba(100, 60, 20, 0.9);
       color: #3B1F00;
-      font-size: 14px;
+      font-size: 15px;
       font-weight: bold;
-      padding: 6px 13px;
+      padding: 7px 14px;
       text-align: center; 
       outline: none;
-      width: 170px; 
+      width: 190px; 
       font-family: 'Arial Black', Arial, sans-serif;
       z-index: 10;
     `
+
+    this.updateNameInputPosition = () => {
+      const canvasBounds = this.game.canvas.getBoundingClientRect()
+      const scaleX = canvasBounds.width / width
+      const scaleY = canvasBounds.height / height
+      this.nameInput.style.left = `${canvasBounds.left + inputGameX * scaleX}px`
+      this.nameInput.style.top = `${canvasBounds.top + inputGameY * scaleY}px`
+    }
+
+    this.cleanupNameInput = () => {
+      window.removeEventListener('resize', this.updateNameInputPosition)
+      if (this.nameInput?.parentNode) {
+        this.nameInput.parentNode.removeChild(this.nameInput)
+      }
+      this.nameInput = null
+    }
     
     this.nameInput.addEventListener('focus', () => this.input.keyboard.disableGlobalCapture())
     this.nameInput.addEventListener('blur', () => this.input.keyboard.enableGlobalCapture())
     document.body.appendChild(this.nameInput)
+    this.updateNameInputPosition()
+    window.addEventListener('resize', this.updateNameInputPosition)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupNameInput)
 
     // 6. Custom PLAY Button PNG
-    const playBtnWidth = 160
-    const playBtn = fitWidth(this.add.image(width / 2, height * 0.86, 'play_button'), playBtnWidth)
+    const playBtnWidth = 170
+    const playBtn = fitWidth(this.add.image(width / 2, height * 0.875, 'play_button'), playBtnWidth)
       .setInteractive()
 
     playBtn.on('pointerover', () => {
@@ -165,7 +187,7 @@ export class MenuScene extends Phaser.Scene {
       }
         
       const name = this.nameInput.value.trim() || 'Adventurer'
-      document.body.removeChild(this.nameInput)
+      this.cleanupNameInput()
       this.scene.start('StoryScene', { playerName: name, chosenBird: this.selectedBird })
     })
 
@@ -180,8 +202,8 @@ export class MenuScene extends Phaser.Scene {
     })
 
     // 7. Visual Controls Hints
-    fitWidth(this.add.image(width * 0.25, height * 0.945, 'wasd_hint'), 220)
-    fitWidth(this.add.image(width * 0.50, height * 0.945, 'space_hint'), 220)
-    fitWidth(this.add.image(width * 0.75, height * 0.945, 'portal_hint'), 220)
+    fitWidth(this.add.image(width * 0.25, height * 0.955, 'wasd_hint'), 210)
+    fitWidth(this.add.image(width * 0.50, height * 0.955, 'space_hint'), 210)
+    fitWidth(this.add.image(width * 0.75, height * 0.955, 'portal_hint'), 210)
   }
 }
