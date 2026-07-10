@@ -115,7 +115,7 @@ export class MenuScene extends Phaser.Scene {
     })
 
     // 4. Name Label
-    fitWidth(this.add.image(width / 2, height * 0.605, 'name_label'), 300)
+    fitWidth(this.add.image(width / 2, height * 0.63, 'name_label'), 300)
 
     // 5. HTML Name Input
     this.nameInput = document.createElement('input')
@@ -123,7 +123,7 @@ export class MenuScene extends Phaser.Scene {
     this.nameInput.placeholder = 'Enter name...'
     this.nameInput.maxLength = 12
     this.nameInput.style.cssText = `
-      position: absolute; left: 50%; top: 67.5%; 
+      position: absolute; left: 50%; top: 69%; 
       transform: translate(-50%, -50%);
       background: #fcf6dc; 
       border: 3px solid #a87b32;
@@ -145,8 +145,8 @@ export class MenuScene extends Phaser.Scene {
     document.body.appendChild(this.nameInput)
 
     // 6. Custom PLAY Button PNG
-    const playBtnWidth = 175
-    const playBtn = fitWidth(this.add.image(width / 2, height * 0.835, 'play_button'), playBtnWidth)
+    const playBtnWidth = 160
+    const playBtn = fitWidth(this.add.image(width / 2, height * 0.86, 'play_button'), playBtnWidth)
       .setInteractive()
 
     playBtn.on('pointerover', () => {
@@ -180,8 +180,8 @@ export class MenuScene extends Phaser.Scene {
     })
 
     // 7. Visual Controls Hints
-    fitWidth(this.add.image(width * 0.25, height * 0.93, 'wasd_hint'), 240)
-    fitWidth(this.add.image(width * 0.50, height * 0.93, 'space_hint'), 240)
-    fitWidth(this.add.image(width * 0.75, height * 0.93, 'portal_hint'), 240)
+    fitWidth(this.add.image(width * 0.25, height * 0.945, 'wasd_hint'), 220)
+    fitWidth(this.add.image(width * 0.50, height * 0.945, 'space_hint'), 220)
+    fitWidth(this.add.image(width * 0.75, height * 0.945, 'portal_hint'), 220)
   }
 }
