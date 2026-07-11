@@ -26,6 +26,17 @@ export class GameScene extends Phaser.Scene {
   create() {
     this.TILE = 48
     this.mapData = this.parseMap()
+
+    const birdSpriteMap = {
+      Ember: 'ember',
+      Frost: 'frost',
+      Volt: 'volt',
+      Shade: 'shade',
+      Gale: 'gale'
+    }
+
+    this.playerSpriteKey = birdSpriteMap[this.chosenBird] || 'ember'
+
     this.mapRows = this.mapData.length
     this.mapCols = this.mapData[0].length
     this.worldW = this.mapCols * this.TILE
@@ -52,7 +63,7 @@ export class GameScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(
       1 * this.TILE + this.TILE / 2,
       1 * this.TILE + this.TILE / 2,
-      'bird_right'
+      `${this.playerSpriteKey}_right`
     )
     this.player.setDisplaySize(this.TILE + 8, this.TILE + 8)
     this.player.setCollideWorldBounds(true)
@@ -84,90 +95,142 @@ export class GameScene extends Phaser.Scene {
     })
   }
   parseMap() {
-    const raw = [
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 5, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 5, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    const rows = 50
+    const cols = 50
+
+    // 1 = tree, 5 = sand/path, 6 = stump
+    const raw = Array.from({ length: rows }, () => Array(cols).fill(1))
+
+    const inBounds = (c, r) =>
+      c > 0 && c < cols - 1 && r > 0 && r < rows - 1
+
+    const carveCell = (c, r, tile = 5) => {
+      if (inBounds(c, r)) raw[r][c] = tile
+    }
+
+    const carveLine = (from, to, tile = 5) => {
+      const [c1, r1] = from
+      const [c2, r2] = to
+
+      if (c1 !== c2) {
+        const step = c2 > c1 ? 1 : -1
+        for (let c = c1; c !== c2 + step; c += step) {
+          carveCell(c, r1, tile)
+        }
+      }
+
+      if (r1 !== r2) {
+        const step = r2 > r1 ? 1 : -1
+        for (let r = r1; r !== r2 + step; r += step) {
+          carveCell(c2, r, tile)
+        }
+      }
+    }
+
+    const carvePath = (points, tile = 5) => {
+      for (let i = 0; i < points.length - 1; i++) {
+        carveLine(points[i], points[i + 1], tile)
+      }
+    }
+
+    const placeStump = (c, r) => {
+      if (inBounds(c, r) && raw[r][c] === 1) raw[r][c] = 6
+    }
+
+    const placeStumpCluster = (spots) => {
+      spots.forEach(([c, r]) => placeStump(c, r))
+    }
+
+    // ONE-TILE MAIN LANE
+    // This route touches the important item/monster positions.
+    carvePath([
+      [1, 1], [6, 1],
+      [6, 3], [3, 3],
+      [3, 6], [5, 6],
+      [5, 9], [11, 9],
+      [11, 12], [19, 12],
+      [19, 15], [15, 15],
+      [21, 15], [29, 15],
+      [29, 18], [37, 18],
+      [37, 21], [33, 21],
+      [33, 24], [28, 24],
+      [28, 26], [25, 26],
+      [25, 28], [21, 28],
+      [21, 30], [18, 30],
+      [18, 32], [15, 32],
+      [15, 34], [11, 34],
+      [11, 37], [8, 37],
+      [8, 40], [5, 40],
+      [5, 43], [3, 43],
+      [3, 47], [1, 47]
+    ])
+
+    // Bottom final route / golden sapling route
+    carvePath([
+      [3, 47], [10, 47],
+      [10, 44], [16, 44],
+      [16, 47], [23, 47],
+      [23, 44], [30, 44],
+      [30, 47], [37, 47],
+      [37, 44], [44, 44],
+      [44, 47]
+    ])
+
+    // Optional narrow branches, still ONE tile wide
+    carvePath([[11, 9], [15, 9]])
+    carvePath([[7, 7], [15, 7], [15, 9]])
+    carvePath([[21, 15], [21, 10], [30, 10], [30, 6], [42, 6]])
+    carvePath([[37, 18], [44, 18], [44, 24], [38, 24]])
+    carvePath([[33, 24], [40, 24], [40, 30], [35, 30]])
+    carvePath([[25, 28], [30, 33], [25, 37], [18, 37]])
+    carvePath([[15, 34], [15, 39], [12, 39]])
+    carvePath([[5, 40], [2, 40], [2, 44]])
+
+    // Force important positions to stay sand, but only ONE tile each
+    const importantSpots = [
+      [1, 1], [3, 3], [5, 6], [5, 9], [11, 9],
+      [19, 12], [15, 15], [29, 15], [37, 18],
+      [33, 21], [28, 26], [25, 28], [21, 30],
+      [18, 32], [15, 34], [44, 47],
+
+      // weapons
+      [7, 7], [15, 9], [21, 15], [37, 18],
+
+      // portal
+      [1, 47]
     ]
+
+    importantSpots.forEach(([c, r]) => carveCell(c, r))
+
+    // Stumps replace the "wide empty path" feeling.
+    // They are inside forest spaces, not on the lane.
+    placeStumpCluster([
+      [8, 2], [10, 2], [13, 2], [17, 4], [19, 4],
+      [4, 5], [7, 5], [9, 6], [13, 7], [17, 8],
+      [8, 10], [13, 11], [16, 13], [22, 13], [27, 14],
+      [31, 16], [35, 17], [39, 19], [42, 20],
+      [30, 22], [36, 23], [43, 25], [39, 27],
+      [27, 29], [23, 31], [19, 33], [13, 36],
+      [9, 38], [6, 42], [4, 45], [12, 45],
+      [19, 46], [27, 46], [34, 45], [40, 46]
+    ])
+
+    // Extra tree blocks near open-looking areas, so the lane stays narrow
+    const extraTrees = [
+      [4, 2], [5, 2], [8, 1], [8, 3],
+      [4, 8], [6, 8], [10, 8], [12, 8],
+      [18, 14], [20, 14], [22, 16], [28, 16],
+      [36, 19], [38, 19], [36, 22], [32, 23],
+      [24, 27], [26, 27], [20, 29], [22, 29],
+      [17, 31], [19, 31], [14, 33], [16, 33],
+      [10, 36], [12, 36], [7, 39], [9, 39],
+      [4, 41], [6, 41], [2, 46], [4, 46]
+    ]
+
+    extraTrees.forEach(([c, r]) => {
+      if (inBounds(c, r) && raw[r][c] === 5) raw[r][c] = 1
+    })
+
     return raw
   }
   drawWorld() {
@@ -182,6 +245,7 @@ export class GameScene extends Phaser.Scene {
         if (t === 3) key = 'wall'
         if (t === 4) key = 'earth'
         if (t === 5) key = 'sand'
+        if (t === 6) key = 'stump'
         this.add.image(x, y, key)
           .setOrigin(0)
           .setDisplaySize(this.TILE, this.TILE)
@@ -192,7 +256,7 @@ export class GameScene extends Phaser.Scene {
     if (row < 0 || row >= this.mapRows) return true
     if (col < 0 || col >= this.mapCols) return true
     const t = this.mapData[row][col]
-    return t === 1 || t === 2
+    return t === 1 || t === 2 || t === 6
   }
   spawnEggs() {
     const positions = [
@@ -213,52 +277,60 @@ export class GameScene extends Phaser.Scene {
       { col: 15, row: 34, type: 'fire' },
       { col: 44, row: 47, type: 'golden' },
     ]
-    const eggColors = {
-      normal: 0xffffff, fire: 0xFF4500,
-      thunder: 0xFFD700, golden: 0xFFD700
-    }
-positions.forEach(e => {
-  const x = e.col * this.TILE + this.TILE/2
-  const y = e.row * this.TILE + this.TILE/2
-  if (this.isWall(e.col, e.row)) return
 
-  const g = this.add.graphics()
+    positions.forEach(e => {
+      const x = e.col * this.TILE + this.TILE / 2
+      const y = e.row * this.TILE + this.TILE / 2
+      if (this.isWall(e.col, e.row)) return
 
-  // Draw sapling instead of egg
-  const stemColor = 0x5C3A1E
-  const leafColor = e.type === 'normal'  ? 0x44ff44 :
-                    e.type === 'fire'    ? 0xFF4500 :
-                    e.type === 'thunder' ? 0xFFD700 : 0xFFD700
+      let saplingKey = 'sapling_1'
 
-  // Stem
-  g.fillStyle(stemColor, 1)
-  g.fillRect(x - 2, y + 4, 4, 12)
+      if (e.type === 'normal') saplingKey = 'sapling_1'
+      if (e.type === 'fire') saplingKey = 'sapling_2'
+      if (e.type === 'thunder') saplingKey = 'sapling_3'
+      if (e.type === 'golden') saplingKey = 'sapling_3'
 
-  // Leaves — triangle shape
-  g.fillStyle(leafColor, 1)
-  g.fillTriangle(x, y - 14, x - 10, y + 6, x + 10, y + 6)
+      const sapling = this.add.image(x, y, saplingKey)
+        .setOrigin(0.5)
+        .setDisplaySize(this.TILE * 0.65, this.TILE * 0.65)
 
-  // Top leaf
-  g.fillStyle(leafColor, 0.9)
-  g.fillTriangle(x, y - 22, x - 7, y - 6, x + 7, y - 6)
+      // Glow for special saplings
+      if (e.type !== 'normal') {
+        const glowColor =
+          e.type === 'fire' ? 0xFF4500 :
+            e.type === 'thunder' ? 0xFFD700 :
+              0xFFD700
 
-  // Glow for special types
-  if (e.type !== 'normal') {
-    const glow = this.add.circle(x, y, 18, leafColor, 0.2)
-    this.tweens.add({
-      targets: glow, scaleX: 2, scaleY: 2, alpha: 0,
-      duration: 1000, repeat: -1
+        const glow = this.add.circle(x, y, 18, glowColor, 0.2)
+
+        this.tweens.add({
+          targets: glow,
+          scaleX: 2,
+          scaleY: 2,
+          alpha: 0,
+          duration: 1000,
+          repeat: -1
+        })
+      }
+
+      // Gentle bounce animation
+      this.tweens.add({
+        targets: sapling,
+        y: y - 4,
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      })
+
+      this.eggList.push({
+        graphic: sapling,
+        x,
+        y,
+        type: e.type,
+        collected: false
+      })
     })
-  }
-
-  // Gentle sway animation
-  this.tweens.add({
-    targets: g, angle: 2, duration: 1200,
-    yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
-  })
-
-  this.eggList.push({ graphic:g, x, y, type:e.type, collected:false })
-})
   }
   spawnMonsters() {
     const positions = [
@@ -725,33 +797,42 @@ positions.forEach(e => {
     }
 
     if (this.wasd.left.isDown || this.cursors.left.isDown) {
-      vx = -speed; this.playerDir = 'left'
-      this.player.setTexture('bird_left'); this.isMoving = true
+      vx = -speed
+      this.playerDir = 'left'
+      this.player.setTexture(`${this.playerSpriteKey}_left`)
+      this.isMoving = true
     } else if (this.wasd.right.isDown || this.cursors.right.isDown) {
-      vx = speed; this.playerDir = 'right'
-      this.player.setTexture('bird_right'); this.isMoving = true
+      vx = speed
+      this.playerDir = 'right'
+      this.player.setTexture(`${this.playerSpriteKey}_right`)
+      this.isMoving = true
     }
+
     if (this.wasd.up.isDown || this.cursors.up.isDown) {
-      vy = -speed; this.playerDir = 'up'
-      this.player.setTexture('bird_back'); this.isMoving = true
+      vy = -speed
+      this.playerDir = 'up'
+      this.player.setTexture(`${this.playerSpriteKey}_back`)
+      this.isMoving = true
     } else if (this.wasd.down.isDown || this.cursors.down.isDown) {
-      vy = speed; this.playerDir = 'down'
-      this.player.setTexture('bird_right'); this.isMoving = true
+      vy = speed
+      this.playerDir = 'down'
+      this.player.setTexture(`${this.playerSpriteKey}_front`)
+      this.isMoving = true
     }
 
     const nextX = this.player.x + (vx * 0.05)
     const nextY = this.player.y + (vy * 0.05)
     const hw = 16
-    const leftTile   = Math.floor((nextX - hw) / this.TILE)
-    const rightTile  = Math.floor((nextX + hw) / this.TILE)
-    const topTile    = Math.floor((nextY - hw) / this.TILE)
+    const leftTile = Math.floor((nextX - hw) / this.TILE)
+    const rightTile = Math.floor((nextX + hw) / this.TILE)
+    const topTile = Math.floor((nextY - hw) / this.TILE)
     const bottomTile = Math.floor((nextY + hw) / this.TILE)
     const curRow = Math.floor(this.player.y / this.TILE)
     const curCol = Math.floor(this.player.x / this.TILE)
 
-    if (vx < 0 && this.isWall(leftTile,  curRow)) vx = 0
+    if (vx < 0 && this.isWall(leftTile, curRow)) vx = 0
     if (vx > 0 && this.isWall(rightTile, curRow)) vx = 0
-    if (vy < 0 && this.isWall(curCol, topTile))    vy = 0
+    if (vy < 0 && this.isWall(curCol, topTile)) vy = 0
     if (vy > 0 && this.isWall(curCol, bottomTile)) vy = 0
 
     this.player.setVelocity(vx, vy)
@@ -788,7 +869,7 @@ positions.forEach(e => {
 
       const chaseRange = m.alwaysChase ? 9999 :
         this.stealthMode ? 0 :
-        this.evolutionStage >= 2 ? 160 : 200
+          this.evolutionStage >= 2 ? 160 : 200
       const attackRange = 36
 
       if (distToPlayer < chaseRange) {
@@ -837,10 +918,10 @@ positions.forEach(e => {
           const mc = Math.floor(m.body.x / this.TILE)
           const mr = Math.floor(m.body.y / this.TILE)
           const allDirs = [
-            { vx:55,  vy:0,  dc:1,  dr:0  },
-            { vx:-55, vy:0,  dc:-1, dr:0  },
-            { vx:0,   vy:55, dc:0,  dr:1  },
-            { vx:0,  vy:-55, dc:0,  dr:-1 },
+            { vx: 55, vy: 0, dc: 1, dr: 0 },
+            { vx: -55, vy: 0, dc: -1, dr: 0 },
+            { vx: 0, vy: 55, dc: 0, dr: 1 },
+            { vx: 0, vy: -55, dc: 0, dr: -1 },
           ]
           const safeDirs = allDirs.filter(d =>
             !this.isWall(mc + d.dc, mr + d.dr)
@@ -895,8 +976,8 @@ positions.forEach(e => {
         w.desc.destroy()
         this.currentWeapon = w.type
         const labels = {
-          bomb:'💣 BOMB equipped!', ice:'❄️ ICE equipped!',
-          lightning:'⚡ LIGHTNING equipped!', boomerang:'🪃 BOOMERANG equipped!'
+          bomb: '💣 BOMB equipped!', ice: '❄️ ICE equipped!',
+          lightning: '⚡ LIGHTNING equipped!', boomerang: '🪃 BOOMERANG equipped!'
         }
         this.showFloatingText(this.player.x, this.player.y - 30, labels[w.type], '#ffffff')
       }
@@ -919,13 +1000,13 @@ positions.forEach(e => {
     this.bobTimer += 1
     if (this.isMoving) {
       if (this.bobTimer > 8) {
-        this.player.setDisplaySize((this.TILE+8)+5, (this.TILE+8)-5)
+        this.player.setDisplaySize((this.TILE + 8) + 5, (this.TILE + 8) - 5)
       } else {
-        this.player.setDisplaySize((this.TILE+8)-2, (this.TILE+8)+5)
+        this.player.setDisplaySize((this.TILE + 8) - 2, (this.TILE + 8) + 5)
       }
       if (this.bobTimer > 15) this.bobTimer = 0
     } else {
-      this.player.setDisplaySize(this.TILE+8, this.TILE+8)
+      this.player.setDisplaySize(this.TILE + 8, this.TILE + 8)
     }
   }
 }

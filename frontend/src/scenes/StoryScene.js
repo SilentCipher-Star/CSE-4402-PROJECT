@@ -3,6 +3,13 @@ import Phaser from 'phaser'
 export class StoryScene extends Phaser.Scene {
   constructor() { super('StoryScene') }
 
+  preload() {
+    this.load.image('story_bg_1', 'resource/story/story_bg_1.png')
+    this.load.image('story_bg_2', 'resource/story/story_bg_2.png')
+    this.load.image('story_bg_3', 'resource/story/story_bg_3.png')
+    this.load.image('story_bg_4', 'resource/story/story_bg_4.png')
+  }
+
   init(data) {
     this.playerName = data.playerName
     this.chosenBird = data.chosenBird
@@ -15,6 +22,7 @@ export class StoryScene extends Phaser.Scene {
     this.panels = [
       {
         bg: 0x0a1a0a,
+        image: 'story_bg_1',
         title: 'A forest full of life...',
         text: 'The forest was alive with rare birds and ancient trees.\nYoung saplings grew across the forest floor —\neach one a new life in a fragile ecosystem.\n15 billion trees are lost every year. This is their story.',
         drawScene: (g) => {
@@ -54,6 +62,7 @@ export class StoryScene extends Phaser.Scene {
       },
       {
         bg: 0x0a0a1a,
+        image: 'story_bg_2',
         title: 'Then the machines came...',
         text: 'Deforestation machines entered the forest.\nThey uprooted saplings and destroyed everything in their path.\nEvery second, a forest the size of a football field is lost.\nThe birds had nowhere left to go.',
         drawScene: (g) => {
@@ -111,6 +120,7 @@ export class StoryScene extends Phaser.Scene {
       },
       {
         bg: 0x0a1a0a,
+        image: 'story_bg_3',
         title: 'But saplings survived...',
         text: 'The machines were careless — some saplings survived.\nBirds are nature\'s planters. As they move through the forest,\nthey spread seeds that grow into new trees.\n90% of tropical trees depend on birds to survive.',
         drawScene: (g) => {
@@ -162,10 +172,11 @@ export class StoryScene extends Phaser.Scene {
         }
       },
       {
-        bg: 0x1a0a1a,
-        title: 'The mission begins!',
-        text: `You are ${this.playerName || 'a guardian bird'} — a critically endangered species.\nRescue the saplings. Fight back the machines.\nReach the replanting zone before time runs out.\nThe forest is counting on you.`,
-        drawScene: (g) => {
+          bg: 0x1a0a1a,
+          image: 'story_bg_4',
+          title: 'The mission begins!',
+          text: `You are ${this.playerName || 'a guardian bird'} — a critically endangered species.\nRescue the saplings. Fight back the machines.\nReach the replanting zone before time runs out.\nThe forest is counting on you.`,
+          drawScene: (g) => {
           // Epic night sky
           g.fillStyle(0x0a0a2a, 1)
           g.fillRect(0, 0, width, height)
@@ -228,6 +239,9 @@ export class StoryScene extends Phaser.Scene {
     ]
 
     this.bgRect = this.add.rectangle(0, 0, width, height, 0x000000).setOrigin(0)
+    this.sceneImage = this.add.image(width / 2, height / 2, 'story_bg_1')
+      .setDisplaySize(width, height)
+      .setVisible(false)
     this.sceneGraphic = this.add.graphics()
     this.textBg = this.add.rectangle(0, height * 0.72, width, height * 0.28, 0x000000, 0.75).setOrigin(0)
 
@@ -306,7 +320,12 @@ export class StoryScene extends Phaser.Scene {
     this.cameras.main.fadeIn(400)
     this.bgRect.setFillStyle(panel.bg)
     this.sceneGraphic.clear()
-    panel.drawScene(this.sceneGraphic)
+    if (panel.image) {
+      this.sceneImage.setTexture(panel.image).setVisible(true)
+    } else {
+      this.sceneImage.setVisible(false)
+      panel.drawScene(this.sceneGraphic)
+    }
     this.titleText.setText(panel.title)
     this.storyText.setText('')
 

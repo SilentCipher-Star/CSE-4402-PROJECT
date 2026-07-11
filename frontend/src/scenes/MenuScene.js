@@ -5,18 +5,50 @@ export class MenuScene extends Phaser.Scene {
 
   preload() {
     // --- Player & Environment Assets ---
-    this.load.image('bird_right', 'resource/player/Angry_bird_right.png')
-    this.load.image('bird_left',  'resource/player/Angry_bird_left.png')
-    this.load.image('bird_back',  'resource/player/Angry_bird_back.png')
+    // Player sprites - Ember
+    this.load.image('ember_right', 'resource/player/ember_right.png')
+    this.load.image('ember_left',  'resource/player/ember_left.png')
+    this.load.image('ember_back',  'resource/player/ember_back.png')
+    this.load.image('ember_front', 'resource/player/ember_front.png')
+
+    // Player sprites - Frost
+    this.load.image('frost_right', 'resource/player/frost_right.png')
+    this.load.image('frost_left',  'resource/player/frost_left.png')
+    this.load.image('frost_back',  'resource/player/frost_back.png')
+    this.load.image('frost_front', 'resource/player/frost_front.png')
+
+    // Player sprites - Volt
+    this.load.image('volt_right', 'resource/player/volt_right.png')
+    this.load.image('volt_left',  'resource/player/volt_left.png')
+    this.load.image('volt_back',  'resource/player/volt_back.png')
+    this.load.image('volt_front', 'resource/player/volt_front.png')
+
+    // Player sprites - Shade
+    this.load.image('shade_right', 'resource/player/shade_right.png')
+    this.load.image('shade_left',  'resource/player/shade_left.png')
+    this.load.image('shade_back',  'resource/player/shade_back.png')
+    this.load.image('shade_front', 'resource/player/shade_front.png')
+
+    // Player sprites - Gale
+    this.load.image('gale_right', 'resource/player/gale_right.png')
+    this.load.image('gale_left',  'resource/player/gale_left.png')
+    this.load.image('gale_back',  'resource/player/gale_back.png')
+    this.load.image('gale_front', 'resource/player/gale_front.png')
     this.load.image('menu_bg',    'resource/tiles/menu_bg.png')
     
     // --- Map Tiles ---
     this.load.image('grass01', 'resource/tiles/grass01.png')
     this.load.image('tree',    'resource/tiles/tree.png')
+    this.load.image('stump',  'resource/tiles/stump.png')
     this.load.image('wall',    'resource/tiles/wall.png')
     this.load.image('water',   'resource/tiles/water00.png')
     this.load.image('sand',    'resource/tiles/sand.png')
     this.load.image('earth',   'resource/tiles/earth.png')
+
+    //-----sapling----
+    this.load.image('sapling_1', 'resource/saplings/sapling_1.png')
+    this.load.image('sapling_2', 'resource/saplings/sapling_2.png')
+    this.load.image('sapling_3', 'resource/saplings/sapling_3.png')
 
     // --- Custom UI Elements ---
     this.load.image('title_board',  'resource/ui/title_board.png')
