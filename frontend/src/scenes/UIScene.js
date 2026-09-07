@@ -9,57 +9,101 @@ export class UIScene extends Phaser.Scene {
     const { width, height } = this.scale
 
     // Top bar
+    // Top HUD bar
     const bar = this.add.graphics()
-    bar.fillStyle(0x000000, 0.65)
-    bar.fillRect(0, 0, width, 48)
+    bar.fillStyle(0x071407, 0.82)
+    bar.fillRect(0, 0, width, 58)
+    bar.lineStyle(2, 0x88cc66, 0.45)
+    bar.lineBetween(0, 58, width, 58)
 
-    this.scoreText = this.add.text(12, 12, 'Score: 0', {
-      fontSize: '16px', fontFamily: 'Arial Black', color: '#ffffff'
+    // Score
+    this.scoreText = this.add.text(16, 8, 'Score: 0', {
+      fontSize: '17px',
+      fontFamily: 'Arial Black',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 3
     })
 
-    this.eggText = this.add.text(175, 12, '🌱 0', {
-      fontSize: '15px', fontFamily: 'Arial Black', color: '#aaffaa'
+    // Hearts
+    this.heartsText = this.add.text(16, 32, '❤️❤️❤️', {
+      fontSize: '17px',
+      stroke: '#000000',
+      strokeThickness: 3
     })
 
-    this.evoText = this.add.text(245, 12, '⭐ Stage 1', {
-      fontSize: '15px', fontFamily: 'Arial Black', color: '#FFD700'
+    // Saplings
+    this.eggText = this.add.text(220, 17, '🌱 0', {
+      fontSize: '18px',
+      fontFamily: 'Arial Black',
+      color: '#aaff77',
+      stroke: '#000000',
+      strokeThickness: 3
     })
 
-    this.timerText = this.add.text(width / 2, 12, '⏱ 180s', {
-      fontSize: '17px', fontFamily: 'Arial Black', color: '#ffffff'
+    this.animalText = this.add.text(285, 17, '🐾 0', {
+      fontSize: '18px',
+      fontFamily: 'Arial Black',
+      color: '#aaffaa',
+      stroke: '#000000',
+      strokeThickness: 3
+    })
+    // Stage
+    this.evoText = this.add.text(390, 17, '⭐ Stage 1', {
+      fontSize: '18px',
+      fontFamily: 'Arial Black',
+      color: '#FFD700',
+      stroke: '#000000',
+      strokeThickness: 3
+    })
+
+    // Timer, centered
+    this.timerText = this.add.text(width / 2, 17, '⏱ 180s', {
+      fontSize: '19px',
+      fontFamily: 'Arial Black',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 3
     }).setOrigin(0.5, 0)
 
-    this.weaponText = this.add.text(width - 12, 12, '🔫 Normal', {
-      fontSize: '13px', fontFamily: 'Arial Black', color: '#ffffff'
+    // Weapon
+    this.weaponText = this.add.text(width - 18, 8, '🔫 Normal', {
+      fontSize: '15px',
+      fontFamily: 'Arial Black',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'right'
     }).setOrigin(1, 0)
 
-    this.infoText = this.add.text(width - 12, 30, '', {
-      fontSize: '11px', fontFamily: 'Arial', color: '#aaffaa'
+    // Bird + player name
+    this.infoText = this.add.text(width - 18, 32, '', {
+      fontSize: '13px',
+      fontFamily: 'Arial Black',
+      color: '#aaffaa',
+      stroke: '#000000',
+      strokeThickness: 3,
+      align: 'right'
     }).setOrigin(1, 0)
-
-    // Hearts display
-    this.heartsText = this.add.text(12, 32, '❤️❤️❤️', {
-      fontSize: '14px'
-    })
 
     // Bottom hint bar
     const bot = this.add.graphics()
     bot.fillStyle(0x000000, 0.5)
     bot.fillRect(0, height - 14, width, 14)
     this.add.text(width / 2, height - 12,
-      'spawnWalk over weapons to pick up   Reach the portal!', {
-      fontSize: '9px', fontFamily: 'Arial', color: '#445544'
+      'Walk over weapons to pick up powers   •   Reach the portal to escape!', {
+      fontSize: '9px', fontFamily: 'Arial', color: '#d8ffd0'
     }).setOrigin(0.5, 0)
 
     // Golden egg bar
     this.goldenBar = this.add.graphics()
 
     // Minimap
-   this.MM_X      = width - 170
-this.MM_Y      = height - 14 - 10
-this.MM_W      = 160
-this.MM_H      = 120
-
+    this.MM_X = width - 170
+    this.MM_Y = height - 24
+    this.MM_W = 160
+    this.MM_H = 120
+    this.MM_BORDER = 6
     const mmBg = this.add.graphics()
     mmBg.fillStyle(0x000000, 0.7)
     mmBg.fillRoundedRect(
@@ -87,8 +131,8 @@ this.MM_H      = 120
     const gs = this.gameScene
     if (!gs) return
 
-    const hp    = gs.playerHP  || 0
-    const maxHp = gs.maxHP     || 3
+    const hp = gs.playerHP || 0
+    const maxHp = gs.maxHP || 3
     let str = ''
 
     for (let i = 0; i < maxHp; i++) {
@@ -108,18 +152,18 @@ this.MM_H      = 120
   }
 
   drawMinimap() {
-    const g  = this.mmGraphic
+    const g = this.mmGraphic
     const gs = this.gameScene
     if (!gs || !gs.mapData) return
 
     g.clear()
 
-    const rows  = gs.mapRows
-    const cols  = gs.mapCols
+    const rows = gs.mapRows
+    const cols = gs.mapCols
     const cellW = this.MM_W / cols
     const cellH = this.MM_H / rows
-    const ox    = this.MM_X
-    const oy    = this.MM_Y - this.MM_H
+    const ox = this.MM_X
+    const oy = this.MM_Y - this.MM_H
 
     // Tiles
     for (let row = 0; row < rows; row++) {
@@ -147,8 +191,8 @@ this.MM_H      = 120
       const ex = ox + (e.x / (gs.mapCols * gs.TILE)) * this.MM_W
       const ey = oy + (e.y / (gs.mapRows * gs.TILE)) * this.MM_H
       const eggColors = {
-        normal:0xffffff, fire:0xFF4500,
-        thunder:0xFFD700, golden:0xFFD700
+        normal: 0xffffff, fire: 0xFF4500,
+        thunder: 0xFFD700, golden: 0xFFD700
       }
       g.fillStyle(eggColors[e.type] || 0xffffff, 1)
       g.fillCircle(ex, ey, 2)
@@ -160,16 +204,16 @@ this.MM_H      = 120
       const wx = ox + (w.x / (gs.mapCols * gs.TILE)) * this.MM_W
       const wy = oy + (w.y / (gs.mapRows * gs.TILE)) * this.MM_H
       const wColors = {
-        bomb:0xFF6600, ice:0x00BFFF,
-        lightning:0xFFD700, boomerang:0xC8A25A
+        bomb: 0xFF6600, ice: 0x00BFFF,
+        lightning: 0xFFD700, boomerang: 0xC8A25A
       }
       g.fillStyle(wColors[w.type] || 0xffffff, 1)
       g.fillRect(wx - 2, wy - 2, 4, 4)
     })
 
     // Portal
-    const portalX = ox + ((gs.portalCol * gs.TILE + gs.TILE/2) / (gs.mapCols * gs.TILE)) * this.MM_W
-    const portalY = oy + ((gs.portalRow * gs.TILE + gs.TILE/2) / (gs.mapRows * gs.TILE)) * this.MM_H
+    const portalX = ox + ((gs.portalCol * gs.TILE + gs.TILE / 2) / (gs.mapCols * gs.TILE)) * this.MM_W
+    const portalY = oy + ((gs.portalRow * gs.TILE + gs.TILE / 2) / (gs.mapRows * gs.TILE)) * this.MM_H
     g.fillStyle(0xAA99FF, 1)
     g.fillCircle(portalX, portalY, 3)
     g.lineStyle(1, 0xAA99FF, 0.5)
@@ -193,7 +237,7 @@ this.MM_H      = 120
       g.fillStyle(0xffffff, 1)
       g.fillCircle(px, py, 4)
       const dirOffsets = {
-        right:[4,0], left:[-4,0], up:[0,-4], down:[0,4]
+        right: [4, 0], left: [-4, 0], up: [0, -4], down: [0, 4]
       }
       const [dx, dy] = dirOffsets[gs.playerDir || 'right']
       g.fillStyle(gs.birdColor || 0xFF4500, 1)
@@ -202,10 +246,10 @@ this.MM_H      = 120
 
     // Camera viewport
     const cam = gs.cameras.main
-    const vx  = ox + (cam.scrollX / (gs.mapCols * gs.TILE)) * this.MM_W
-    const vy  = oy + (cam.scrollY / (gs.mapRows * gs.TILE)) * this.MM_H
-    const vw  = (cam.width  / (gs.mapCols * gs.TILE)) * this.MM_W
-    const vh  = (cam.height / (gs.mapRows * gs.TILE)) * this.MM_H
+    const vx = ox + (cam.scrollX / (gs.mapCols * gs.TILE)) * this.MM_W
+    const vy = oy + (cam.scrollY / (gs.mapRows * gs.TILE)) * this.MM_H
+    const vw = (cam.width / (gs.mapCols * gs.TILE)) * this.MM_W
+    const vh = (cam.height / (gs.mapRows * gs.TILE)) * this.MM_H
     g.lineStyle(1, 0xffffff, 0.25)
     g.strokeRect(vx, vy, vw, vh)
   }
@@ -215,18 +259,27 @@ this.MM_H      = 120
 
     this.scoreText.setText('Score: ' + this.gameScene.score)
     this.eggText.setText('🌱 ' + this.gameScene.eggsCollected)
+    this.animalText.setText('🐾 ' + this.gameScene.animalsSaved)
 
-    const stages = { 1:'⭐ Stage 1', 2:'✨ Stage 2', 3:'🔥 EVOLVED' }
+    const stages = { 1: '⭐ Stage 1', 2: '✨ Stage 2', 3: '🔥 EVOLVED' }
     this.evoText.setText(stages[this.gameScene.evolutionStage] || '⭐ Stage 1')
 
-    const t = this.gameScene.timeLeft
+    const t = Math.max(0, this.gameScene.timeLeft)
     this.timerText.setText('⏱ ' + t + 's')
-    this.timerText.setStyle({ color: t <= 30 ? '#ff4444' : '#ffffff' })
+    this.timerText.setStyle({
+      color: t <= 30 ? '#ff4444' : '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 3
+    })
 
     const wLabels = {
-      normal:'🔫 Normal', bomb:'💣 Bomb',
-      ice:'❄️ Ice', lightning:'⚡ Lightning',
-      boomerang:'🪃 Boomerang'
+      normal: '🔫 Normal',
+      fire: '🔥 Fire',
+      ice: '❄️ Ice',
+      lightning: '⚡ Electric',
+      bomb: '💣 Bomb',
+      boomerang: '🪃 Boomerang',
+      wind: '🌪 Wind'
     }
     this.weaponText.setText(
       wLabels[this.gameScene.currentWeapon] || '🔫 Normal'
@@ -243,7 +296,7 @@ this.MM_H      = 120
       this.goldenBar.fillStyle(0x333300, 0.7)
       this.goldenBar.fillRect(395, 36, 80, 6)
       this.goldenBar.fillStyle(0xFFD700, 1)
-      this.goldenBar.fillRect(395, 36, (ge/3)*80, 6)
+      this.goldenBar.fillRect(395, 36, (ge / 3) * 80, 6)
     }
 
     // Hearts + minimap

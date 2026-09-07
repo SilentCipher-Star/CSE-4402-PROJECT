@@ -3,10 +3,15 @@ import { Terminal } from '../ui/Terminal.js'
 export class GameScene extends Phaser.Scene {
   constructor() { super('GameScene') }
   init(data) {
+    this.monstersKilled = 0
+    this.animalsRescued = 0
+    this.saplingScore = 0
+    this.collectedFlashCards = []
     this.playerName = data.playerName || 'Adventurer'
     this.chosenBird = data.chosenBird || 'Ember'
     this.score = 0
     this.eggsCollected = 0
+    this.animalsSaved = 0
     this.evolutionStage = 1
     this.goldenEggs = 0
     this.isAttacking = false
@@ -14,7 +19,17 @@ export class GameScene extends Phaser.Scene {
     this.timeLeft = 180
     this.bobTimer = 0
     this.isMoving = false
-    this.currentWeapon = 'normal'
+    const birdPowerMap = {
+      Ember: 'fire',
+      Frost: 'ice',
+      Volt: 'lightning',
+      Shade: 'bomb',
+      Gale: 'boomerang'
+    }
+
+    this.currentWeapon = birdPowerMap[this.chosenBird] || 'fire'
+    this.basePower = this.currentWeapon
+
     this.playerHitCooldown = false
     this.frozenMonsters = new Set()
     this.playerHP = 3
@@ -53,8 +68,10 @@ export class GameScene extends Phaser.Scene {
     this.spawnEggs()
     this.monsterList = []
     this.spawnMonsters()
+    this.animalList = []
+    this.spawnAnimals()
     this.weaponList = []
-    this.spawnWeapons()
+
     this.portalGfx = this.add.graphics()
     this.portalAngle = 0
     this.portalCol = 1
@@ -260,7 +277,7 @@ export class GameScene extends Phaser.Scene {
   }
   spawnEggs() {
     const positions = [
-      { col: 1, row: 1, type: 'normal' },
+
       { col: 3, row: 3, type: 'fire' },
       { col: 5, row: 6, type: 'normal' },
       { col: 5, row: 9, type: 'thunder' },
@@ -284,6 +301,7 @@ export class GameScene extends Phaser.Scene {
       if (this.isWall(e.col, e.row)) return
 
       let saplingKey = 'sapling_1'
+      let glow = null
 
       if (e.type === 'normal') saplingKey = 'sapling_1'
       if (e.type === 'fire') saplingKey = 'sapling_2'
@@ -301,7 +319,7 @@ export class GameScene extends Phaser.Scene {
             e.type === 'thunder' ? 0xFFD700 :
               0xFFD700
 
-        const glow = this.add.circle(x, y, 18, glowColor, 0.2)
+        glow = this.add.circle(x, y, 18, glowColor, 0.2)
 
         this.tweens.add({
           targets: glow,
@@ -325,6 +343,7 @@ export class GameScene extends Phaser.Scene {
 
       this.eggList.push({
         graphic: sapling,
+        glow,
         x,
         y,
         type: e.type,
@@ -344,29 +363,368 @@ export class GameScene extends Phaser.Scene {
       { col: 25, row: 28 },
       { col: 18, row: 32 },
     ]
-    positions.forEach((m, i) => {
+
+    positions.forEach((m) => {
       if (this.isWall(m.col, m.row)) return
+
       const x = m.col * this.TILE + this.TILE / 2
       const y = m.row * this.TILE + this.TILE / 2
-      const g = this.add.graphics()
-      this.drawMonster(g, x, y)
-      const body = this.physics.add.image(x, y, null).setVisible(false)
-      body.body.setSize(28, 28)
+
+      const body = this.physics.add.sprite(x, y, 'hunter_right')
+        .setDisplaySize(this.TILE * 1.25, this.TILE * 1.25)
+        .setDepth(10)
+
+      body.body.setSize(28, 32)
       body.setCollideWorldBounds(true)
       body.setVelocity(60, 0)
+
       const hpBar = this.add.graphics()
       this.drawHPBar(hpBar, x, y - 28, 2, 2)
+
       const alert = this.add.text(x, y - 40, '❗', {
         fontSize: '16px'
       }).setOrigin(0.5).setVisible(false)
+
       this.monsterList.push({
-        graphic: g, body, hpBar, alert,
-        hp: 2, maxHp: 2, alive: true,
-        chasing: false, patrolTimer: 0, frozen: false,
-        alwaysChase: false, hacked: false,
-        spawnX: x, spawnY: y
+
+        body,
+        hpBar,
+        alert,
+
+        hp: 2,
+        maxHp: 2,
+        alive: true,
+        chasing: false,
+        patrolTimer: 0,
+        frozen: false,
+        alwaysChase: false,
+        hacked: false,
+        spawnX: x,
+        spawnY: y
       })
     })
+  }
+
+  spawnAnimals() {
+    const animals = [
+      { col: 4, row: 4, type: 'deer' },
+      { col: 13, row: 9, type: 'deer' },
+      { col: 20, row: 12, type: 'deer' },
+      { col: 34, row: 21, type: 'deer' },
+      { col: 18, row: 32, type: 'deer' },
+      { col: 10, row: 37, type: 'deer' },
+
+      { col: 27, row: 15, type: 'rhino' },
+      { col: 36, row: 18, type: 'rhino' },
+      { col: 29, row: 24, type: 'rhino' },
+      { col: 24, row: 28, type: 'rhino' },
+      { col: 42, row: 44, type: 'rhino' }
+    ]
+
+    animals.forEach(a => {
+      if (this.isWall(a.col, a.row)) return
+
+      const x = a.col * this.TILE + this.TILE / 2
+      const y = a.row * this.TILE + this.TILE / 2
+
+      const startKey = a.type === 'deer' ? 'deer_front_1' : 'rhino_front_1'
+
+      const body = this.physics.add.sprite(x, y, startKey)
+        .setOrigin(0.5)
+        .setDepth(9)
+
+      if (a.type === 'deer') {
+        body.setDisplaySize(this.TILE * 1.05, this.TILE * 1.05)
+        body.body.setSize(34, 34)
+      } else {
+        body.setDisplaySize(this.TILE * 1.3, this.TILE * 1.3)
+        body.body.setSize(38, 34)
+      }
+
+      body.setCollideWorldBounds(true)
+
+      const cage = this.add.graphics()
+      cage.setDepth(8)
+      cage.lineStyle(2, 0xffcc66, 0.75)
+      cage.strokeCircle(x, y, 25)
+
+      this.animalList.push({
+        type: a.type,
+        body,
+        cage,
+        rescued: false,
+        leaving: false,
+        roamTimer: 0,
+        frameTimer: 0,
+        frameIndex: 1,
+        dir: 'front'
+      })
+    })
+  }
+  setAnimalTexture(animal, vx, vy, delta = 16) {
+    if (!animal || !animal.body || !animal.body.active) return
+
+    const speed = Math.abs(vx) + Math.abs(vy)
+
+    // Decide direction from movement
+    if (speed > 2) {
+      if (Math.abs(vx) > Math.abs(vy)) {
+        animal.dir = vx >= 0 ? 'right' : 'left'
+      } else {
+        animal.dir = vy >= 0 ? 'front' : 'back'
+      }
+    }
+
+    // Standing still = first frame only
+    if (speed <= 2) {
+      animal.frameIndex = 1
+      animal.frameTimer = 0
+    } else {
+      animal.frameTimer = (animal.frameTimer || 0) + delta
+
+      // Lower number = faster leg movement
+      if (animal.frameTimer > 140) {
+        animal.frameTimer = 0
+        animal.frameIndex = animal.frameIndex === 1 ? 2 : 1
+      }
+    }
+
+    let key = ''
+
+    // Deer rule:
+    // front/back have 2 frames.
+    // left/right have only 1 frame.
+    if (animal.type === 'deer') {
+      if (animal.dir === 'left') {
+        key = 'deer_left_1'
+      } else if (animal.dir === 'right') {
+        key = 'deer_right_1'
+      } else {
+        key = `deer_${animal.dir}_${animal.frameIndex}`
+      }
+    }
+
+    // Rhino has 2 frames for every direction.
+    if (animal.type === 'rhino') {
+      key = `rhino_${animal.dir}_${animal.frameIndex}`
+    }
+
+    if (this.textures.exists(key)) {
+      animal.body.setTexture(key)
+    }
+  }
+
+
+  animateAnimalWalk(animal) {
+    if (!animal || !animal.body || !animal.body.active) return
+
+    const vx = animal.body.body.velocity.x
+    const vy = animal.body.body.velocity.y
+    const speed = Math.abs(vx) + Math.abs(vy)
+
+    const baseSize = animal.type === 'rhino'
+      ? this.TILE * 1.3
+      : this.TILE * 1.05
+
+    if (speed <= 2) {
+      animal.walkTimer = 0
+      animal.body.setAngle(0)
+      animal.body.setDisplaySize(baseSize, baseSize)
+      return
+    }
+
+    animal.walkTimer = (animal.walkTimer || 0) + 0.22
+
+    const step = Math.sin(animal.walkTimer)
+    const bounce = Math.abs(step)
+
+    // Deer left/right has only 1 PNG, so wobble makes it feel alive.
+    // Rhino also gets a tiny body bounce so it does not look like sliding.
+    animal.body.setAngle(step * 2.5)
+    animal.body.setDisplaySize(
+      baseSize + bounce * 2,
+      baseSize - bounce * 2
+    )
+  }
+  updateAnimals(delta) {
+    if (!this.animalList) return
+
+    this.animalList.forEach(animal => {
+      if (!animal.body || !animal.body.active) return
+
+      if (animal.leaving) {
+        this.setAnimalTexture(
+          animal,
+          animal.body.body.velocity.x,
+          animal.body.body.velocity.y,
+          delta
+        )
+        this.animateAnimalWalk(animal)
+        return
+      }
+
+      if (animal.rescued) return
+
+      // Keep cage around animal
+      if (animal.cage) {
+        animal.cage.clear()
+        animal.cage.lineStyle(2, 0xffcc66, 0.75)
+        animal.cage.strokeCircle(animal.body.x, animal.body.y, 25)
+      }
+
+      animal.roamTimer++
+
+      if (animal.roamTimer > 60) {
+        animal.roamTimer = 0
+
+        const col = Math.floor(animal.body.x / this.TILE)
+        const row = Math.floor(animal.body.y / this.TILE)
+
+        const possibleDirs = [
+          { vx: 45, vy: 0, dc: 1, dr: 0 },
+          { vx: -45, vy: 0, dc: -1, dr: 0 },
+          { vx: 0, vy: 45, dc: 0, dr: 1 },
+          { vx: 0, vy: -45, dc: 0, dr: -1 },
+        ]
+
+        const safeDirs = possibleDirs.filter(d =>
+          !this.isWall(col + d.dc, row + d.dr)
+        )
+
+        const dir = safeDirs[Phaser.Math.Between(0, safeDirs.length - 1)]
+
+        animal.body.setVelocity(dir.vx, dir.vy)
+        this.setAnimalTexture(animal, dir.vx, dir.vy)
+      }
+    })
+  }
+
+  checkAnimalRescue() {
+    if (!this.animalList) return
+
+    this.animalList.forEach(animal => {
+      if (animal.rescued || animal.leaving) return
+      if (!animal.body || !animal.body.active) return
+
+      const dist = Phaser.Math.Distance.Between(
+        this.player.x,
+        this.player.y,
+        animal.body.x,
+        animal.body.y
+      )
+
+      if (dist < 42) {
+        this.releaseAnimal(animal)
+      }
+    })
+  }
+  releaseAnimal(animal) {
+    if (!animal || animal.rescued || animal.leaving) return
+
+    animal.rescued = true
+    animal.leaving = true
+
+    this.animalsSaved++
+    const rescueScore = animal.type === 'rhino' ? 200 : 100
+    this.score += rescueScore
+    this.monstersKilled++
+
+    if (animal.cage) {
+      animal.cage.destroy()
+      animal.cage = null
+    }
+
+    this.showFloatingText(
+      animal.body.x,
+      animal.body.y - 30,
+      `🐾 ${animal.type === 'rhino' ? 'Rhino' : 'Deer'} Saved! +${rescueScore}`,
+      '#aaffaa'
+    )
+
+    // Animal walks away from player and leaves scene
+    const angle = Phaser.Math.Angle.Between(
+      this.player.x,
+      this.player.y,
+      animal.body.x,
+      animal.body.y
+    )
+
+    const leaveSpeed = animal.type === 'rhino' ? 120 : 150
+
+    animal.body.setVelocity(
+      Math.cos(angle) * leaveSpeed,
+      Math.sin(angle) * leaveSpeed
+    )
+
+    animal.body.setDepth(12)
+
+    this.setAnimalTexture(
+      animal,
+      animal.body.body.velocity.x,
+      animal.body.body.velocity.y
+    )
+
+    this.tweens.add({
+      targets: animal.body,
+      alpha: 0,
+      duration: 1600,
+      delay: 700,
+      onComplete: () => {
+        if (animal.body) {
+          animal.body.destroy()
+          animal.body = null
+        }
+      }
+    })
+  }
+  setHunterDirection(m, vx, vy) {
+    if (!m || !m.body || !m.body.active) return
+
+    if (Math.abs(vx) > Math.abs(vy)) {
+      if (vx > 0) {
+        m.body.setTexture('hunter_right')
+      } else if (vx < 0) {
+        m.body.setTexture('hunter_left')
+      }
+    } else {
+      if (vy > 0) {
+        m.body.setTexture('hunter_front')
+      } else if (vy < 0) {
+        m.body.setTexture('hunter_back')
+      }
+    }
+
+    if (m.frozen) {
+      m.body.setTint(0x88ccff)
+    } else {
+      m.body.clearTint()
+    }
+  }
+  animateHunterWalk(m, delta) {
+    if (!m || !m.body || !m.body.active) return
+
+    const baseSize = this.TILE * 1.25
+    const velocityX = m.body.body.velocity.x
+    const velocityY = m.body.body.velocity.y
+    const speed = Math.abs(velocityX) + Math.abs(velocityY)
+
+    if (m.frozen || (m.stunnedUntil && this.time.now < m.stunnedUntil) || speed < 5) {
+      m.walkTimer = 0
+      m.body.setAngle(0)
+      m.body.setDisplaySize(baseSize, baseSize)
+      return
+    }
+
+    m.walkTimer = (m.walkTimer || 0) + delta * 0.018
+
+    const step = Math.sin(m.walkTimer)
+    const bounce = Math.abs(step)
+
+    m.body.setAngle(step * 3)
+    m.body.setDisplaySize(
+      baseSize + bounce * 3,
+      baseSize - bounce * 2
+    )
   }
   spawnWeapons() {
     const weapons = [
@@ -397,39 +755,7 @@ export class GameScene extends Phaser.Scene {
       })
     })
   }
-  drawMonster(g, x, y, frozen) {
-    g.clear()
-    const bodyColor = frozen ? 0x88CCFF : 0x8B0000
-    const highlightColor = frozen ? 0xAAEEFF : 0xcc2222
-    // Draw at 0,0 — position set via g.setPosition()
-    g.fillStyle(0x000000, 0.2)
-    g.fillEllipse(0, 18, 34, 10)
-    g.fillStyle(bodyColor, 1)
-    g.fillCircle(0, 0, 17)
-    g.fillStyle(highlightColor, 0.5)
-    g.fillCircle(-5, -6, 9)
-    g.fillStyle(frozen ? 0xffffff : 0xff4444, 1)
-    g.fillCircle(-6, -3, 5)
-    g.fillCircle(6, -3, 5)
-    g.fillStyle(0x000000, 1)
-    g.fillCircle(-5, -3, 2)
-    g.fillCircle(7, -3, 2)
-    g.lineStyle(2, 0x000000, 1)
-    g.beginPath()
-    g.moveTo(-9, -9)
-    g.lineTo(-3, -6)
-    g.strokePath()
-    g.beginPath()
-    g.moveTo(9, -9)
-    g.lineTo(3, -6)
-    g.strokePath()
-    g.lineStyle(2, frozen ? 0x00BFFF : 0xff0000, 1)
-    g.beginPath()
-    g.arc(0, 5, 6, 0.2, Math.PI - 0.2)
-    g.strokePath()
-    // Move the graphic to world position
-    g.setPosition(x, y)
-  }
+
   drawHPBar(g, x, y, hp, maxHp) {
     g.clear()
     g.fillStyle(0x440000, 1)
@@ -474,14 +800,13 @@ export class GameScene extends Phaser.Scene {
       this.evolutionStage = 3
       this.maxHP = 4
       this.playerHP = Math.min(this.playerHP + 1, 4)
-      this.player.setTint(0xFFD700)
+
       this.showFloatingText(
         this.player.x, this.player.y - 40,
         '🔥 STAGE 3 — OVERPOWERED! +1 Heart', '#FF6B2B'
       )
     } else if (this.goldenEggs >= 1 && this.evolutionStage < 2) {
       this.evolutionStage = 2
-      this.player.setTint(0xaaffaa)
       this.showFloatingText(
         this.player.x, this.player.y - 40,
         '✨ EVOLVED TO STAGE 2!', '#FFD700'
@@ -490,124 +815,298 @@ export class GameScene extends Phaser.Scene {
   }
   useWeapon() {
     if (this.isAttacking) return
+
     this.isAttacking = true
-    const range = this.evolutionStage >= 3 ? 150 :
-      this.evolutionStage >= 2 ? 110 : 75
+
+    // Safe reset. Even if a power does nothing, attack will unlock.
+    this.time.delayedCall(500, () => {
+      this.isAttacking = false
+    })
+
+    const range = this.evolutionStage >= 3 ? 165 :
+      this.evolutionStage >= 2 ? 125 : 95
+
+    const attackColorMap = {
+      fire: 0xff2200,
+      lightning: 0xffdd00,
+      bomb: 0x111111,
+      ice: 0x00bfff,
+      wind: 0x88ffee,
+      boomerang: 0xc8a25a,
+      normal: this.birdColor
+    }
+
+    const attackColor = attackColorMap[this.currentWeapon] || this.birdColor
+
+    const makeRing = (color, startRadius, finalScale, duration = 350) => {
+      const ring = this.add.graphics()
+      ring.setPosition(this.player.x, this.player.y)
+      ring.lineStyle(3, color, 0.65)
+      ring.strokeCircle(0, 0, startRadius)
+
+      this.tweens.add({
+        targets: ring,
+        scaleX: finalScale,
+        scaleY: finalScale,
+        alpha: 0,
+        duration,
+        onComplete: () => ring.destroy()
+      })
+
+      return ring
+    }
+
     switch (this.currentWeapon) {
-      case 'normal': {
-        const sw = this.add.graphics()
-        sw.lineStyle(3, this.birdColor, 0.9)
-        sw.strokeCircle(this.player.x, this.player.y, 10)
+      case 'fire': {
+        makeRing(attackColor, 10, range / 16, 300)
+
+        const flame = this.add.graphics()
+        flame.setPosition(this.player.x, this.player.y)
+        flame.fillStyle(0xff6600, 0.35)
+        flame.fillCircle(0, 0, 22)
+
         this.tweens.add({
-          targets: sw, scaleX: range / 10, scaleY: range / 10, alpha: 0,
-          duration: 350, onComplete: () => sw.destroy()
+          targets: flame,
+          scaleX: 4,
+          scaleY: 4,
+          alpha: 0,
+          duration: 350,
+          onComplete: () => flame.destroy()
         })
-        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, this.birdColor)
+
+        this.hitMonstersInRange(
+          this.player.x,
+          this.player.y,
+          range,
+          1,
+          0xff4500
+        )
+
+        this.showFloatingText(
+          this.player.x,
+          this.player.y - 30,
+          '🔥 Fire Burst!',
+          '#ff8844'
+        )
+
         break
       }
+
       case 'bomb': {
+        makeRing(attackColor, 12, range / 18, 320)
+
         const boom = this.add.graphics()
-        boom.fillStyle(0xFF6600, 0.7)
-        boom.fillCircle(this.player.x, this.player.y, 20)
+        boom.setPosition(this.player.x, this.player.y)
+        boom.fillStyle(0x111111, 0.35)
+        boom.fillCircle(0, 0, 24)
+
         this.tweens.add({
-          targets: boom, scaleX: 8, scaleY: 8, alpha: 0,
-          duration: 500, onComplete: () => boom.destroy()
+          targets: boom,
+          scaleX: 5,
+          scaleY: 5,
+          alpha: 0,
+          duration: 420,
+          onComplete: () => boom.destroy()
         })
-        const ring = this.add.graphics()
-        ring.lineStyle(4, 0xFF6600, 1)
-        ring.strokeCircle(this.player.x, this.player.y, 10)
-        this.tweens.add({
-          targets: ring, scaleX: 15, scaleY: 15, alpha: 0,
-          duration: 500, onComplete: () => ring.destroy()
-        })
-        this.hitMonstersInRange(this.player.x, this.player.y, range * 1.8, 2, 0xFF6600)
-        this.cameras.main.shake(300, 0.01)
+
+        this.hitMonstersInRange(
+          this.player.x,
+          this.player.y,
+          range * 1.05,
+          2,
+          attackColor
+        )
+
+        this.cameras.main.shake(180, 0.006)
+
+        this.showFloatingText(
+          this.player.x,
+          this.player.y - 30,
+          '💣 Bomb Blast!',
+          '#ff9955'
+        )
+
         break
       }
+
       case 'ice': {
-        const iceRing = this.add.graphics()
-        iceRing.lineStyle(3, 0x00BFFF, 0.9)
-        iceRing.strokeCircle(this.player.x, this.player.y, 10)
-        this.tweens.add({
-          targets: iceRing, scaleX: range / 10, scaleY: range / 10, alpha: 0,
-          duration: 400, onComplete: () => iceRing.destroy()
-        })
+        makeRing(0x00bfff, 10, range / 10, 400)
+
+        let frozeAnyone = false
+
         this.monsterList.forEach(m => {
           if (!m.alive || !m.body || !m.body.active) return
+
           const dist = Phaser.Math.Distance.Between(
-            this.player.x, this.player.y, m.body.x, m.body.y
+            this.player.x,
+            this.player.y,
+            m.body.x,
+            m.body.y
           )
+
           if (dist < range) {
-            m.frozen = true
-            m.body.setVelocity(0, 0)
-            this.drawMonster(m.graphic, m.body.x, m.body.y, true)
-            this.showFloatingText(m.body.x, m.body.y - 20, '❄️ FROZEN!', '#00BFFF')
-            this.time.delayedCall(3000, () => {
-              if (m.alive) {
-                m.frozen = false
-                this.drawMonster(m.graphic, m.body.x, m.body.y, false)
-              }
-            })
+            frozeAnyone = true
+            this.freezeKillMonster(m)
           }
         })
+
+        if (!frozeAnyone) {
+          this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#88ccff')
+        }
+
         break
       }
+
       case 'lightning': {
-        const sorted = this.monsterList
-          .filter(m => m.alive && m.body && m.body.active)
+        makeRing(attackColor, 10, range / 16, 280)
+        const targets = this.monsterList
+          .filter(m => {
+            if (!m.alive || !m.body || !m.body.active) return false
+
+            const dist = Phaser.Math.Distance.Between(
+              this.player.x,
+              this.player.y,
+              m.body.x,
+              m.body.y
+            )
+
+            return dist <= range * 1.7
+          })
           .sort((a, b) =>
             Phaser.Math.Distance.Between(this.player.x, this.player.y, a.body.x, a.body.y) -
             Phaser.Math.Distance.Between(this.player.x, this.player.y, b.body.x, b.body.y)
-          ).slice(0, 3)
+          )
+          .slice(0, 3)
+
+        if (targets.length === 0) {
+          this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#888888')
+          break
+        }
+
         const lightning = this.add.graphics()
-        lightning.lineStyle(3, 0xFFD700, 1)
-        let lastX = this.player.x, lastY = this.player.y
-        sorted.forEach(m => {
+        lightning.lineStyle(4, 0xffdd00, 1)
+
+        let lastX = this.player.x
+        let lastY = this.player.y
+
+        targets.forEach(m => {
+          if (!m.alive || !m.body || !m.body.active) return
+
           lightning.beginPath()
           lightning.moveTo(lastX, lastY)
-          const midX = (lastX + m.body.x) / 2 + Phaser.Math.Between(-20, 20)
-          const midY = (lastY + m.body.y) / 2 + Phaser.Math.Between(-20, 20)
+
+          const midX = (lastX + m.body.x) / 2 + Phaser.Math.Between(-18, 18)
+          const midY = (lastY + m.body.y) / 2 + Phaser.Math.Between(-18, 18)
+
           lightning.lineTo(midX, midY)
           lightning.lineTo(m.body.x, m.body.y)
           lightning.strokePath()
-          lastX = m.body.x; lastY = m.body.y
-          m.hp--
+
+          lastX = m.body.x
+          lastY = m.body.y
+
+          m.hp -= 1
+          m.stunnedUntil = this.time.now + 450
+          m.body.setVelocity(0, 0)
+
+          if (m.hp <= 0) {
+            this.killMonster(m, this.currentWeapon)
+            return
+          }
+
           this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
           this.showFloatingText(m.body.x, m.body.y - 20, '⚡ ZAP!', '#FFD700')
-          if (m.hp <= 0) this.killMonster(m)
         })
+
         this.tweens.add({
-          targets: lightning, alpha: 0, duration: 300,
+          targets: lightning,
+          alpha: 0,
+          duration: 260,
           onComplete: () => lightning.destroy()
         })
-        if (sorted.length === 0)
-          this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#888888')
+
+        this.showFloatingText(
+          this.player.x,
+          this.player.y - 30,
+          '⚡ Electric Chain!',
+          '#FFD700'
+        )
+
         break
       }
+
+      case 'wind': {
+        makeRing(0x88ffee, 10, range / 9, 380)
+
+        let hitAnyone = false
+
+        this.monsterList.forEach(m => {
+          if (!m.alive || !m.body || !m.body.active) return
+
+          const dist = Phaser.Math.Distance.Between(
+            this.player.x,
+            this.player.y,
+            m.body.x,
+            m.body.y
+          )
+
+          if (dist < range * 1.2) {
+            hitAnyone = true
+
+            const angle = Phaser.Math.Angle.Between(
+              this.player.x,
+              this.player.y,
+              m.body.x,
+              m.body.y
+            )
+
+            m.hp -= 1
+            m.stunnedUntil = this.time.now + 550
+
+            m.body.setVelocity(
+              Math.cos(angle) * 180,
+              Math.sin(angle) * 180
+            )
+
+            if (m.hp <= 0) {
+              this.killMonster(m, this.currentWeapon)
+              return
+            }
+
+            this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+            this.showFloatingText(m.body.x, m.body.y - 20, '🌪 Pushed!', '#88ffee')
+          }
+        })
+
+        if (!hitAnyone) {
+          this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#88ffee')
+        } else {
+          this.showFloatingText(this.player.x, this.player.y - 30, '🌪 Wind Force!', '#88ffee')
+        }
+
+        break
+      }
+
       case 'boomerang': {
-        const bSw = this.add.graphics()
-        bSw.lineStyle(3, 0xC8A25A, 0.9)
-        bSw.strokeCircle(this.player.x, this.player.y, 10)
-        this.tweens.add({
-          targets: bSw, scaleX: range / 10, scaleY: range / 10, alpha: 0,
-          duration: 250, onComplete: () => bSw.destroy()
+        makeRing(0xc8a25a, 10, range / 10, 250)
+        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xc8a25a)
+
+        this.time.delayedCall(300, () => {
+          makeRing(0xc8a25a, 10, range / 10, 250)
+          this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xc8a25a)
         })
-        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xC8A25A)
-        this.time.delayedCall(400, () => {
-          const bSw2 = this.add.graphics()
-          bSw2.lineStyle(3, 0xC8A25A, 0.9)
-          bSw2.strokeCircle(this.player.x, this.player.y, 10)
-          this.tweens.add({
-            targets: bSw2, scaleX: range / 10, scaleY: range / 10, alpha: 0,
-            duration: 250, onComplete: () => bSw2.destroy()
-          })
-          this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xC8A25A)
-          this.showFloatingText(this.player.x, this.player.y - 30, '🪃 Boomerang!', '#C8A25A')
-        })
+
+        this.showFloatingText(this.player.x, this.player.y - 30, '🪃 Boomerang!', '#C8A25A')
+        break
+      }
+
+      case 'normal':
+      default: {
+        makeRing(this.birdColor, 10, range / 10, 350)
+        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, this.birdColor)
         break
       }
     }
-    this.time.delayedCall(400, () => { this.isAttacking = false })
   }
 
 
@@ -630,6 +1129,8 @@ export class GameScene extends Phaser.Scene {
         hit = true
 
         m.hp -= damage
+        m.stunnedUntil = this.time.now + 350
+        m.body.setVelocity(0, 0)
 
         if (m.hpBar) {
           this.drawHPBar(
@@ -641,12 +1142,12 @@ export class GameScene extends Phaser.Scene {
           )
         }
 
-        if (m.graphic) {
-          m.graphic.setAlpha(0.3)
+        if (m.body) {
+          m.body.setAlpha(0.3)
 
           this.time.delayedCall(150, () => {
-            if (m.graphic) {
-              m.graphic.setAlpha(1)
+            if (m.body) {
+              m.body.setAlpha(1)
             }
           })
         }
@@ -675,7 +1176,7 @@ export class GameScene extends Phaser.Scene {
 
         // Safe kill
         if (m.hp <= 0) {
-          this.killMonster(m)
+          this.killMonster(m, this.currentWeapon)
           return
         }
 
@@ -701,53 +1202,335 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  killMonster(m) {
-    if (!m || !m.alive) return
+  killMonster(m, deathType = this.currentWeapon) {
+    if (!m || !m.alive || !m.body) return
 
     m.alive = false
 
-    // Save coords BEFORE destroy
-    const dx = m.body ? m.body.x : 0
-    const dy = m.body ? m.body.y : 0
+    const x = m.body.x
+    const y = m.body.y
 
-    // Explosion particles
-    for (let i = 0; i < 10; i++) {
-      const angle = (i / 10) * Math.PI * 2
+    // Stop hunter immediately
+    m.body.setVelocity(0, 0)
+    m.body.setAngle(0)
 
-      const burst = this.add.graphics()
-
-      burst.fillStyle(0xff2200, 1)
-      burst.fillCircle(dx, dy, 5)
-
-      this.tweens.add({
-        targets: burst,
-        x: dx + Math.cos(angle) * Phaser.Math.Between(20, 50),
-        y: dy + Math.sin(angle) * Phaser.Math.Between(20, 50),
-        alpha: 0,
-        scaleX: 0.2,
-        scaleY: 0.2,
-        duration: Phaser.Math.Between(300, 600),
-        onComplete: () => burst.destroy()
-      })
+    if (m.body.body) {
+      m.body.body.enable = false
     }
 
-    // Safe destroys
-    if (m.graphic) m.graphic.destroy()
-    if (m.hpBar) m.hpBar.destroy()
-    if (m.alert) m.alert.destroy()
-
-    if (m.body) {
-      m.body.destroy()
-      m.body = null
+    // Remove active UI
+    if (m.hpBar) {
+      m.hpBar.destroy()
+      m.hpBar = null
     }
+
+    if (m.alert) {
+      m.alert.destroy()
+      m.alert = null
+    }
+
+    // Different death effect depending on chosen bird power
+    this.playMonsterDeathEffect(x, y, deathType)
+
+    // Tint/behavior before disappearing
+    if (deathType === 'fire') {
+      m.body.setTint(0xff5500)
+    } else if (deathType === 'bomb') {
+      m.body.setTint(0x333333)
+    } else if (deathType === 'lightning') {
+      m.body.setTint(0xffff66)
+    } else if (deathType === 'wind' || deathType === 'boomerang') {
+      m.body.setTint(0x88ffee)
+    }
+
+    // Mini skull appears right before disappearance
+    this.time.delayedCall(350, () => {
+      this.showDeathSkull(x, y)
+    })
+
+    // Hunter disappears after effect
+    this.tweens.add({
+      targets: m.body,
+      alpha: 0,
+      duration: 650,
+      delay: deathType === 'lightning' ? 120 : 0,
+      onComplete: () => {
+        if (m.body) {
+          m.body.destroy()
+          m.body = null
+        }
+      }
+    })
 
     this.score += 200
 
     this.showFloatingText(
-      dx,
-      dy,
-      '💥 +200',
-      '#ff4444'
+      x,
+      y - 24,
+      '+200',
+      '#ffffff'
+    )
+  }
+
+  showDeathSkull(x, y) {
+    const skull = this.add.text(x, y - 28, '☠️', {
+      fontSize: '22px',
+      stroke: '#000000',
+      strokeThickness: 4
+    }).setOrigin(0.5).setDepth(50)
+
+    this.tweens.add({
+      targets: skull,
+      y: y - 55,
+      alpha: 0,
+      scaleX: 1.4,
+      scaleY: 1.4,
+      duration: 650,
+      onComplete: () => skull.destroy()
+    })
+  }
+  playMonsterDeathEffect(x, y, deathType) {
+    if (deathType === 'fire') {
+      // Ember: burning effect
+      for (let i = 0; i < 14; i++) {
+        const flame = this.add.graphics()
+        flame.setPosition(
+          x + Phaser.Math.Between(-16, 16),
+          y + Phaser.Math.Between(-10, 18)
+        )
+
+        const color = Phaser.Math.Between(0, 1) === 0 ? 0xff4500 : 0xffaa00
+        flame.fillStyle(color, 0.9)
+        flame.fillCircle(0, 0, Phaser.Math.Between(4, 8))
+
+        this.tweens.add({
+          targets: flame,
+          y: flame.y - Phaser.Math.Between(25, 45),
+          alpha: 0,
+          scaleX: 0.2,
+          scaleY: 0.2,
+          duration: Phaser.Math.Between(350, 650),
+          onComplete: () => flame.destroy()
+        })
+      }
+
+      return
+    }
+
+    if (deathType === 'bomb') {
+      // Shade: bomb blast + smoke
+      const blast = this.add.graphics()
+      blast.setPosition(x, y)
+      blast.fillStyle(0xff6600, 0.55)
+      blast.fillCircle(0, 0, 18)
+
+      this.tweens.add({
+        targets: blast,
+        scaleX: 4,
+        scaleY: 4,
+        alpha: 0,
+        duration: 380,
+        onComplete: () => blast.destroy()
+      })
+
+      for (let i = 0; i < 18; i++) {
+        const smoke = this.add.graphics()
+        smoke.setPosition(x, y)
+
+        smoke.fillStyle(0x555555, 0.75)
+        smoke.fillCircle(0, 0, Phaser.Math.Between(7, 13))
+
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2)
+        const dist = Phaser.Math.Between(25, 65)
+
+        this.tweens.add({
+          targets: smoke,
+          x: x + Math.cos(angle) * dist,
+          y: y + Math.sin(angle) * dist,
+          alpha: 0,
+          scaleX: 1.8,
+          scaleY: 1.8,
+          duration: Phaser.Math.Between(500, 850),
+          onComplete: () => smoke.destroy()
+        })
+      }
+
+      this.cameras.main.shake(180, 0.008)
+      return
+    }
+
+    if (deathType === 'lightning') {
+      // Volt: lightning PNG appears over hunter before death
+
+      const flash = this.add.graphics()
+      flash.setPosition(x, y)
+      flash.fillStyle(0xffffaa, 0.45)
+      flash.fillCircle(0, 0, 34)
+
+      this.tweens.add({
+        targets: flash,
+        scaleX: 2.2,
+        scaleY: 2.2,
+        alpha: 0,
+        duration: 250,
+        onComplete: () => flash.destroy()
+      })
+
+      const strike = this.add.image(x, y - 35, 'lightning_strike')
+        .setDepth(60)
+        .setOrigin(0.5, 0.5)
+        .setDisplaySize(70, 110)
+        .setAlpha(0.95)
+
+      this.tweens.add({
+        targets: strike,
+        alpha: 0,
+        scaleX: 1.15,
+        scaleY: 1.15,
+        duration: 400,
+        delay: 120,
+        onComplete: () => strike.destroy()
+      })
+
+      // optional small sparks
+      for (let i = 0; i < 8; i++) {
+        const spark = this.add.graphics()
+        spark.setPosition(x, y)
+
+        spark.lineStyle(3, 0xffdd00, 1)
+
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2)
+        const len = Phaser.Math.Between(18, 34)
+
+        spark.beginPath()
+        spark.moveTo(0, 0)
+        spark.lineTo(Math.cos(angle) * len, Math.sin(angle) * len)
+        spark.strokePath()
+
+        this.tweens.add({
+          targets: spark,
+          alpha: 0,
+          scaleX: 1.4,
+          scaleY: 1.4,
+          duration: 260,
+          onComplete: () => spark.destroy()
+        })
+      }
+
+      this.cameras.main.shake(180, 0.006)
+
+      return
+    }
+    if (deathType === 'wind' || deathType === 'boomerang') {
+      // Gale: wind swirl
+      const swirl = this.add.graphics()
+      swirl.setPosition(x, y)
+      swirl.lineStyle(4, 0x88ffee, 0.9)
+
+      swirl.strokeCircle(0, 0, 12)
+      swirl.strokeCircle(0, 0, 22)
+      swirl.strokeCircle(0, 0, 32)
+
+      this.tweens.add({
+        targets: swirl,
+        angle: 240,
+        scaleX: 1.8,
+        scaleY: 1.8,
+        alpha: 0,
+        duration: 500,
+        onComplete: () => swirl.destroy()
+      })
+
+      return
+    }
+
+    // Default small smoke
+    const smoke = this.add.graphics()
+    smoke.setPosition(x, y)
+    smoke.fillStyle(0x777777, 0.7)
+    smoke.fillCircle(0, 0, 18)
+
+    this.tweens.add({
+      targets: smoke,
+      scaleX: 2.5,
+      scaleY: 2.5,
+      alpha: 0,
+      duration: 450,
+      onComplete: () => smoke.destroy()
+    })
+  }
+  freezeKillMonster(m) {
+    if (!m || !m.alive || !m.body) return
+
+    m.alive = false
+    m.frozen = true
+
+    const x = m.body.x
+    const y = m.body.y
+
+    m.body.setVelocity(0, 0)
+    m.body.setTint(0x88ccff)
+    m.body.setAngle(0)
+    m.body.setAlpha(0.85)
+
+    if (m.body.body) {
+      m.body.body.enable = false
+    }
+
+    if (m.hpBar) {
+      m.hpBar.destroy()
+      m.hpBar = null
+    }
+
+    if (m.alert) {
+      m.alert.destroy()
+      m.alert = null
+    }
+
+    const ice = this.add.graphics()
+    ice.setDepth(20)
+
+    ice.setPosition(x, y)
+    ice.fillStyle(0x99ddff, 0.25)
+    ice.fillCircle(0, 0, 30)
+
+    ice.lineStyle(4, 0x99eeff, 0.95)
+    ice.strokeCircle(0, 0, 28)
+
+    ice.lineStyle(2, 0xffffff, 0.8)
+    ice.strokeCircle(0, 0, 20)
+
+    ice.fillStyle(0xdffaff, 0.9)
+
+    const spikes = [
+      [0, -36], [26, -24], [36, 0], [24, 26],
+      [0, 36], [-24, 26], [-36, 0], [-26, -24]
+    ]
+
+    spikes.forEach(([sx, sy]) => {
+      ice.fillCircle(sx, sy, 4)
+    })
+
+    this.tweens.add({
+      targets: ice,
+      alpha: 0.65,
+      duration: 700,
+      yoyo: true,
+      repeat: -1
+    })
+
+    m.iceGraphic = ice
+
+    this.time.delayedCall(350, () => {
+      this.showDeathSkull(x, y);
+    })
+
+    this.score += 200
+    this.showFloatingText(
+      x,
+      y - 24,
+      '❄️ Frozen Captured! +200',
+      '#99eeff'
     )
   }
 
@@ -773,15 +1556,51 @@ export class GameScene extends Phaser.Scene {
       console.log('Score not saved — backend offline')
     }
   }
+
+  getCo2Absorbed() {
+    return Math.floor(this.saplingScore / 10)
+  }
+
+
   endGame(escaped) {
     if (this.gameEnding) return
     this.gameEnding = true
+
     if (this.terminal) this.terminal.destroy()
+
     this.saveScore()
     this.scene.stop('UIScene')
-    this.time.delayedCall(400, () => this.scene.start('MenuScene'))
+
+    const reportData = {
+      playerName: this.playerName,
+      chosenBird: this.chosenBird,
+
+      totalScore: this.score,
+      saplingsCollected: this.eggsCollected,
+
+      // IMPORTANT: use animalsSaved because that is what your animal rescue system increases
+      animalsRescued: this.animalsSaved || 0,
+
+      // IMPORTANT: use monstersKilled because your killMonster() should increase this
+      monstersKilled: this.monstersKilled || 0,
+
+      co2Absorbed: this.getCo2Absorbed ? this.getCo2Absorbed() : 0,
+
+      timeTaken: 180 - this.timeLeft,
+
+      // IMPORTANT: ReportScene expects flashCards
+      flashCards: this.collectedFlashCards || [],
+
+      escaped
+    }
+
+    this.time.delayedCall(300, () => {
+      this.scene.launch('ReportScene', reportData)
+      this.scene.pause('GameScene')
+    })
   }
-  update() {
+
+  update(time, delta) {
     const speed = this.evolutionStage >= 2 ? 190 : 140
     let vx = 0, vy = 0
     this.isMoving = false
@@ -844,9 +1663,22 @@ export class GameScene extends Phaser.Scene {
     // Monster AI
     this.monsterList.forEach(m => {
       if (!m.alive || !m.body || !m.body.active) return
+      if (m.stunnedUntil && this.time.now < m.stunnedUntil) {
+        m.body.setVelocity(0, 0)
+        m.body.setAngle(0)
+        m.body.setTint(0xffaaaa)
+        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+        return
+      }
+
+      if (m.stunnedUntil && this.time.now >= m.stunnedUntil) {
+        m.stunnedUntil = null
+        m.body.clearTint()
+      }
 
       if (m.frozen) {
-        this.drawMonster(m.graphic, m.body.x, m.body.y, true)
+        m.body.setVelocity(0, 0)
+        m.body.setTint(0x88ccff)
         this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
         return
       }
@@ -858,7 +1690,7 @@ export class GameScene extends Phaser.Scene {
         m.body.setPosition(m.spawnX, m.spawnY)
         m.body.setVelocity(0, 0)
         m.patrolTimer = 0
-        this.drawMonster(m.graphic, m.body.x, m.body.y, false)
+
         this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
         return
       }
@@ -869,8 +1701,8 @@ export class GameScene extends Phaser.Scene {
 
       const chaseRange = m.alwaysChase ? 9999 :
         this.stealthMode ? 0 :
-          this.evolutionStage >= 2 ? 160 : 200
-      const attackRange = 36
+          this.evolutionStage >= 2 ? 190 : 240
+      const attackRange = 30
 
       if (distToPlayer < chaseRange) {
         m.chasing = true
@@ -880,7 +1712,7 @@ export class GameScene extends Phaser.Scene {
         const angle = Phaser.Math.Angle.Between(
           m.body.x, m.body.y, this.player.x, this.player.y
         )
-        const ms = 85
+        const ms = 100
         const mvx = Math.cos(angle) * ms
         const mvy = Math.sin(angle) * ms
         const nextCol = Math.floor((m.body.x + mvx * 0.05) / this.TILE)
@@ -888,12 +1720,13 @@ export class GameScene extends Phaser.Scene {
         const mc = Math.floor(m.body.x / this.TILE)
         const mr = Math.floor(m.body.y / this.TILE)
 
-        m.body.setVelocity(
-          this.isWall(nextCol, mr) ? 0 : mvx,
-          this.isWall(mc, nextRow) ? 0 : mvy
-        )
+        const finalVx = this.isWall(nextCol, mr) ? 0 : mvx
+        const finalVy = this.isWall(mc, nextRow) ? 0 : mvy
 
-        if (distToPlayer < attackRange && !this.playerHitCooldown) {
+        m.body.setVelocity(finalVx, finalVy)
+        this.setHunterDirection(m, finalVx, finalVy)
+
+        if (distToPlayer < attackRange && !this.playerHitCooldown && !this.isAttacking) {
           this.playerHitCooldown = true
           this.playerHP--
           this.cameras.main.shake(200, 0.008)
@@ -901,8 +1734,7 @@ export class GameScene extends Phaser.Scene {
           this.showFloatingText(this.player.x, this.player.y - 30, '💔 -1 Heart', '#ff0000')
           this.time.delayedCall(400, () => {
             this.player.clearTint()
-            if (this.evolutionStage === 2) this.player.setTint(0xaaffaa)
-            if (this.evolutionStage === 3) this.player.setTint(0xFFD700)
+
             this.playerHitCooldown = false
           })
           if (this.playerHP <= 0) this.endGame(false)
@@ -929,12 +1761,16 @@ export class GameScene extends Phaser.Scene {
           const dirs = safeDirs.length > 0 ? safeDirs : allDirs
           const d = dirs[Phaser.Math.Between(0, dirs.length - 1)]
           m.body.setVelocity(d.vx, d.vy)
+          this.setHunterDirection(m, d.vx, d.vy)
         }
       }
 
-      this.drawMonster(m.graphic, m.body.x, m.body.y, false)
+      this.animateHunterWalk(m, delta)
       this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
     })
+
+    this.updateAnimals()
+    this.checkAnimalRescue()
 
     // Egg collection
     this.eggList.forEach(e => {
@@ -944,20 +1780,47 @@ export class GameScene extends Phaser.Scene {
       )
       if (dist < 34) {
         e.collected = true
-        e.graphic.destroy()
+
+        if (e.graphic) {
+          e.graphic.destroy()
+        }
+
+        if (e.glow) {
+          this.tweens.killTweensOf(e.glow)
+          e.glow.destroy()
+          e.glow = null
+        }
+
         this.eggsCollected++
+        const flashCardMap = {
+          normal: 'flashCard_1',
+          fire: 'flashCard_2',
+          thunder: 'flashCard_3',
+          golden: 'flashCard_3'
+        }
+
+        const unlockedCard = flashCardMap[e.type]
+        if (unlockedCard && !this.collectedFlashCards.includes(unlockedCard)) {
+          this.collectedFlashCards.push(unlockedCard)
+        }
+
         if (e.type === 'golden') {
-          this.goldenEggs++; this.score += 500
+          this.goldenEggs++
+          this.score += 500
+          this.saplingScore += 500
           this.checkEvolution()
           this.showFloatingText(this.player.x, this.player.y - 30, '🌟 RARE SAPLING! +500', '#FFD700')
         } else if (e.type === 'fire') {
           this.score += 200
+          this.saplingScore += 200
           this.showFloatingText(this.player.x, this.player.y - 30, '🔥 FIRE SAPLING! +200', '#FF4500')
         } else if (e.type === 'thunder') {
           this.score += 300
+          this.saplingScore += 300
           this.showFloatingText(this.player.x, this.player.y - 30, '⚡ ANCIENT SAPLING! +300', '#FFD700')
         } else {
           this.score += 100
+          this.saplingScore += 100
           this.showFloatingText(this.player.x, this.player.y - 30, '🌱 +100', '#ffffff')
         }
       }

@@ -7,62 +7,91 @@ export class MenuScene extends Phaser.Scene {
     // --- Player & Environment Assets ---
     // Player sprites - Ember
     this.load.image('ember_right', 'resource/player/ember_right.png')
-    this.load.image('ember_left',  'resource/player/ember_left.png')
-    this.load.image('ember_back',  'resource/player/ember_back.png')
+    this.load.image('ember_left', 'resource/player/ember_left.png')
+    this.load.image('ember_back', 'resource/player/ember_back.png')
     this.load.image('ember_front', 'resource/player/ember_front.png')
 
     // Player sprites - Frost
     this.load.image('frost_right', 'resource/player/frost_right.png')
-    this.load.image('frost_left',  'resource/player/frost_left.png')
-    this.load.image('frost_back',  'resource/player/frost_back.png')
+    this.load.image('frost_left', 'resource/player/frost_left.png')
+    this.load.image('frost_back', 'resource/player/frost_back.png')
     this.load.image('frost_front', 'resource/player/frost_front.png')
 
     // Player sprites - Volt
     this.load.image('volt_right', 'resource/player/volt_right.png')
-    this.load.image('volt_left',  'resource/player/volt_left.png')
-    this.load.image('volt_back',  'resource/player/volt_back.png')
+    this.load.image('volt_left', 'resource/player/volt_left.png')
+    this.load.image('volt_back', 'resource/player/volt_back.png')
     this.load.image('volt_front', 'resource/player/volt_front.png')
 
     // Player sprites - Shade
     this.load.image('shade_right', 'resource/player/shade_right.png')
-    this.load.image('shade_left',  'resource/player/shade_left.png')
-    this.load.image('shade_back',  'resource/player/shade_back.png')
+    this.load.image('shade_left', 'resource/player/shade_left.png')
+    this.load.image('shade_back', 'resource/player/shade_back.png')
     this.load.image('shade_front', 'resource/player/shade_front.png')
 
     // Player sprites - Gale
     this.load.image('gale_right', 'resource/player/gale_right.png')
-    this.load.image('gale_left',  'resource/player/gale_left.png')
-    this.load.image('gale_back',  'resource/player/gale_back.png')
+    this.load.image('gale_left', 'resource/player/gale_left.png')
+    this.load.image('gale_back', 'resource/player/gale_back.png')
     this.load.image('gale_front', 'resource/player/gale_front.png')
-    this.load.image('menu_bg',    'resource/tiles/menu_bg.png')
-    
+    this.load.image('menu_bg', 'resource/tiles/menu_bg.png')
+
     // --- Map Tiles ---
     this.load.image('grass01', 'resource/tiles/grass01.png')
-    this.load.image('tree',    'resource/tiles/tree.png')
-    this.load.image('stump',  'resource/tiles/stump.png')
-    this.load.image('wall',    'resource/tiles/wall.png')
-    this.load.image('water',   'resource/tiles/water00.png')
-    this.load.image('sand',    'resource/tiles/sand.png')
-    this.load.image('earth',   'resource/tiles/earth.png')
+    this.load.image('tree', 'resource/tiles/tree.png')
+    this.load.image('stump', 'resource/tiles/stump.png')
+    this.load.image('wall', 'resource/tiles/wall.png')
+    this.load.image('water', 'resource/tiles/water00.png')
+    this.load.image('sand', 'resource/tiles/sand.png')
+    this.load.image('earth', 'resource/tiles/earth.png')
+
+    //-----HunterLevel_1-----
+    this.load.image('hunter_front', 'resource/Hunter_Level1/hunter_front.png')
+    this.load.image('hunter_back', 'resource/Hunter_Level1/hunter_back.png')
+    this.load.image('hunter_left', 'resource/Hunter_Level1/hunter_left.png')
+    this.load.image('hunter_right', 'resource/Hunter_Level1/hunter_right.png')
 
     //-----sapling----
     this.load.image('sapling_1', 'resource/saplings/sapling_1.png')
     this.load.image('sapling_2', 'resource/saplings/sapling_2.png')
     this.load.image('sapling_3', 'resource/saplings/sapling_3.png')
 
+    //------FlashCard------
+    this.load.image('flashCard_1', 'resource/flashcards/flashcard_1.png')
+    this.load.image('flashCard_2', 'resource/flashcards/flashcard_2.png')
+    this.load.image('flashCard_3', 'resource/flashcards/flashcard_3.png')
+
+    // ----- Animals -----
+    this.load.image('deer_front_1', 'resource/animals/Deer/deer_front_1.png')
+    this.load.image('deer_front_2', 'resource/animals/Deer/deer_front_2.png')
+    this.load.image('deer_back_1', 'resource/animals/Deer/deer_back_1.png')
+    this.load.image('deer_back_2', 'resource/animals/Deer/deer_back_2.png')
+    this.load.image('deer_left_1', 'resource/animals/Deer/deer_left_1.png')
+    this.load.image('deer_right_1', 'resource/animals/Deer/deer_right_1.png')
+
+    this.load.image('rhino_front_1', 'resource/animals/rhino/rhino_front_1.png')
+    this.load.image('rhino_front_2', 'resource/animals/rhino/rhino_front_2.png')
+    this.load.image('rhino_back_1', 'resource/animals/rhino/rhino_back_1.png')
+    this.load.image('rhino_back_2', 'resource/animals/rhino/rhino_back_2.png')
+    this.load.image('rhino_left_1', 'resource/animals/rhino/rhino_left_1.png')
+    this.load.image('rhino_left_2', 'resource/animals/rhino/rhino_left_2.png')
+    this.load.image('rhino_right_1', 'resource/animals/rhino/rhino_right_1.png')
+    this.load.image('rhino_right_2', 'resource/animals/rhino/rhino_right_2.png')
+
     // --- Custom UI Elements ---
-    this.load.image('title_board',  'resource/ui/title_board.png')
-    this.load.image('choose_bird',  'resource/ui/choose_bird.png')
-    this.load.image('card_ember',   'resource/ui/card_ember.png')
-    this.load.image('card_frost',   'resource/ui/card_frost.png')
-    this.load.image('card_gale',    'resource/ui/card_gale.png')
-    this.load.image('card_shade',   'resource/ui/card_shade.png')
-    this.load.image('card_volt',    'resource/ui/card_volt.png')
-    this.load.image('play_button',  'resource/ui/play_button.png')
-    this.load.image('name_label',   'resource/ui/name_label.png')
-    this.load.image('wasd_hint',    'resource/ui/w_a_s_d_move_controls.png')
-    this.load.image('space_hint',   'resource/ui/space_attack.png')
-    this.load.image('portal_hint',  'resource/ui/reach_the_portal_to_escape.png')
+    this.load.image('lightning_strike', 'resource/effects/lightning_strike.png')
+    this.load.image('title_board', 'resource/ui/title_board.png')
+    this.load.image('choose_bird', 'resource/ui/choose_bird.png')
+    this.load.image('card_ember', 'resource/ui/card_ember.png')
+    this.load.image('card_frost', 'resource/ui/card_frost.png')
+    this.load.image('card_gale', 'resource/ui/card_gale.png')
+    this.load.image('card_shade', 'resource/ui/card_shade.png')
+    this.load.image('card_volt', 'resource/ui/card_volt.png')
+    this.load.image('play_button', 'resource/ui/play_button.png')
+    this.load.image('name_label', 'resource/ui/name_label.png')
+    this.load.image('wasd_hint', 'resource/ui/w_a_s_d_move_controls.png')
+    this.load.image('space_hint', 'resource/ui/space_attack.png')
+    this.load.image('portal_hint', 'resource/ui/reach_the_portal_to_escape.png')
   }
 
   create() {
@@ -81,10 +110,10 @@ export class MenuScene extends Phaser.Scene {
 
     // 3. Interactive Bird Cards (Perfectly Centered & No Default Selection)
     const birds = ['Ember', 'Frost', 'Volt', 'Shade', 'Gale']
-    
+
     this.selectedBird = null // FIXED: No bird is selected when the game starts!
     this.birdBoxes = []
-    
+
     const cardScale = 0.125
     const spacing = 170
     const totalWidth = spacing * (birds.length - 1)
@@ -94,28 +123,28 @@ export class MenuScene extends Phaser.Scene {
     birds.forEach((bird, i) => {
       const x = startX + i * spacing
       const cardKey = `card_${bird.toLowerCase()}`
-      
+
       const card = this.add.image(x, baseY, cardKey)
         .setScale(cardScale)
         .setInteractive()
 
       const updateCardState = () => {
-         if (this.selectedBird === null) {
-             // NO SELECTION YET: All birds are bright and aligned
-             card.clearTint()
-             card.setScale(cardScale)
-             card.setY(baseY)
-         } else if (this.selectedBird === bird) {
-             // THIS BIRD IS CHOSEN: Lift it up and keep it bright
-             card.clearTint()
-             card.setScale(cardScale * 1.05)
-             card.setY(baseY - 15)
-         } else {
-             // A DIFFERENT BIRD IS CHOSEN: Darken this one
-             card.setTint(0x555555)
-             card.setScale(cardScale)
-             card.setY(baseY)
-         }
+        if (this.selectedBird === null) {
+          // NO SELECTION YET: All birds are bright and aligned
+          card.clearTint()
+          card.setScale(cardScale)
+          card.setY(baseY)
+        } else if (this.selectedBird === bird) {
+          // THIS BIRD IS CHOSEN: Lift it up and keep it bright
+          card.clearTint()
+          card.setScale(cardScale * 1.05)
+          card.setY(baseY - 15)
+        } else {
+          // A DIFFERENT BIRD IS CHOSEN: Darken this one
+          card.setTint(0x555555)
+          card.setScale(cardScale)
+          card.setY(baseY)
+        }
       }
 
       // Initialize state
@@ -124,19 +153,19 @@ export class MenuScene extends Phaser.Scene {
       card.on('pointerover', () => {
         this.input.setDefaultCursor('pointer')
         if (this.selectedBird === null) {
-            // Fun hover bump before a choice is made
-            card.setScale(cardScale * 1.03) 
+          // Fun hover bump before a choice is made
+          card.setScale(cardScale * 1.03)
         } else if (this.selectedBird !== bird) {
-            // Lighten slightly if hovering over a darkened bird
-            card.setTint(0x999999) 
+          // Lighten slightly if hovering over a darkened bird
+          card.setTint(0x999999)
         }
       })
-      
+
       card.on('pointerout', () => {
         this.input.setDefaultCursor('default')
-        updateCardState() 
+        updateCardState()
       })
-      
+
       card.on('pointerdown', () => {
         this.selectedBird = bird
         this.birdBoxes.forEach(b => b.updateState()) // Update all cards
@@ -190,7 +219,7 @@ export class MenuScene extends Phaser.Scene {
       }
       this.nameInput = null
     }
-    
+
     this.nameInput.addEventListener('focus', () => this.input.keyboard.disableGlobalCapture())
     this.nameInput.addEventListener('blur', () => this.input.keyboard.enableGlobalCapture())
     document.body.appendChild(this.nameInput)
@@ -214,10 +243,10 @@ export class MenuScene extends Phaser.Scene {
     playBtn.on('pointerdown', () => {
       // Check if they actually picked a bird!
       if (!this.selectedBird) {
-          alert("Please choose a bird first!");
-          return;
+        alert("Please choose a bird first!");
+        return;
       }
-        
+
       const name = this.nameInput.value.trim() || 'Adventurer'
       this.cleanupNameInput()
       this.scene.start('StoryScene', { playerName: name, chosenBird: this.selectedBird })
@@ -228,8 +257,8 @@ export class MenuScene extends Phaser.Scene {
       targets: playBtn,
       displayWidth: playBtnWidth * 1.06,
       displayHeight: playBtn.height * (playBtnWidth / playBtn.width) * 1.06,
-      duration: 600, 
-      yoyo: true, 
+      duration: 600,
+      yoyo: true,
       repeat: -1
     })
 
