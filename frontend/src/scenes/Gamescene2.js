@@ -5,19 +5,31 @@ export class GameScene2 extends Phaser.Scene {
   constructor() { super('GameScene2') }
 
   preload() {
-    this.load.image('arctic_ground', 'resource/tiles/ground_arctic.png')
-    this.load.image('arctic_tree', 'resource/tiles/tree_arctic.png')
-    this.load.image('arctic_tree_frozen', 'resource/tiles/tree_arctic_frozen.png')
-    // Reuse existing assets
-    this.load.image('sand', 'resource/tiles/sand.png')
-    this.load.image('card_wollemi', 'resource/flashcards/card_wollemi.png')
-    this.load.image('card_pennantia', 'resource/flashcards/card_pennantia.png')
-    this.load.image('card_bois', 'resource/flashcards/card_bois.png')
-    this.load.image('card_baobab', 'resource/flashcards/card_baobab.png')
-    this.load.image('card_torreya', 'resource/flashcards/card_torreya.png')
-    this.load.image('card_monkey', 'resource/flashcards/card_monkey.png')
-    this.load.image('card_chestnut', 'resource/flashcards/card_chestnut.png')
-    this.load.image('card_dragon', 'resource/flashcards/card_dragon.png')
+    this.load.image('snow_ground', 'resource/tiles/0_snow_ground.png')
+    this.load.image('dark_snow', 'resource/tiles/1_dark_snow.png')
+    this.load.image('ice', 'resource/tiles/2_ice.png')
+    this.load.image('frozen_water', 'resource/tiles/3_frozen_water.png')
+    this.load.image('snow_cliff', 'resource/tiles/4_snow_cliff.png')
+    this.load.image('snow_rock', 'resource/tiles/5_snowy_rock.png')
+    this.load.image('ice_wall', 'resource/tiles/6_ice_wall.png')
+    this.load.image('snow_bank', 'resource/tiles/7_snow_bank.png')
+    this.load.image('frozen_log', 'resource/tiles/8_frozen_log.png')
+    this.load.image('pine_large', 'resource/tiles/10_pine_tree_large.png')
+    this.load.image('pine_small', 'resource/tiles/11_pine_tree_small.png')
+    this.load.image('dead_tree', 'resource/tiles/12_dead_tree.png')
+    this.load.image('stump', 'resource/tiles/13_stump.png')
+    this.load.image('icicle', 'resource/tiles/14_icicle.png')
+    this.load.image('snow_pile', 'resource/tiles/15_snow_pile.png')
+    this.load.image('card_arctic_willow', 'resource/flashcards/card_arctic_willow.png')
+    this.load.image('card_himalayan_yew', 'resource/flashcards/card_himalayan_yew.png')
+    this.load.image('card_ice_grass', 'resource/flashcards/card_ice_grass.png')
+    this.load.image('card_polar_bellflower', 'resource/flashcards/card_polar_bellflower.png')
+    this.load.image('card_snow_lotus', 'resource/flashcards/card_snow_lotus.png')
+    this.load.image('sapling_arctic_willow', 'resource/saplings2/arctic_willow.png')
+    this.load.image('sapling_himalayan_yew', 'resource/saplings2/himalayan_yew.png')
+    this.load.image('sapling_ice_grass', 'resource/saplings2/ice_grass.png')
+    this.load.image('sapling_polar_bellflower', 'resource/saplings2/polar_bellflower.png')
+    this.load.image('sapling_snow_lotus', 'resource/saplings2/snow_lotus.png')
     this.load.image('ember_right', 'resource/player/ember_right.png')
     this.load.image('ember_left', 'resource/player/ember_left.png')
     this.load.image('ember_back', 'resource/player/ember_back.png')
@@ -57,6 +69,7 @@ export class GameScene2 extends Phaser.Scene {
     this.chosenBird = data.chosenBird || 'Ember'
     this.score = data.score || 0
     this.eggsCollected = 0
+    this.collectedFlashCards = []
     this.evolutionStage = data.evolutionStage || 1
     this.goldenEggs = 0
     this.isAttacking = false
@@ -74,6 +87,29 @@ export class GameScene2 extends Phaser.Scene {
     this.forestHealth = 100
     this.totalSaplings = 14
     this.wildlifeJournal = data.wildlifeJournal || []
+
+    // ❄️ Warmth system
+    this.warmth = 100
+    this.maxWarmth = 100
+    this.lastFrostbiteTick = 0
+    this.isSheltered = false
+    this.nearCampfire = false
+    this.OPEN_DECAY_PER_SEC = 2.0
+    this.SHELTER_DECAY_PER_SEC = 0.7
+    this.CAMPFIRE_REGEN_PER_SEC = 9
+    this.BLIZZARD_DECAY_MULT = 2.5
+
+    // 🌨️ Blizzard system
+    this.blizzardActive = false
+    this.blizzardWarningActive = false
+    this.blizzardFlakes = []
+    this.blizzardOverlay = null
+
+    // 👣 Footprints
+    this.footprints = []
+    this.playerLastFootX = null
+    this.playerLastFootY = null
+    this.isRescuing = false
   }
 
   create() {
@@ -110,6 +146,13 @@ export class GameScene2 extends Phaser.Scene {
     this.spawnWeapons()
     this.spawnWildlife()
 
+    this.campfireList = []
+    this.spawnCampfires()
+    this.spawnAlarmTraps()
+    this.spawnHunterCamps()
+    this.createWarmthHUD()
+    this.scheduleNextBlizzard()
+
     this.portalGfx = this.add.graphics()
     this.portalAngle = 0
     this.portalCol = 45
@@ -125,6 +168,7 @@ export class GameScene2 extends Phaser.Scene {
     this.player.setDisplaySize(this.TILE + 8, this.TILE + 8)
     this.player.setCollideWorldBounds(true)
     this.player.body.setSize(28, 28)
+    this.player.setDepth(20)
 
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
 
@@ -152,113 +196,291 @@ export class GameScene2 extends Phaser.Scene {
   }
 
   parseMap() {
-    const raw = [
-      [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-      [2, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 5, 5, 5, 5, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 1, 1, 1, 2],
-      [2, 5, 1, 1, 1, 1, 1, 1, 5, 1, 1, 5, 1, 1, 1, 5, 1, 5, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 5, 1, 1, 5, 5, 5, 1, 5, 1, 1, 5, 1, 1, 1, 5, 1, 5, 1, 1, 5, 5, 5, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 5, 1, 1, 5, 1, 1, 1, 5, 1, 1, 5, 1, 1, 1, 5, 1, 5, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 1, 1, 1, 2],
-      [2, 5, 5, 5, 5, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 2],
-      [2, 5, 1, 1, 5, 1, 1, 1, 5, 1, 1, 5, 1, 1, 1, 5, 1, 5, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 5, 1, 1, 5, 1, 1, 1, 5, 1, 1, 5, 1, 1, 1, 5, 1, 5, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 5, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 5, 5, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 5, 5, 5, 5, 5, 1, 1, 1, 2],
-      [2, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 5, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 5, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 5, 1, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 5, 1, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 1, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 5, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 5, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 5, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 5, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 2],
-      [2, 1, 1, 5, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 5, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 2],
-      [2, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 5, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 1, 2],
-      [2, 5, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 5, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 2],
-      [2, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 2],
-      [2, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 2],
-      [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
-      [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
-      [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    ]
-    return raw
-  }
-   showWildlifeCard(species, fact) {
-  const { width, height } = this.scale
+    const rows = 50
+    const cols = 50
+    const map = []
 
-  const card = this.add.graphics().setScrollFactor(0).setDepth(400)
-  card.fillStyle(0x0a1420, 0.97)
-  card.fillRoundedRect(width/2 - 180, height/2 - 90, 360, 180, 16)
-  card.lineStyle(3, 0xFFD700, 1)
-  card.strokeRoundedRect(width/2 - 180, height/2 - 90, 360, 180, 16)
+    for (let r = 0; r < rows; r++) {
+      const row = []
+      for (let c = 0; c < cols; c++) row.push(5)
+      map.push(row)
+    }
 
-  const title = this.add.text(width/2, height/2 - 60, '🐧 SPECIES COLLECTED!', {
-    fontSize: '15px', fontFamily: 'Arial Black', color: '#FFD700'
-  }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
+    // seeded random so the layout is stable across reloads
+    let seed = 928371
+    const rand = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296
+      return seed / 4294967296
+    }
 
-  const name = this.add.text(width/2, height/2 - 30, species, {
-    fontSize: '20px', fontFamily: 'Arial Black', color: '#ffffff'
-  }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
-
-  const factText = this.add.text(width/2, height/2 + 10, fact, {
-    fontSize: '11px', fontFamily: 'Arial', color: '#aaccdd',
-    wordWrap: { width: 320 }, align: 'center'
-  }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
-
-  const count = this.wildlifeJournal.length
-  const counter = this.add.text(width/2, height/2 + 60, `Journal: ${count} / 8 species`, {
-    fontSize: '11px', fontFamily: 'Arial Black', color: '#00d4ff'
-  }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
-
-  const elements = [card, title, name, factText, counter]
-  elements.forEach(el => { el.setAlpha(0) })
-  this.tweens.add({
-    targets: elements, alpha: 1, duration: 250
-  })
-
-  this.time.delayedCall(2600, () => {
-    this.tweens.add({
-      targets: elements, alpha: 0, duration: 300,
-      onComplete: () => elements.forEach(el => el.destroy())
-    })
-  })
-}
-  drawWorld() {
-    for (let row = 0; row < this.mapRows; row++) {
-      for (let col = 0; col < this.mapCols; col++) {
-        const t = this.mapData[row][col]
-        const x = col * this.TILE
-        const y = row * this.TILE
-        let key = 'arctic_ground'
-        if (t === 1) key = 'arctic_tree'
-        if (t === 2) key = 'arctic_tree_frozen'
-        if (t === 5) key = 'arctic_ground'
-        this.add.image(x, y, key)
-          .setOrigin(0)
-          .setDisplaySize(this.TILE + 2, this.TILE + 2)
+    // Paints one themed blob (forest / cliff / water / pile-patch)
+    // at the given fill density, so each theme reads as ONE coherent
+    // region instead of everything being mixed and scattered across
+    // the whole map.
+    //   value      = tile type to paint (1 forest, 2 cliff, 3 water, 6 pile)
+    //   fillChance = how solid the blob is (1 = packed solid, lower = looser/sparser)
+    const paintBlob = (cx, cy, r, value, fillChance) => {
+      for (let y = cy - r; y <= cy + r; y++) {
+        for (let x = cx - r; x <= cx + r; x++) {
+          if (x < 1 || x >= cols - 1 || y < 1 || y >= rows - 1) continue
+          const dx = x - cx
+          const dy = y - cy
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          // uneven edge (not a perfect circle) so it reads as a natural blob
+          const edge = r * (0.55 + rand() * 0.5)
+          if (dist <= edge && rand() < fillChance) {
+            map[y][x] = value
+          }
+        }
       }
+    }
+
+    // ── ONE solid forest region down the left side ────────────────
+    paintBlob(9, 11, 8, 1, 0.88)
+    paintBlob(7, 31, 7, 1, 0.85)
+
+    // ── just a handful of standalone trees near the centre ────────
+    paintBlob(25, 23, 4, 1, 0.3)
+
+    // ── ONE solid cliff/rock region down the right side ───────────
+    paintBlob(41, 12, 7, 2, 0.88)
+    paintBlob(42, 31, 6, 2, 0.85)
+
+    // ── frozen water — a single confined lake, not scattered ──────
+    paintBlob(43, 42, 4, 3, 0.75)
+
+    // ── snow piles clustered together in their own patch ──────────
+    paintBlob(16, 40, 5, 6, 0.55)
+
+    const clearCircle = (cx, cy, r) => {
+      for (let y = cy - r; y <= cy + r; y++) {
+        for (let x = cx - r; x <= cx + r; x++) {
+          if (x < 0 || x >= cols || y < 0 || y >= rows) continue
+          const dx = x - cx
+          const dy = y - cy
+          if (dx * dx + dy * dy <= r * r) map[y][x] = 5
+        }
+      }
+    }
+
+    // wide (3-tile) winding clearings between the regions, so open
+    // ground reads as continuous space rather than a single-tile trail
+    const carveLine = (x1, y1, x2, y2, width) => {
+      const steps = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * 3
+      for (let i = 0; i <= steps; i++) {
+        const t = steps === 0 ? 0 : i / steps
+        const x = Math.round(Phaser.Math.Linear(x1, x2, t))
+        const y = Math.round(Phaser.Math.Linear(y1, y2, t))
+        clearCircle(x, y, width)
+      }
+    }
+
+    clearCircle(2, 2, 4)
+    carveLine(2, 2, 46, 5, 3)
+    carveLine(2, 15, 46, 17, 3)
+    carveLine(2, 24, 46, 24, 3)
+    carveLine(2, 34, 46, 35, 3)
+    carveLine(2, 43, 46, 44, 3)
+    carveLine(6, 6, 6, 42, 3)
+    carveLine(27, 6, 27, 43, 3)
+    carveLine(46, 5, 46, 41, 3)
+
+    // every gameplay spawn point must stay walkable no matter how the
+    // regions above landed
+    const importantSpots = [
+      [1, 1],
+      [3, 1], [11, 1], [20, 3], [4, 8], [13, 8], [17, 10], [32, 10], [3, 13], [24, 15], [20, 20], [6, 22], [3, 24], [45, 25], [45, 35],
+      [5, 1], [20, 1], [5, 5], [20, 5], [5, 8], [34, 8], [5, 10], [20, 10],
+      [5, 3], [16, 5], [24, 7], [16, 10], [11, 13], [14, 17], [7, 21], [4, 25], [40, 30],
+      [11, 3], [24, 8], [32, 18], [13, 27],
+      [45, 43],
+
+      // extra hunter spawns (more all over the map)
+      [30, 3], [44, 6], [9, 17], [27, 17], [38, 20],
+      [44, 24], [6, 35], [27, 35], [38, 38], [20, 43],
+
+      // extra wildlife spawns (more all over the map)
+      [30, 5], [44, 8], [9, 15], [27, 20], [38, 17],
+      [15, 22], [6, 38], [38, 35],
+
+      // campfires (warmth system)
+      [8, 4], [24, 24], [40, 40], [16, 30],
+
+      // alarm traps
+      [12, 5], [33, 13], [20, 33], [42, 20],
+
+      // hunter camps
+      [19, 6], [44, 14], [6, 44], [33, 44]
+    ]
+    importantSpots.forEach(([c, r]) => clearCircle(c, r, 2))
+
+    // frozen boundary wall around the whole map
+    for (let c = 0; c < cols; c++) { map[0][c] = 2; map[rows - 1][c] = 2 }
+    for (let r = 0; r < rows; r++) { map[r][0] = 2; map[r][cols - 1] = 2 }
+
+    return map
+  }
+
+  showWildlifeCard(species, fact) {
+    const { width, height } = this.scale
+
+    const card = this.add.graphics().setScrollFactor(0).setDepth(400)
+    card.fillStyle(0x0a1420, 0.97)
+    card.fillRoundedRect(width/2 - 180, height/2 - 90, 360, 180, 16)
+    card.lineStyle(3, 0xFFD700, 1)
+    card.strokeRoundedRect(width/2 - 180, height/2 - 90, 360, 180, 16)
+
+    const title = this.add.text(width/2, height/2 - 60, '🐧 SPECIES COLLECTED!', {
+      fontSize: '15px', fontFamily: 'Arial Black', color: '#FFD700'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
+
+    const name = this.add.text(width/2, height/2 - 30, species, {
+      fontSize: '20px', fontFamily: 'Arial Black', color: '#ffffff'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
+
+    const factText = this.add.text(width/2, height/2 + 10, fact, {
+      fontSize: '11px', fontFamily: 'Arial', color: '#aaccdd',
+      wordWrap: { width: 320 }, align: 'center'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
+
+    const count = this.wildlifeJournal.length
+    const counter = this.add.text(width/2, height/2 + 60, `Journal: ${count} / 8 species`, {
+      fontSize: '11px', fontFamily: 'Arial Black', color: '#00d4ff'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
+
+    const elements = [card, title, name, factText, counter]
+    elements.forEach(el => { el.setAlpha(0) })
+    this.tweens.add({
+      targets: elements, alpha: 1, duration: 250
+    })
+
+    this.time.delayedCall(2600, () => {
+      this.tweens.add({
+        targets: elements, alpha: 0, duration: 300,
+        onComplete: () => elements.forEach(el => el.destroy())
+      })
+    })
+  }
+
+  drawWorld() {
+    const rows = this.mapRows
+    const cols = this.mapCols
+
+    // Linear texture filtering can smear a tile's edge pixels into
+    // its neighbour, showing up as a thin seam line along every grid
+    // edge. Forcing nearest-neighbour filtering on these tile
+    // textures keeps every edge crisp and fully opaque right up to
+    // the border.
+    const tileKeys = [
+      'snow_ground', 'dark_snow', 'ice', 'frozen_water', 'snow_cliff',
+      'snow_rock', 'ice_wall', 'snow_bank', 'frozen_log',
+      'pine_large', 'pine_small', 'dead_tree', 'stump', 'icicle', 'snow_pile'
+    ]
+    tileKeys.forEach(key => {
+      const tex = this.textures.get(key)
+      if (tex) tex.setFilter(Phaser.Textures.FilterMode.NEAREST)
+    })
+
+    // seeded so tile variety is stable across reloads
+    let seed = 55211
+    const rand = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296
+      return seed / 4294967296
+    }
+
+    // Every PNG in this set is a fully opaque, self-contained tile —
+    // background snow and the object (tree/rock/log/etc.) are baked
+    // into the same square, with no transparency at all. That means
+    // exactly ONE image belongs on each grid cell — never a ground
+    // tile with a second image layered on top, since two opaque
+    // images of slightly different sizes stacked on the same cell is
+    // what caused the misaligned/overlapping look.
+    //
+    // A few tiles (the trees and the log) render a little taller
+    // than one cell so their canopy can rise upward for a natural
+    // look, anchored at the bottom of their OWN cell only — never
+    // shifted sideways — so they never bleed into a neighbouring
+    // column.
+    const risesAbove = new Set(['pine_large', 'pine_small', 'dead_tree', 'ice_wall'])
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const t = this.mapData[row][col]
+        const isEdge =
+          row === 0 || row === rows - 1 ||
+          col === 0 || col === cols - 1
+
+        let key
+
+        if (isEdge) {
+          key = 'snow_cliff'
+        } else if (t === 1) {
+          // forest region
+          const roll = rand()
+          key = roll < 0.55 ? 'pine_large' : roll < 0.9 ? 'pine_small' : 'dead_tree'
+        } else if (t === 2) {
+          // cliff/rock region
+          key = 'ice_wall'
+        } else if (t === 3) {
+          // the one confined frozen-water lake
+          key = 'frozen_water'
+        } else if (t === 6) {
+          // the clustered snow-pile patch
+          key = rand() < 0.8 ? 'snow_pile' : 'snow_bank'
+        } else {
+          // plain open ground — just quiet floor variation, no
+          // scattered props (those live in their own zones above)
+          const roll = rand()
+          if (roll < 0.82) key = 'snow_ground'
+          else if (roll < 0.96) key = 'dark_snow'
+          else if (roll < 0.985) key = 'stump'
+          else key = 'frozen_log'
+        }
+
+        const cellCenterX = col * this.TILE + this.TILE / 2
+        const cellCenterY = row * this.TILE + this.TILE / 2
+        const cellBottomY = row * this.TILE + this.TILE
+
+        // Even at an exact TILE x TILE size, sub-pixel rounding and
+        // texture-edge filtering can leave a hairline gap between two
+        // "perfectly" adjacent tiles. Rounding positions to whole
+        // pixels and overscanning each flat tile by ~2px (so
+        // neighbours overlap a hair instead of just touching) hides
+        // that seam completely.
+        const bleed = 2
+
+        const img = this.add.image(0, 0, key)
+
+        if (risesAbove.has(key)) {
+          // anchored to the bottom edge of THIS cell only — grows
+          // upward, stays centred on its own column
+          img.setOrigin(0.5, 1)
+          img.setPosition(Math.round(cellCenterX), Math.round(cellBottomY))
+          img.setDisplaySize(this.TILE + bleed, this.TILE * 1.35)
+        } else {
+          // fills its own cell exactly, edge to edge, with a slight
+          // overscan so there's no visible seam
+          img.setOrigin(0.5, 0.5)
+          img.setPosition(Math.round(cellCenterX), Math.round(cellCenterY))
+          img.setDisplaySize(this.TILE + bleed, this.TILE + bleed)
+        }
+      }
+    }
+
+    // ============================================================
+    // Gentle ambient snow sparkle for atmosphere (purely cosmetic,
+    // drawn last so it sits on top of everything).
+    // ============================================================
+    for (let i = 0; i < 150; i++) {
+      const x = Phaser.Math.Between(20, this.worldW - 20)
+      const y = Phaser.Math.Between(20, this.worldH - 20)
+      const sparkle = this.add.circle(
+        x, y,
+        Phaser.Math.Between(1, 2),
+        0xffffff,
+        Phaser.Math.FloatBetween(0.25, 0.6)
+      )
+      sparkle.setDepth(0)
     }
   }
 
@@ -266,63 +488,86 @@ export class GameScene2 extends Phaser.Scene {
     if (row < 0 || row >= this.mapRows) return true
     if (col < 0 || col >= this.mapCols) return true
     const t = this.mapData[row][col]
-    return t === 1 || t === 2
+    return t === 1 || t === 2 || t === 3
   }
 
   spawnEggs() {
+    // Every sapling is tied to one of the 5 real flashcards.
+    // Duplicate species are allowed, but the flashcard is only unlocked once.
     const positions = [
-      { col: 3, row: 1, type: 'normal', card: 'card_wollemi' },
-      { col: 11, row: 1, type: 'fire', card: 'card_bois' },
-      { col: 20, row: 3, type: 'normal', card: 'card_baobab' },
-      { col: 4, row: 8, type: 'thunder', card: 'card_torreya' },
-      { col: 13, row: 8, type: 'normal', card: 'card_monkey' },
-      { col: 17, row: 10, type: 'fire', card: 'card_chestnut' },
-      { col: 32, row: 10, type: 'normal', card: 'card_dragon' },
-      { col: 3, row: 13, type: 'thunder', card: 'card_pennantia' },
-      { col: 24, row: 15, type: 'normal', card: 'card_baobab' },
-      { col: 20, row: 20, type: 'fire', card: 'card_wollemi' },
-      { col: 6, row: 22, type: 'thunder', card: 'card_bois' },
-      { col: 3, row: 24, type: 'normal', card: 'card_torreya' },
-      { col: 45, row: 25, type: 'golden', card: 'card_monkey' },
-      { col: 45, row: 35, type: 'golden', card: 'card_dragon' },
+      { col: 3,  row: 1,  type: 'normal',  card: 'card_arctic_willow',    sprite: 'sapling_arctic_willow' },
+      { col: 11, row: 1,  type: 'fire',    card: 'card_himalayan_yew',    sprite: 'sapling_himalayan_yew' },
+      { col: 20, row: 3,  type: 'normal',  card: 'card_ice_grass',        sprite: 'sapling_ice_grass' },
+      { col: 4,  row: 8,  type: 'thunder', card: 'card_polar_bellflower', sprite: 'sapling_polar_bellflower' },
+      { col: 13, row: 8,  type: 'normal',  card: 'card_snow_lotus',       sprite: 'sapling_snow_lotus' },
+      { col: 17, row: 10, type: 'fire',    card: 'card_arctic_willow',    sprite: 'sapling_arctic_willow' },
+      { col: 32, row: 10, type: 'normal',  card: 'card_himalayan_yew',    sprite: 'sapling_himalayan_yew' },
+      { col: 3,  row: 13, type: 'thunder', card: 'card_ice_grass',        sprite: 'sapling_ice_grass' },
+      { col: 24, row: 15, type: 'normal',  card: 'card_polar_bellflower', sprite: 'sapling_polar_bellflower' },
+      { col: 20, row: 20, type: 'fire',    card: 'card_snow_lotus',       sprite: 'sapling_snow_lotus' },
+      { col: 6,  row: 22, type: 'thunder', card: 'card_arctic_willow',    sprite: 'sapling_arctic_willow' },
+      { col: 3,  row: 24, type: 'normal',  card: 'card_himalayan_yew',    sprite: 'sapling_himalayan_yew' },
+      { col: 45, row: 25, type: 'golden',  card: 'card_ice_grass',        sprite: 'sapling_ice_grass' },
+      { col: 45, row: 35, type: 'golden',  card: 'card_polar_bellflower', sprite: 'sapling_polar_bellflower' },
     ]
-
-    const eggColors = {
-      normal: 0xaaddff, fire: 0xFF4500,
-      thunder: 0xFFD700, golden: 0xFFD700
-    }
 
     positions.forEach(e => {
       const x = e.col * this.TILE + this.TILE / 2
       const y = e.row * this.TILE + this.TILE / 2
       if (this.isWall(e.col, e.row)) return
 
-      const g = this.add.graphics()
-      const stemColor = 0x4a6fa5
-      const leafColor = eggColors[e.type]
+      let glow = null
 
-      g.fillStyle(0x2a4a70, 1)
-      g.fillRect(x - 2, y + 4, 4, 12)
-      g.fillStyle(leafColor, 1)
-      g.fillTriangle(x, y - 14, x - 10, y + 6, x + 10, y + 6)
-      g.fillStyle(leafColor, 0.9)
-      g.fillTriangle(x, y - 22, x - 7, y - 6, x + 7, y - 6)
+      const sapling = this.add.image(x, y, e.sprite)
+        .setOrigin(0.5)
+        .setDisplaySize(this.TILE * 0.75, this.TILE * 0.75)
+        .setDepth(7)
+
+      if (e.type === 'golden') {
+        sapling.setTint(0xFFD700)
+      }
 
       if (e.type !== 'normal') {
-        const glow = this.add.circle(x, y, 18, leafColor, 0.2)
+        const glowColor =
+          e.type === 'fire' ? 0xFF4500 :
+          e.type === 'thunder' ? 0x00BFFF :
+          0xFFD700
+
+        glow = this.add.circle(x, y, 18, glowColor, 0.2).setDepth(6)
+
         this.tweens.add({
-          targets: glow, scaleX: 2, scaleY: 2, alpha: 0,
-          duration: 1000, repeat: -1
+          targets: glow,
+          scaleX: 2,
+          scaleY: 2,
+          alpha: 0,
+          duration: 1000,
+          repeat: -1,
+          yoyo: true
         })
       }
 
       this.tweens.add({
-        targets: g, angle: 2, duration: 1200,
-        yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+        targets: sapling,
+        y: y - 4,
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
       })
 
-      this.eggList.push({ graphic: g, x, y, type: e.type, card: e.card, collected: false })
+      this.eggList.push({
+        graphic: sapling,
+        glow,
+        x,
+        y,
+        type: e.type,
+        card: e.card,
+        sprite: e.sprite,
+        collected: false
+      })
     })
+
+    this.totalSaplings = this.eggList.length
   }
   spawnWildlife() {
 const positions = [
@@ -331,9 +576,19 @@ const positions = [
   { col: 5,  row: 5,  species: 'King Penguin',       fact: 'Takes over a year to raise a single chick.',                    type: 'penguin' },
   { col: 20, row: 5,  species: 'Chinstrap Penguin',  fact: 'Named for the thin black line under its chin.',                 type: 'penguin' },
   { col: 5,  row: 8,  species: 'Gentoo Penguin',     fact: 'The fastest swimming penguin species alive.',                   type: 'penguin' },
-  { col: 34, row: 8,  species: 'Rockhopper Penguin', fact: 'Known for hopping between rocks instead of waddling.',          type: 'penguin' },
+  { col: 34, row: 8,  species: 'Rockhopper Penguin', fact: 'Known for hopping between rocks instead of waddling.',          type: 'penguin', trapped: 'snare' },
   { col: 5,  row: 10, species: 'Polar Bear',         fact: 'Sea ice loss is shrinking their hunting grounds every year.',   type: 'bear' },
   { col: 20, row: 10, species: 'Polar Bear Cub',     fact: 'Cubs stay with their mother for over two years.',               type: 'bear' },
+
+  // extra wildlife, spread further across the map
+  { col: 30, row: 5,  species: 'Macaroni Penguin',   fact: 'Recognized instantly by its spiky yellow head feathers.',       type: 'penguin' },
+  { col: 44, row: 8,  species: 'Chinstrap Colony',   fact: 'Chinstrap penguins can form colonies of over a million birds.', type: 'penguin' },
+  { col: 9,  row: 15, species: 'Polar Bear',         fact: 'An adult male can weigh over 450 kilograms.',                   type: 'bear', trapped: 'snare' },
+  { col: 27, row: 20, species: 'Gentoo Penguin',     fact: 'Builds nests from pebbles it carefully collects one by one.',   type: 'penguin' },
+  { col: 38, row: 17, species: 'Emperor Penguin',    fact: 'Huddles in groups of thousands to survive -60°C winds.',        type: 'penguin', trapped: 'cage' },
+  { col: 15, row: 22, species: 'Polar Bear Cub',     fact: 'Born blind and weighing under half a kilogram.',                type: 'bear' },
+  { col: 6,  row: 38, species: 'King Penguin',       fact: 'The second-largest penguin species after the Emperor.',         type: 'penguin', trapped: 'snare' },
+  { col: 38, row: 35, species: 'Polar Bear',         fact: 'Can smell a seal through nearly a meter of ice.',               type: 'bear', trapped: 'cage' },
 ]
 
     this.wildlifeList = []
@@ -357,6 +612,46 @@ const positions = [
         color: '#FFD700', stroke: '#000000', strokeThickness: 3
       }).setOrigin(0.5).setDepth(11).setVisible(false)
 
+      const shelter = this.findNearestShelterTile(p.col, p.row)
+
+      // 🪤 Trap rescue UI (only created for animals that start trapped)
+      let trapIcon = null, alertIcon = null, dangerText = null, promptRescue = null, rescueBar = null
+      if (p.trapped) {
+        trapIcon = this.add.text(x, y + (p.type === 'bear' ? 30 : 22), '🪤', { fontSize: '16px' })
+          .setOrigin(0.5).setDepth(9).setVisible(false)
+
+        alertIcon = this.add.text(x, y - (p.type === 'bear' ? 80 : 68), '❗', { fontSize: '15px' })
+          .setOrigin(0.5).setDepth(11).setVisible(false)
+
+        dangerText = this.add.text(x, y - (p.type === 'bear' ? 66 : 56), '', {
+          fontSize: '11px', fontFamily: 'Arial Black',
+          color: '#ff5555', stroke: '#000000', strokeThickness: 3
+        }).setOrigin(0.5).setDepth(11).setVisible(false)
+
+        promptRescue = this.add.text(x, y - (p.type === 'bear' ? 52 : 42), 'Hold E to rescue', {
+          fontSize: '9px', fontFamily: 'Arial Black',
+          color: '#66ff99', stroke: '#000000', strokeThickness: 3
+        }).setOrigin(0.5).setDepth(11).setVisible(false)
+
+        rescueBar = this.add.graphics().setDepth(11)
+
+        // 👣 A short trail of animal tracks leading toward the trap,
+        // so the player can discover it by following prints instead
+        // of just walking into the discovery radius blind.
+        var trapTrail = this.buildAnimalTrail(p.col, p.row, p.type)
+
+        // 🧑‍🌾 Cage traps are guarded by a hunter stationed right next to them
+        if (p.trapped === 'cage') {
+          const offsets = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+          const spot = offsets
+            .map(([dc, dr]) => ({ col: p.col + dc, row: p.row + dr }))
+            .find(({ col, row }) => !this.isWall(col, row))
+          if (spot) {
+            this.createHunterAt(spot.col * this.TILE + this.TILE / 2, spot.row * this.TILE + this.TILE / 2)
+          }
+        }
+      }
+
       this.wildlifeList.push({
         graphic: sprite, shadow, prompt,
         x, y,
@@ -369,7 +664,24 @@ const positions = [
         size,
         species: p.species,
         fact: p.fact,
-        collected: this.wildlifeJournal.includes(p.species)
+        shelterCol: shelter ? shelter.col : null,
+        shelterRow: shelter ? shelter.row : null,
+        collected: this.wildlifeJournal.includes(p.species),
+
+        // 🪤 Trap / rescue state
+        trapped: !!p.trapped,
+        trapType: p.trapped || null,
+        discovered: false,
+        dangerTimer: 0,
+        assignedHunter: null,
+        rescueProgress: 0,
+        rescued: false,
+        escorting: false,
+        lost: false,
+        done: false,
+        shelterTarget: null,
+        trapIcon, alertIcon, dangerText, promptRescue, rescueBar,
+        trailSprites: trapTrail || []
       })
 
       if (this.wildlifeJournal.includes(p.species)) {
@@ -388,43 +700,62 @@ const positions = [
       { col: 7, row: 21 },
       { col: 4, row: 25 },
       { col: 40, row: 30 },
+
+      // extra hunters, spread further across the map
+      { col: 30, row: 3 },
+      { col: 44, row: 6 },
+      { col: 9, row: 17 },
+      { col: 27, row: 17 },
+      { col: 38, row: 20 },
+      { col: 44, row: 24 },
+      { col: 6, row: 35 },
+      { col: 27, row: 35 },
+      { col: 38, row: 38 },
+      { col: 20, row: 43 },
     ]
 
     positions.forEach(m => {
       if (this.isWall(m.col, m.row)) return
       const x = m.col * this.TILE + this.TILE / 2
       const y = m.row * this.TILE + this.TILE / 2
-
-      // Sprite instead of drawn graphic
-      const sprite = this.add.sprite(x, y, 'hunter_front')
-      sprite.setDisplaySize(48, 58)
-      sprite.setOrigin(0.5, 0.6)
-      sprite.setDepth(10)
-
-      // Shadow beneath hunter
-      const shadow = this.add.ellipse(x, y + 22, 30, 10, 0x000000, 0.35)
-      shadow.setDepth(9)
-
-      const body = this.physics.add.image(x, y, null).setVisible(false)
-      body.body.setSize(28, 28)
-      body.setCollideWorldBounds(true)
-      body.setVelocity(60, 0)
-
-      const hpBar = this.add.graphics()
-      this.drawHPBar(hpBar, x, y - 28, 2, 2)
-
-      const alert = this.add.text(x, y - 40, '❗', { fontSize: '16px' })
-        .setOrigin(0.5).setVisible(false)
-
-      this.monsterList.push({
-        graphic: sprite, shadow, body, hpBar, alert,
-        hp: 2, maxHp: 2, alive: true,
-        chasing: false, patrolTimer: 0, frozen: false,
-        alwaysChase: false, hacked: false,
-        spawnX: x, spawnY: y,
-        dir: 'front', walkTween: null
-      })
+      this.createHunterAt(x, y)
     })
+  }
+
+  createHunterAt(x, y) {
+    // Sprite instead of drawn graphic
+    const sprite = this.add.sprite(x, y, 'hunter_front')
+    sprite.setDisplaySize(48, 58)
+    sprite.setOrigin(0.5, 0.6)
+    sprite.setDepth(10)
+
+    // Shadow beneath hunter
+    const shadow = this.add.ellipse(x, y + 22, 30, 10, 0x000000, 0.35)
+    shadow.setDepth(9)
+
+    const body = this.physics.add.image(x, y, null).setVisible(false)
+    body.body.setSize(28, 28)
+    body.setCollideWorldBounds(true)
+    body.setVelocity(60, 0)
+
+    const hpBar = this.add.graphics()
+    this.drawHPBar(hpBar, x, y - 28, 2, 2)
+
+    const alert = this.add.text(x, y - 40, '❗', { fontSize: '16px' })
+      .setOrigin(0.5).setVisible(false)
+
+    const hunter = {
+      graphic: sprite, shadow, body, hpBar, alert,
+      hp: 2, maxHp: 2, alive: true,
+      chasing: false, patrolTimer: 0, frozen: false,
+      alwaysChase: false, hacked: false,
+      spawnX: x, spawnY: y,
+      dir: 'front', walkTween: null,
+      state: null, investigateTarget: null,
+      lastFootX: x, lastFootY: y
+    }
+    this.monsterList.push(hunter)
+    return hunter
   }
 
   spawnWeapons() {
@@ -502,19 +833,6 @@ const positions = [
     })
   }
 
-  showSpeciesCard(cardKey) {
-    const { width, height } = this.scale
-    const card = this.add.image(width + 300, height / 2, cardKey)
-      .setOrigin(1, 0.5).setScrollFactor(0).setDepth(200).setScale(0.38).setAlpha(0)
-    this.tweens.add({ targets: card, x: width - 20, alpha: 1, duration: 300, ease: 'Back.easeOut' })
-    this.time.delayedCall(3200, () => {
-      this.tweens.add({
-        targets: card, x: width + 300, alpha: 0, duration: 250, ease: 'Back.easeIn',
-        onComplete: () => card.destroy()
-      })
-    })
-  }
-
   checkEvolution() {
     if (this.goldenEggs >= 3 && this.evolutionStage < 3) {
       this.evolutionStage = 3
@@ -559,39 +877,799 @@ const positions = [
       })
     }
   }
+
+  // ===========================================================
+  // ❄️ WARMTH SYSTEM
+  // ===========================================================
+
+  spawnCampfires() {
+    const positions = [
+      { col: 8, row: 4 },
+      { col: 24, row: 24 },
+      { col: 40, row: 40 },
+      { col: 16, row: 30 }
+    ]
+
+    positions.forEach(p => {
+      if (this.isWall(p.col, p.row)) return
+      const x = p.col * this.TILE + this.TILE / 2
+      const y = p.row * this.TILE + this.TILE / 2
+      const radius = 110
+
+      const rangeRing = this.add.circle(x, y, radius, 0xFF6600, 0.06)
+        .setStrokeStyle(1, 0xFF9944, 0.35)
+        .setDepth(5)
+
+      const glow = this.add.circle(x, y, 26, 0xFF6600, 0.35).setDepth(6)
+      this.tweens.add({
+        targets: glow, scaleX: 1.6, scaleY: 1.6, alpha: 0.1,
+        duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+      })
+
+      const flame = this.add.text(x, y, '🔥', { fontSize: '26px' })
+        .setOrigin(0.5).setDepth(8)
+      this.tweens.add({
+        targets: flame, scaleX: 1.15, scaleY: 0.9,
+        duration: 260, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+      })
+
+      const logs = this.add.ellipse(x, y + 10, 34, 12, 0x4a2c14, 0.9).setDepth(7)
+
+      this.campfireList.push({ x, y, radius, rangeRing, glow, flame, logs })
+    })
+  }
+
+  // 🪤 Hidden alarm traps — stepping on one alerts nearby hunters
+  spawnAlarmTraps() {
+    const positions = [
+      { col: 12, row: 5 },
+      { col: 33, row: 13 },
+      { col: 20, row: 33 },
+      { col: 42, row: 20 }
+    ]
+
+    this.trapList = []
+
+    positions.forEach(p => {
+      if (this.isWall(p.col, p.row)) return
+      const x = p.col * this.TILE + this.TILE / 2
+      const y = p.row * this.TILE + this.TILE / 2
+
+      const icon = this.add.text(x, y, '🪤', { fontSize: '15px' })
+        .setOrigin(0.5).setDepth(9).setAlpha(0.85)
+
+      this.trapList.push({ x, y, icon, triggered: false })
+    })
+  }
+
+  updateAlarmTraps() {
+    this.trapList.forEach(t => {
+      if (t.triggered) return
+      t.icon.setAlpha(this.blizzardActive ? 0.45 : 0.85)
+
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, t.x, t.y) < 24) {
+        t.triggered = true
+        t.icon.setVisible(false)
+        this.showBanner('🚨 ALERT! Hunters are coming!', '#ff3355')
+        this.cameras.main.shake(250, 0.01)
+
+        this.monsterList.forEach(m => {
+          if (!m.alive || !m.body) return
+          const d = Phaser.Math.Distance.Between(m.body.x, m.body.y, t.x, t.y)
+          if (d < 420) m.alertedUntil = this.time.now + 10000
+        })
+      }
+    })
+  }
+
+  // Finds the nearest walkable tile that sits next to a tree/cliff tile,
+  // so wildlife has somewhere to actually huddle during a blizzard.
+  findNearestShelterTile(col, row) {
+    for (let radius = 1; radius <= 6; radius++) {
+      for (let dr = -radius; dr <= radius; dr++) {
+        for (let dc = -radius; dc <= radius; dc++) {
+          if (Math.max(Math.abs(dc), Math.abs(dr)) !== radius) continue
+          const c = col + dc
+          const r = row + dr
+          if (this.isWall(c, r)) continue
+
+          const adj = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+          for (const [adc, adr] of adj) {
+            if (this.isWall(c + adc, r + adr)) {
+              return { col: c, row: r }
+            }
+          }
+        }
+      }
+    }
+    return null
+  }
+
+  createWarmthHUD() {
+    const { width } = this.scale
+    const x = width - 190
+    const y = 86
+
+    this.warmthHUDX = x
+    this.warmthHUDY = y
+    this.warmthBarW = 150
+    this.warmthBarH = 14
+
+    this.warmthIcon = this.add.text(x - 22, y, '❄️', { fontSize: '16px' })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(250)
+
+    this.warmthBarBg = this.add.graphics().setScrollFactor(0).setDepth(250)
+    this.warmthBarBg.fillStyle(0x001a2e, 0.85)
+    this.warmthBarBg.fillRoundedRect(x - 4, y - this.warmthBarH / 2, this.warmthBarW + 8, this.warmthBarH, 6)
+
+    this.warmthBarFill = this.add.graphics().setScrollFactor(0).setDepth(251)
+
+    this.warmthText = this.add.text(x + this.warmthBarW / 2, y + 16, '', {
+      fontSize: '11px', fontFamily: 'Arial Black',
+      color: '#aee6ff', stroke: '#000000', strokeThickness: 3
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(251)
+
+    this.updateWarmthHUD()
+  }
+
+  updateWarmthHUD() {
+    if (!this.warmthBarFill) return
+    const pct = Phaser.Math.Clamp(this.warmth / this.maxWarmth, 0, 1)
+
+    const color =
+      pct > 0.6 ? 0x00BFFF :
+      pct > 0.3 ? 0xFFD700 :
+      0xff3355
+
+    this.warmthBarFill.clear()
+    this.warmthBarFill.fillStyle(color, 1)
+    this.warmthBarFill.fillRoundedRect(
+      this.warmthHUDX,
+      this.warmthHUDY - this.warmthBarH / 2,
+      this.warmthBarW * pct,
+      this.warmthBarH,
+      5
+    )
+
+    let label = `WARMTH: ${Math.round(this.warmth)}%`
+    if (this.warmth <= 0) label = '🥶 FROSTBITE!'
+    else if (this.nearCampfire) label = '🔥 WARMING UP'
+    else if (this.isSheltered) label = `WARMTH: ${Math.round(this.warmth)}% (sheltered)`
+
+    this.warmthText.setText(label)
+    this.warmthText.setColor(this.warmth <= 0 ? '#ff5577' : '#aee6ff')
+  }
+
+  updateWarmth(delta) {
+    if (!this.player || !this.player.active) return
+    const dt = delta / 1000
+
+    // Sheltered = standing next to a tree/cliff tile (wind-blocked)
+    const pc = Math.floor(this.player.x / this.TILE)
+    const pr = Math.floor(this.player.y / this.TILE)
+    this.isSheltered = false
+    for (let dr = -1; dr <= 1 && !this.isSheltered; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dc === 0 && dr === 0) continue
+        if (this.mapData[pr + dr] && this.isWall(pc + dc, pr + dr)) {
+          this.isSheltered = true
+          break
+        }
+      }
+    }
+
+    this.nearCampfire = this.campfireList.some(f =>
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, f.x, f.y) < f.radius
+    )
+
+    if (this.nearCampfire) {
+      this.warmth = Math.min(this.maxWarmth, this.warmth + this.CAMPFIRE_REGEN_PER_SEC * dt)
+    } else if (this.isRescuing) {
+      // Holding a rescue steady shouldn't also be a race against frostbite —
+      // warmth just holds still while you're actively freeing an animal.
+    } else {
+      const baseDecay = this.isSheltered ? this.SHELTER_DECAY_PER_SEC : this.OPEN_DECAY_PER_SEC
+      const blizzardMult = this.blizzardActive ? this.BLIZZARD_DECAY_MULT : 1
+      this.warmth = Math.max(0, this.warmth - baseDecay * blizzardMult * dt)
+    }
+
+    if (this.warmth <= 0 && this.time.now - this.lastFrostbiteTick > 2500) {
+      this.lastFrostbiteTick = this.time.now
+      this.playerHP--
+      this.player.setTint(0x66ccff)
+      this.showFloatingText(this.player.x, this.player.y - 30, '🥶 Frostbite! -1 Heart', '#66ccff')
+      this.time.delayedCall(300, () => {
+        if (this.player && this.player.active) this.player.clearTint()
+      })
+      if (this.playerHP <= 0) {
+        this.playerHP = 0
+        this.updateWarmthHUD()
+        this.endGame(false)
+        return
+      }
+    }
+
+    this.updateWarmthHUD()
+  }
+
+  // ===========================================================
+  // 🌨️ DYNAMIC BLIZZARD EVENTS
+  // ===========================================================
+
+  showBanner(msg, color) {
+    const { width } = this.scale
+    const banner = this.add.text(width / 2, 70, msg, {
+      fontSize: '18px', fontFamily: 'Arial Black',
+      color, stroke: '#000000', strokeThickness: 4
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(260).setAlpha(0)
+
+    this.tweens.add({
+      targets: banner, alpha: 1, duration: 300,
+      yoyo: true, hold: 2200,
+      onComplete: () => banner.destroy()
+    })
+  }
+
+  scheduleNextBlizzard() {
+    if (this.gameEnding) return
+    this.blizzardTimer = this.time.delayedCall(
+      Phaser.Math.Between(25000, 40000),
+      () => this.triggerBlizzardWarning()
+    )
+  }
+
+  triggerBlizzardWarning() {
+    if (this.gameEnding) return
+    this.blizzardWarningActive = true
+    this.showBanner('🌨️ Blizzard incoming...', '#aee6ff')
+    this.time.delayedCall(3000, () => this.startBlizzard())
+  }
+
+  startBlizzard() {
+    if (this.gameEnding) return
+    this.blizzardWarningActive = false
+    this.blizzardActive = true
+    this.showBanner('❄️ BLIZZARD!', '#ffffff')
+
+    const { width, height } = this.scale
+
+    this.blizzardOverlay = this.add.rectangle(width / 2, height / 2, width, height, 0xdfefff, 0.12)
+      .setScrollFactor(0).setDepth(180)
+    this.tweens.add({
+      targets: this.blizzardOverlay, alpha: 0.22,
+      duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+    })
+
+    this.blizzardFlakes = []
+    for (let i = 0; i < 90; i++) {
+      const x = Phaser.Math.Between(0, width)
+      const y = Phaser.Math.Between(-height, height)
+      const flake = this.add.circle(x, y, Phaser.Math.FloatBetween(1.5, 3.5), 0xffffff, 0.8)
+        .setScrollFactor(0).setDepth(181)
+
+      const tween = this.tweens.add({
+        targets: flake,
+        y: height + 20,
+        x: flake.x - Phaser.Math.Between(60, 140),
+        duration: Phaser.Math.Between(700, 1400),
+        repeat: -1,
+        onRepeat: () => {
+          flake.setPosition(Phaser.Math.Between(0, width), Phaser.Math.Between(-50, -10))
+        }
+      })
+
+      this.blizzardFlakes.push({ flake, tween })
+    }
+
+    this.blizzardTimer = this.time.delayedCall(
+      Phaser.Math.Between(14000, 20000),
+      () => this.endBlizzard()
+    )
+  }
+
+  endBlizzard() {
+    this.blizzardActive = false
+    this.clearBlizzardVisuals()
+    if (!this.gameEnding) {
+      this.showBanner('☀️ The blizzard has passed', '#aee6ff')
+      this.scheduleNextBlizzard()
+    }
+  }
+
+  clearBlizzardVisuals() {
+    if (this.blizzardOverlay) {
+      this.tweens.killTweensOf(this.blizzardOverlay)
+      this.blizzardOverlay.destroy()
+      this.blizzardOverlay = null
+    }
+    this.blizzardFlakes.forEach(f => {
+      if (f.tween) f.tween.stop()
+      if (f.flake) f.flake.destroy()
+    })
+    this.blizzardFlakes = []
+  }
+
+  // ===========================================================
+  // 👣 FOOTPRINTS (player, hunters, animals — a tracking clue,
+  // not decoration: trails hint at trapped animals; fresh boot
+  // prints tell you a hunter came through).
+  // ===========================================================
+
+  layFootprint(x, y, color, size) {
+    const lifespan = this.blizzardActive ? 3000 : 5000
+    // Two small offset ellipses — heel + ball of foot — reads as a
+    // print at this scale without depending on any emoji glyph.
+    const fp = this.add.graphics().setDepth(4).setAlpha(0.6)
+    fp.fillStyle(color, 1)
+    fp.fillEllipse(x, y, size, size * 1.5)
+    fp.fillEllipse(x - size * 0.35, y - size * 1.1, size * 0.7, size * 0.9)
+
+    this.tweens.add({
+      targets: fp, alpha: 0, duration: lifespan,
+      onComplete: () => {
+        fp.destroy()
+        const i = this.footprints.indexOf(fp)
+        if (i >= 0) this.footprints.splice(i, 1)
+      }
+    })
+
+    this.footprints.push(fp)
+  }
+
+  maybePlayerFootprint() {
+    if (this.playerLastFootX === null) {
+      this.playerLastFootX = this.player.x
+      this.playerLastFootY = this.player.y
+      return
+    }
+    const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.playerLastFootX, this.playerLastFootY)
+    if (d >= 26) {
+      this.layFootprint(this.player.x, this.player.y + 16, 0xdfefff, 6)
+      this.playerLastFootX = this.player.x
+      this.playerLastFootY = this.player.y
+    }
+  }
+
+  maybeLayHunterFootprint(m) {
+    if (m.lastFootX === undefined) { m.lastFootX = m.body.x; m.lastFootY = m.body.y; return }
+    const d = Phaser.Math.Distance.Between(m.body.x, m.body.y, m.lastFootX, m.lastFootY)
+    if (d >= 26) {
+      this.layFootprint(m.body.x, m.body.y + 14, 0x4a3626, 7)
+      m.lastFootX = m.body.x
+      m.lastFootY = m.body.y
+    }
+  }
+
+  maybeLayAnimalFootprint(w) {
+    if (w.lastFootX === undefined) { w.lastFootX = w.x; w.lastFootY = w.y; return }
+    const d = Phaser.Math.Distance.Between(w.x, w.y, w.lastFootX, w.lastFootY)
+    if (d >= 22) {
+      const dot = w.type === 'bear' ? '●' : '•'
+      this.layFootprint(w.x, w.y + (w.type === 'bear' ? 24 : 18), dot, w.type === 'bear' ? '13px' : '11px')
+      w.lastFootX = w.x
+      w.lastFootY = w.y
+    }
+  }
+
+  // A short, static trail of tracks leading toward a trapped animal —
+  // gives the player something to actually follow and discover, instead
+  // of just stumbling onto the danger banner.
+  buildAnimalTrail(col, row, type) {
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]
+    const dir = dirs[Phaser.Math.Between(0, dirs.length - 1)]
+    const dot = type === 'bear' ? '●' : '•'
+    const size = type === 'bear' ? '13px' : '11px'
+    const trail = []
+    let c = col, r = row
+
+    for (let i = 1; i <= 6; i++) {
+      c += dir[0]; r += dir[1]
+      if (this.isWall(c, r)) break
+      const x = c * this.TILE + this.TILE / 2
+      const y = r * this.TILE + this.TILE / 2
+      const sprite = this.add.text(x, y, dot, { fontSize: size })
+        .setOrigin(0.5).setDepth(4).setAlpha(0.5)
+      trail.push(sprite)
+    }
+
+    return trail
+  }
+
+  // A static trail of boot prints leading toward a hunter camp — same idea
+  // as the animal trail, just for camps instead of traps.
+  buildBootTrail(col, row, alpha) {
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]
+    const dir = dirs[Phaser.Math.Between(0, dirs.length - 1)]
+    let c = col, r = row
+    for (let i = 1; i <= 6; i++) {
+      c += dir[0]; r += dir[1]
+      if (this.isWall(c, r)) break
+      const x = c * this.TILE + this.TILE / 2
+      const y = r * this.TILE + this.TILE / 2
+      const print = this.add.graphics().setDepth(4).setAlpha(alpha)
+      print.fillStyle(0x4a3626, 1)
+      print.fillEllipse(x, y, 7, 10.5)
+      print.fillEllipse(x - 2.5, y - 7.7, 4.9, 6.3)
+    }
+  }
+
+  // ===========================================================
+  // 🏕️ HUNTER CAMPS — pure environmental discovery. No quest,
+  // no restriction: find one, light the dead fire, get a small
+  // reward and a real warmth source. The footprints do the work
+  // of pointing the player toward it.
+  // ===========================================================
+
+  // Drawn instead of an emoji glyph — 🏕️ is a compound emoji that a lot of
+  // canvas/font setups silently fail to render, so build it as a shape.
+  // Deliberately bigger than a tile (48px) — it's a landmark, not a prop.
+  drawTent(x, y) {
+    const g = this.add.graphics().setDepth(8)
+
+    // Ground shadow
+    g.fillStyle(0x000000, 0.25)
+    g.fillEllipse(x, y + 17, 64, 18)
+
+    // Tent body
+    g.fillStyle(0x8a6a4a, 1)
+    g.beginPath()
+    g.moveTo(x, y - 42)
+    g.lineTo(x - 32, y + 16)
+    g.lineTo(x + 32, y + 16)
+    g.closePath()
+    g.fillPath()
+
+    // Entrance flap
+    g.fillStyle(0x4a3626, 1)
+    g.beginPath()
+    g.moveTo(x, y - 22)
+    g.lineTo(x - 13, y + 16)
+    g.lineTo(x + 13, y + 16)
+    g.closePath()
+    g.fillPath()
+
+    // Outline + ridge seam
+    g.lineStyle(3, 0x3a2c1e, 0.9)
+    g.strokeTriangle(x, y - 42, x - 32, y + 16, x + 32, y + 16)
+    g.lineBetween(x, y - 42, x, y - 22)
+
+    return g
+  }
+
+  spawnHunterCamps() {
+    const camps = [
+      { col: 19, row: 6,  variant: 'abandoned' },
+      { col: 44, row: 14, variant: 'active' },
+      { col: 6,  row: 44, variant: 'old' },
+      { col: 33, row: 44, variant: 'large' }
+    ]
+
+    this.hunterCamps = []
+
+    camps.forEach(c => {
+      if (this.isWall(c.col, c.row)) return
+      const x = c.col * this.TILE + this.TILE / 2
+      const y = c.row * this.TILE + this.TILE / 2
+
+      // Tent(s) — larger camps get a small cluster instead of one
+      const tentOffsets = [[0, -32], [-58, -4], [58, -4]]
+      const tentCount = c.variant === 'large' ? 3 : 1
+      for (let i = 0; i < tentCount; i++) {
+        const [ox, oy] = tentOffsets[i]
+        this.drawTent(x + ox, y + oy)
+      }
+
+      // Dead campfire — cold ash and unlit logs, no flame yet
+      const logs = this.add.ellipse(x, y + 14, 34, 12, 0x3a3a3a, 0.9).setDepth(7)
+      const ash = this.add.circle(x, y + 14, 15, 0x555555, 0.45).setDepth(6)
+
+      // Supplies
+      const crate = this.add.text(x + 34, y + 10, '📦', { fontSize: '18px' }).setOrigin(0.5).setDepth(8)
+
+      if (c.variant === 'old') {
+        // Partially buried under drifted snow
+        crate.setAlpha(0.55)
+        this.add.ellipse(x + 34, y + 14, 22, 10, 0xffffff, 0.55).setDepth(9)
+      }
+
+      // Footprints leading to the camp — fresher and more visible for
+      // a recently-used camp, barely-there for an old one
+      const trailAlpha = c.variant === 'old' ? 0.2 : c.variant === 'active' ? 0.6 : 0.4
+      const trailCount = c.variant === 'large' ? 3 : 1
+      for (let i = 0; i < trailCount; i++) {
+        this.buildBootTrail(c.col, c.row, trailAlpha)
+      }
+
+      // A recently-used camp still has a hunter lingering nearby
+      if (c.variant === 'active') {
+        const offsets = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+        const spot = offsets
+          .map(([dc, dr]) => ({ col: c.col + dc, row: c.row + dr }))
+          .find(({ col, row }) => !this.isWall(col, row))
+        if (spot) {
+          this.createHunterAt(spot.col * this.TILE + this.TILE / 2, spot.row * this.TILE + this.TILE / 2)
+        }
+      }
+
+      const prompt = this.add.text(x, y - 42, '[E] Light Campfire', {
+        fontSize: '11px', fontFamily: 'Arial Black',
+        color: '#ffcc66', stroke: '#000000', strokeThickness: 3
+      }).setOrigin(0.5).setDepth(11).setVisible(false)
+
+      this.hunterCamps.push({
+        x, y, lit: false, variant: c.variant,
+        logs, ash, crate, prompt,
+        radius: 110
+      })
+    })
+  }
+
+  updateHunterCamps() {
+    this.hunterCamps.forEach(camp => {
+      if (camp.lit) return
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, camp.x, camp.y)
+      const canLight = dist < 55
+      camp.prompt.setVisible(canLight)
+
+      if (canLight && Phaser.Input.Keyboard.JustDown(this.collectKey)) {
+        this.lightHunterCamp(camp)
+      }
+    })
+  }
+
+  lightHunterCamp(camp) {
+    camp.lit = true
+    camp.prompt.destroy()
+    camp.ash.destroy()
+    camp.logs.setFillStyle(0x4a2c14, 0.9)
+
+    const glow = this.add.circle(camp.x, camp.y + 14, 26, 0xFF6600, 0.35).setDepth(6)
+    this.tweens.add({
+      targets: glow, scaleX: 1.6, scaleY: 1.6, alpha: 0.1,
+      duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+    })
+
+    const flame = this.add.text(camp.x, camp.y + 14, '🔥', { fontSize: '24px' }).setOrigin(0.5).setDepth(8)
+    this.tweens.add({
+      targets: flame, scaleX: 1.15, scaleY: 0.9,
+      duration: 260, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+    })
+
+    // A lit camp is a real warmth source from here on
+    this.campfireList.push({ x: camp.x, y: camp.y + 14, radius: camp.radius, glow, flame, logs: camp.logs })
+
+    this.score += 100
+    this.showBanner('🔥 HUNTER CAMP DISCOVERED', '#ffcc66')
+    this.time.delayedCall(2600, () => {
+      this.showBanner('Evidence of illegal hunting activity was found here.', '#dddddd')
+    })
+  }
+
+  // ===========================================================
+  // 🪤 HUNTER TRAPS + RESCUE EVENTS
+  // ===========================================================
+
+  hideWildlifeUI(w) {
+    if (w.trapIcon) w.trapIcon.setVisible(false)
+    if (w.alertIcon) w.alertIcon.setVisible(false)
+    if (w.dangerText) w.dangerText.setVisible(false)
+    if (w.promptRescue) w.promptRescue.setVisible(false)
+    if (w.rescueBar) w.rescueBar.clear()
+    if (w.prompt) w.prompt.setVisible(false)
+    if (w.trailSprites) w.trailSprites.forEach(s => s.destroy())
+    if (w.trailSprites) w.trailSprites = []
+  }
+
+  updateRescueBar(w) {
+    if (!w.rescueBar) return
+    w.rescueBar.clear()
+    if (!w.rescueProgress) return
+
+    const barW = 40
+    const barX = w.x - barW / 2
+    const barY = w.y - (w.type === 'bear' ? 96 : 84)
+
+    w.rescueBar.fillStyle(0x001a0e, 0.8)
+    w.rescueBar.fillRoundedRect(barX, barY, barW, 7, 3)
+    w.rescueBar.fillStyle(0x66ff99, 1)
+    w.rescueBar.fillRoundedRect(barX, barY, barW * w.rescueProgress, 7, 3)
+  }
+
+  completeRescue(w) {
+    w.trapped = false
+    w.rescued = true
+    w.discovered = true
+    this.wildlifeJournal.push(w.species)
+    this.score += 150
+    this.showFloatingText(w.x, w.y - 30, '❤️ RESCUED!', '#66ff99')
+    this.hideWildlifeUI(w)
+
+    if (w.assignedHunter) {
+      w.assignedHunter.state = null
+      w.assignedHunter.investigateTarget = null
+      w.assignedHunter = null
+    }
+
+    let nearestFire = null, nearestDist = Infinity
+    this.campfireList.forEach(f => {
+      const d = Phaser.Math.Distance.Between(w.x, w.y, f.x, f.y)
+      if (d < nearestDist) { nearestDist = d; nearestFire = f }
+    })
+
+    if (nearestFire) {
+      w.shelterTarget = nearestFire
+      w.escorting = true
+    } else {
+      w.done = true
+    }
+  }
+
+  loseTrappedAnimal(w, reason) {
+    w.trapped = false
+    w.lost = true
+    this.forestHealth = Math.max(0, (this.forestHealth || 100) - 10)
+
+    const msg = reason === 'hunter'
+      ? `💔 ${w.species} was taken!`
+      : `💔 ${w.species} didn't make it...`
+
+    this.showFloatingText(w.x, w.y - 30, msg, '#ff4444')
+    this.hideWildlifeUI(w)
+    w.graphic.setAlpha(0.2)
+
+    if (w.assignedHunter) {
+      w.assignedHunter.state = null
+      w.assignedHunter.investigateTarget = null
+      w.assignedHunter = null
+    }
+  }
+
+  updateTrappedAnimal(w, delta) {
+    // ── Freed and walking itself to the nearest campfire shelter ──
+    if (w.escorting) {
+      const target = w.shelterTarget
+      if (!target) { w.done = true; return }
+
+      const dist = Phaser.Math.Distance.Between(w.x, w.y, target.x, target.y)
+      if (dist < 40) {
+        w.escorting = false
+        w.done = true
+        this.showBanner(`❤️ ${w.species} is SAFE!`, '#66ff99')
+        w.graphic.setAlpha(0.35)
+        return
+      }
+
+      const angle = Phaser.Math.Angle.Between(w.x, w.y, target.x, target.y)
+      const spd = (w.type === 'bear' ? 0.9 : 1.3)
+      w.x += Math.cos(angle) * spd
+      w.y += Math.sin(angle) * spd
+      w.graphic.setPosition(w.x, w.y)
+      w.shadow.setPosition(w.x, w.y + (w.type === 'bear' ? 28 : 22))
+      this.maybeLayAnimalFootprint(w)
+
+      const horizontal = Math.abs(Math.cos(angle)) > Math.abs(Math.sin(angle))
+      const dir = horizontal
+        ? (Math.cos(angle) > 0 ? 'right' : 'left')
+        : (Math.sin(angle) > 0 ? 'front' : 'back')
+      w.graphic.setTexture(w.type + '_' + dir)
+      return
+    }
+
+    if (!w.trapped) return
+
+    const distToPlayer = Phaser.Math.Distance.Between(this.player.x, this.player.y, w.x, w.y)
+
+    // ── Discovery: nothing happens until the player gets close ──
+    if (!w.discovered) {
+      if (distToPlayer < 220) {
+        w.discovered = true
+        w.dangerTimer = w.trapType === 'cage' ? 30000 : 24000
+        this.showBanner(`⚠️ ${w.species} is trapped!`, '#ffcc55')
+        if (w.trapIcon) w.trapIcon.setVisible(true)
+        if (w.trailSprites) { w.trailSprites.forEach(s => s.destroy()); w.trailSprites = [] }
+      } else {
+        return
+      }
+    }
+
+    // ── Danger timer ──
+    w.dangerTimer -= delta
+    if (w.dangerTimer <= 0) {
+      this.loseTrappedAnimal(w, 'timeout')
+      return
+    }
+    if (w.dangerText) {
+      w.dangerText.setVisible(true)
+      w.dangerText.setPosition(w.x, w.y - (w.type === 'bear' ? 66 : 56))
+      w.dangerText.setText(`⏱️ ${Math.ceil(w.dangerTimer / 1000)}s`)
+    }
+    if (w.alertIcon) {
+      w.alertIcon.setVisible(true)
+      w.alertIcon.setPosition(w.x, w.y - (w.type === 'bear' ? 80 : 68))
+    }
+    if (w.trapIcon) w.trapIcon.setAlpha(this.blizzardActive ? 0.45 : 1)
+
+    // ── Assign the nearest free hunter to investigate ──
+    if (w.assignedHunter && !w.assignedHunter.alive) w.assignedHunter = null
+    if (!w.assignedHunter) {
+      let nearest = null, nearestDist = 320
+      this.monsterList.forEach(m => {
+        if (!m.alive || !m.body || m.state === 'investigate') return
+        const d = Phaser.Math.Distance.Between(m.body.x, m.body.y, w.x, w.y)
+        if (d < nearestDist) { nearestDist = d; nearest = m }
+      })
+      if (nearest) {
+        nearest.state = 'investigate'
+        nearest.investigateTarget = w
+        w.assignedHunter = nearest
+      }
+    }
+
+    // ── Rescue interaction: hold E while close ──
+    const canRescue = distToPlayer < 60
+    if (w.promptRescue) {
+      w.promptRescue.setVisible(canRescue)
+      w.promptRescue.setPosition(w.x, w.y - (w.type === 'bear' ? 52 : 42))
+    }
+
+    if (canRescue && this.collectKey.isDown) {
+      w.rescueProgress = Math.min(1, (w.rescueProgress || 0) + delta / 2000)
+      this.isRescuing = true
+    } else {
+      w.rescueProgress = Math.max(0, (w.rescueProgress || 0) - delta / 1000)
+    }
+    this.updateRescueBar(w)
+
+    if (w.rescueProgress >= 1) {
+      this.completeRescue(w)
+    }
+  }
+
   useWeapon() {
     if (this.isAttacking) return
     this.isAttacking = true
     const range = this.evolutionStage >= 3 ? 220 :
       this.evolutionStage >= 2 ? 170 : 120
 
+    // Same two-layer ring effect GameScene1 uses for every attack:
+    // a thin expanding stroke ring, optionally paired with a soft glow.
+    const makeRing = (color, startRadius, finalScale, duration = 350) => {
+      const ring = this.add.graphics()
+      ring.setPosition(this.player.x, this.player.y)
+      ring.lineStyle(3, color, 0.65)
+      ring.strokeCircle(0, 0, startRadius)
+      this.tweens.add({
+        targets: ring, scaleX: finalScale, scaleY: finalScale, alpha: 0,
+        duration, onComplete: () => ring.destroy()
+      })
+      return ring
+    }
+
     switch (this.currentWeapon) {
       case 'normal': {
-        const sw = this.add.graphics()
-        sw.lineStyle(3, this.birdColor, 0.9)
-        sw.strokeCircle(this.player.x, this.player.y, 10)
-        this.tweens.add({ targets: sw, scaleX: range / 10, scaleY: range / 10, alpha: 0, duration: 350, onComplete: () => sw.destroy() })
+        makeRing(this.birdColor, 10, range / 10, 350)
         this.hitMonstersInRange(this.player.x, this.player.y, range, 1, this.birdColor)
         break
       }
       case 'bomb': {
+        makeRing(0xFF6600, 12, range / 9, 320)
         const boom = this.add.graphics()
         boom.fillStyle(0xFF6600, 0.7)
         boom.fillCircle(this.player.x, this.player.y, 20)
         this.tweens.add({ targets: boom, scaleX: 8, scaleY: 8, alpha: 0, duration: 500, onComplete: () => boom.destroy() })
         this.hitMonstersInRange(this.player.x, this.player.y, range * 2.2, 3, 0xFF6600)
         this.cameras.main.shake(300, 0.01)
+        this.showFloatingText(this.player.x, this.player.y - 30, '💣 Bomb Blast!', '#ff9955')
         break
       }
       case 'ice': {
-        const iceRing = this.add.graphics()
-        iceRing.lineStyle(3, 0x00BFFF, 0.9)
-        iceRing.strokeCircle(this.player.x, this.player.y, 10)
-        this.tweens.add({ targets: iceRing, scaleX: range / 10, scaleY: range / 10, alpha: 0, duration: 400, onComplete: () => iceRing.destroy() })
+        makeRing(0x00BFFF, 10, range / 10, 400)
+        let frozeAnyone = false
         this.monsterList.forEach(m => {
           if (!m.alive || !m.body || !m.body.active) return
           const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
           if (dist < range) {
+            frozeAnyone = true
             m.frozen = true
             m.body.setVelocity(0, 0)
             this.drawMonster(m, m.body.x, m.body.y, true)
@@ -599,12 +1677,22 @@ const positions = [
             this.time.delayedCall(3000, () => { if (m.alive) { m.frozen = false; this.drawMonster(m, m.body.x, m.body.y, false) } })
           }
         })
+        if (!frozeAnyone) {
+          this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#88ccff')
+        }
         break
       }
       case 'lightning': {
         const sorted = this.monsterList.filter(m => m.alive && m.body && m.body.active)
           .sort((a, b) => Phaser.Math.Distance.Between(this.player.x, this.player.y, a.body.x, a.body.y) - Phaser.Math.Distance.Between(this.player.x, this.player.y, b.body.x, b.body.y))
           .slice(0, 3)
+
+        if (sorted.length === 0) {
+          this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#888888')
+          break
+        }
+
+        makeRing(0xFFD700, 10, range / 16, 280)
         const lightning = this.add.graphics()
         lightning.lineStyle(3, 0xFFD700, 1)
         let lx = this.player.x, ly = this.player.y
@@ -619,14 +1707,17 @@ const positions = [
           if (m.hp <= 0) this.killMonster(m)
         })
         this.tweens.add({ targets: lightning, alpha: 0, duration: 300, onComplete: () => lightning.destroy() })
+        this.showFloatingText(this.player.x, this.player.y - 30, '⚡ Electric Chain!', '#FFD700')
         break
       }
       case 'boomerang': {
+        makeRing(0xC8A25A, 10, range / 10, 250)
         this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xC8A25A)
         this.time.delayedCall(400, () => {
+          makeRing(0xC8A25A, 10, range / 10, 250)
           this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xC8A25A)
-          this.showFloatingText(this.player.x, this.player.y - 30, '🪃 Boomerang!', '#C8A25A')
         })
+        this.showFloatingText(this.player.x, this.player.y - 30, '🪃 Boomerang!', '#C8A25A')
         break
       }
     }
@@ -714,12 +1805,37 @@ const positions = [
     })
     this.tweens.killAll()
     this.time.removeAllEvents()
+    this.clearBlizzardVisuals()
+    this.footprints.forEach(fp => fp.destroy())
+    this.footprints = []
     this.physics.pause()
     this.input.keyboard.enabled = false
     if (this.terminal) this.terminal.destroy()
     this.saveScore()
     this.scene.stop('UIScene')
-    this.time.delayedCall(200, () => this.showConservationReport(escaped))
+
+    // Build report data
+    const reportData = {
+      playerName: this.playerName,
+      chosenBird: this.chosenBird,
+      totalScore: this.score,
+      saplingsCollected: this.eggsCollected,
+      animalsRescued: (this.wildlifeJournal || []).length,
+      monstersKilled: this.monsterList.filter(m => !m.alive).length,
+      co2Absorbed: this.eggsCollected * 22,
+      timeTaken: 200 - (this.timeLeft || 0),
+      flashCards: [...(this.collectedFlashCards || [])],
+      escaped: escaped
+    }
+
+    // OPEN FLASHCARD SCENE (report is shown afterwards, from goToReport())
+    this.scene.launch('FlashcardScene2', {
+      flashCards: reportData.flashCards,
+      reportData: reportData
+    })
+
+    // Pause GameScene2 AFTER launching flashcards
+    this.scene.pause('GameScene2')
   }
   animateHunterWalk(m) {
     if (m.walkTween) return // already animating
@@ -959,7 +2075,12 @@ const positions = [
   update() {
   if (this.gameEnding) return
 
-  const speed = this.evolutionStage >= 2 ? 190 : 140
+  const delta = this.game.loop.delta
+  this.updateWarmth(delta)
+  this.isRescuing = false
+  this.maybePlayerFootprint()
+
+  const speed = (this.evolutionStage >= 2 ? 190 : 140) * (this.warmth <= 0 ? 0.8 : 1)
   let vx = 0, vy = 0
   this.isMoving = false
 
@@ -1022,9 +2143,52 @@ const positions = [
     }
 
     const distToPlayer = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
-    const chaseRange = m.alwaysChase ? 9999 : this.stealthMode ? 0 : this.evolutionStage >= 2 ? 110 : 140
+    const alerted = m.alertedUntil && this.time.now < m.alertedUntil
+    const chaseRange = (m.alwaysChase || alerted) ? 9999 : this.stealthMode ? 0 : (this.evolutionStage >= 2 ? 110 : 140) * (this.blizzardActive ? 0.7 : 1)
+
+    // 🪤 Investigating a trapped animal takes priority over patrolling,
+    // unless the player wanders close enough to draw the hunter's attention.
+    if (m.state === 'investigate' && distToPlayer >= chaseRange) {
+      const target = m.investigateTarget
+      if (!target || target.rescued || target.lost) {
+        m.state = null
+        m.investigateTarget = null
+      } else {
+        m.alert.setVisible(true)
+        m.alert.setPosition(m.body.x, m.body.y - 42)
+        const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, target.x, target.y)
+        const ms = 65
+        const mvx = Math.cos(angle) * ms, mvy = Math.sin(angle) * ms
+        const nc = Math.floor((m.body.x + mvx * 0.05) / this.TILE)
+        const nr = Math.floor((m.body.y + mvy * 0.05) / this.TILE)
+        const finalVx = this.isWall(nc, mr) ? 0 : mvx
+        const finalVy = this.isWall(mc, nr) ? 0 : mvy
+        m.body.setVelocity(finalVx, finalVy)
+        this.animateHunterWalk(m)
+
+        if (Math.abs(finalVx) > Math.abs(finalVy)) {
+          if (finalVx !== 0) m.graphic.setTexture(finalVx > 0 ? 'hunter_right' : 'hunter_left')
+        } else if (finalVy !== 0) {
+          m.graphic.setTexture(finalVy > 0 ? 'hunter_front' : 'hunter_back')
+        }
+        m.graphic.setDisplaySize(48, 58)
+
+        if (Phaser.Math.Distance.Between(m.body.x, m.body.y, target.x, target.y) < 34) {
+          this.loseTrappedAnimal(target, 'hunter')
+          m.state = null
+          m.investigateTarget = null
+        }
+
+        this.maybeLayHunterFootprint(m)
+        this.drawMonster(m, m.body.x, m.body.y, false)
+        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+        return
+      }
+    }
 
     if (distToPlayer < chaseRange) {
+      m.state = null
+      m.investigateTarget = null
       m.chasing = true
       m.alert.setVisible(true)
       m.alert.setPosition(m.body.x, m.body.y - 42)
@@ -1112,10 +2276,16 @@ const positions = [
             e.graphic.destroy()
             e.graphic = null
           }
+          if (e.glow) {
+            this.tweens.killTweensOf(e.glow)
+            e.glow.destroy()
+            e.glow = null
+          }
         }
       }
     }
 
+    this.maybeLayHunterFootprint(m)
     this.drawMonster(m, m.body.x, m.body.y, false)
     this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
   })
@@ -1127,8 +2297,18 @@ const positions = [
       e.collected = true
       e.graphic.destroy()
       e.graphic = null
+      if (e.glow) {
+        this.tweens.killTweensOf(e.glow)
+        e.glow.destroy()
+        e.glow = null
+      }
       this.eggsCollected++
-      this.showSpeciesCard(e.card)
+      // The sapling determines the flashcard, but the card is only
+      // recorded here — it is NOT shown during gameplay anymore.
+      // FlashcardScene2 opens once, after the game ends (see endGame()).
+      if (e.card && !this.collectedFlashCards.includes(e.card)) {
+        this.collectedFlashCards.push(e.card)
+      }
       if (e.type === 'golden') {
         this.goldenEggs++; this.score += 500
         this.checkEvolution()
@@ -1146,10 +2326,24 @@ const positions = [
     }
   })
 
+  // ── Alarm traps ──────────────────────────────────────────────
+  this.updateAlarmTraps()
+
+  // ── Hunter camps ─────────────────────────────────────────────
+  this.updateHunterCamps()
+
   // ── Wildlife wander + flee + collection ────────────────────────
   if (this.wildlifeList) {
 
   this.wildlifeList.forEach(w => {
+      // 🪤 Trapped / rescued / escorting animals run on their own logic
+      // and skip the normal wander-and-collect behaviour entirely.
+      if (w.lost || w.done) return
+      if (w.trapped || w.escorting) {
+        this.updateTrappedAnimal(w, delta)
+        return
+      }
+
       // Collection prompt + E key handling
       const playerDistCol = Phaser.Math.Distance.Between(this.player.x, this.player.y, w.x, w.y)
      const canCollect = playerDistCol < 55 && !w.fleeing && !w.collected
@@ -1181,6 +2375,13 @@ this.monsterList.forEach(m => {
 
 w.fleeing = nearestHunterDist < 90
 
+      // ❄️ Cold tint while huddling in a blizzard (fleeing overrides it)
+      if (this.blizzardActive && !w.fleeing) {
+        w.graphic.setTint(0x99ccff)
+      } else {
+        w.graphic.clearTint()
+      }
+
       if (!w.moving) {
         let dc = 0, dr = 0
 
@@ -1194,6 +2395,20 @@ w.fleeing = nearestHunterDist < 90
             dc = Math.round(Math.cos(angle))
             dr = Math.round(Math.sin(angle))
           }
+        } else if (this.blizzardActive && w.shelterCol != null) {
+          // Blizzard AI: head for the nearest sheltered tile and huddle there
+          const curCol = Math.round((w.x - this.TILE / 2) / this.TILE)
+          const curRow = Math.round((w.y - this.TILE / 2) / this.TILE)
+          if (curCol !== w.shelterCol || curRow !== w.shelterRow) {
+            if (Math.abs(w.shelterCol - curCol) >= Math.abs(w.shelterRow - curRow)) {
+              dc = Math.sign(w.shelterCol - curCol)
+            } else {
+              dr = Math.sign(w.shelterRow - curRow)
+            }
+          }
+          // already at shelter — dc/dr stay 0, animal huddles in place
+        } else if (this.blizzardActive) {
+          // no shelter nearby — just hunker down where it is
         } else {
           w.wanderTimer = (w.wanderTimer || 0) + 1
           const waitTime = w.fleeing ? 0 : 60
@@ -1247,6 +2462,7 @@ w.fleeing = nearestHunterDist < 90
 
       w.graphic.setPosition(w.x, w.y)
       w.shadow.setPosition(w.x, w.y + (w.type === 'bear' ? 28 : 22))
+      if (w.moving) this.maybeLayAnimalFootprint(w)
     })
   }
 
@@ -1257,7 +2473,7 @@ w.fleeing = nearestHunterDist < 90
       w.collected = true
       w.bg.destroy(); w.label.destroy(); w.desc.destroy()
       this.currentWeapon = w.type
-      const labels = { bomb: '💣 BOMB!', ice: '❄️ ICE!', lightning: '⚡ LIGHTNING!', boomerang: '🪃 BOOMERANG!' }
+      const labels = { bomb: '💣 BOMB equipped!', ice: '❄️ ICE equipped!', lightning: '⚡ LIGHTNING equipped!', boomerang: '🪃 BOOMERANG equipped!' }
       this.showFloatingText(this.player.x, this.player.y - 30, labels[w.type], '#ffffff')
     }
   })
