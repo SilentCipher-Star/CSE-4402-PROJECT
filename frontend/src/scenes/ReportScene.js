@@ -225,26 +225,42 @@ export class ReportScene extends Phaser.Scene {
       }
     })
 
-    this.makeButton(panelX + panelW * 0.64, btnY, 'MENU', () => {
-      this.scene.stop('ReportScene')
-      this.scene.stop('GameScene')
-      this.scene.start('MenuScene')
+    this.makeButton(panelX + panelW * 0.64, btnY, 'MENU (ESC)', () => {
+      this.goToMenu()
     })
 
-  
+    this.isLeaving = false
+    this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
+
+    this.input.keyboard.on('keydown-ESC', () => {
+      if (!this.scene.isActive('FlashCardScene')) {
+        this.goToMenu()
+      }
+    })
+
+    this.events.on('resume', () => {
+      if (this.game.canvas) {
+        this.game.canvas.focus()
+      }
+      if (this.escKey) {
+        this.escKey.reset()
+      }
+    })
+  }
+
+  goToMenu() {
+    if (this.isLeaving) return
+    this.isLeaving = true
+    this.scene.stop('ReportScene')
+    this.scene.stop('GameScene')
+    this.scene.start('MenuScene')
   }
 
   update() {
-    // Only check for ESC in ReportScene if FlashCardScene is NOT active
+    // Check for ESC in ReportScene when FlashCardScene is NOT active
     if (!this.scene.isActive('FlashCardScene')) {
-      if (!this.escKey) {
-        this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
-      }
-
-      if (Phaser.Input.Keyboard.JustDown(this.escKey)) {
-        this.scene.stop('ReportScene')
-        this.scene.stop('GameScene')
-        this.scene.start('MenuScene')
+      if (this.escKey && Phaser.Input.Keyboard.JustDown(this.escKey)) {
+        this.goToMenu()
       }
     }
   }

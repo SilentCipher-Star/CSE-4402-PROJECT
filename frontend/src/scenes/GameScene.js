@@ -82,7 +82,8 @@ export class GameScene extends Phaser.Scene {
       1 * this.TILE + this.TILE / 2,
       `${this.playerSpriteKey}_right`
     )
-    this.player.setDisplaySize(this.TILE + 8, this.TILE + 8)
+    const playerSize = (this.chosenBird === 'Ember') ? this.TILE : (this.TILE + 8)
+    this.player.setDisplaySize(playerSize, playerSize)
     this.player.setCollideWorldBounds(true)
     this.player.body.setSize(28, 28)
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
@@ -1090,6 +1091,43 @@ export class GameScene extends Phaser.Scene {
       case 'boomerang': {
         makeRing(0xc8a25a, 10, range / 10, 250)
         this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xc8a25a)
+
+        // Spawn spinning boomerang projectile arcing out
+        const b = this.add.text(this.player.x, this.player.y, '🪃', { fontSize: '24px' }).setOrigin(0.5).setDepth(20)
+        let targetAngle = 0
+        let closestDist = 9999
+        this.monsterList.forEach(m => {
+          if (m.alive && m.body) {
+            const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
+            if (d < range * 1.5 && d < closestDist) {
+              closestDist = d
+              targetAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, m.body.x, m.body.y)
+            }
+          }
+        })
+        const throwDist = Math.min(range, closestDist < 9999 ? closestDist : range)
+        const targetX = this.player.x + Math.cos(targetAngle) * throwDist
+        const targetY = this.player.y + Math.sin(targetAngle) * throwDist
+
+        this.tweens.add({
+          targets: b,
+          x: targetX,
+          y: targetY,
+          angle: 720,
+          duration: 260,
+          ease: 'Sine.easeOut',
+          onComplete: () => {
+            this.tweens.add({
+              targets: b,
+              x: this.player.x,
+              y: this.player.y,
+              angle: 1440,
+              duration: 260,
+              ease: 'Sine.easeIn',
+              onComplete: () => b.destroy()
+            })
+          }
+        })
 
         this.time.delayedCall(300, () => {
           makeRing(0xc8a25a, 10, range / 10, 250)

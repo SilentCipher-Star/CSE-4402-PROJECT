@@ -123,6 +123,8 @@ export class GameScene2 extends Phaser.Scene {
       b + '_right'
     )
     this.player.setDisplaySize(this.TILE + 8, this.TILE + 8)
+    const playerSize = (this.chosenBird === 'Ember') ? this.TILE : (this.TILE + 8)
+    this.player.setDisplaySize(playerSize, playerSize)
     this.player.setCollideWorldBounds(true)
     this.player.body.setSize(28, 28)
 
