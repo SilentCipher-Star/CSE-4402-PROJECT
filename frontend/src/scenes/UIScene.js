@@ -32,6 +32,17 @@ export class UIScene extends Phaser.Scene {
       strokeThickness: 3
     })
 
+    this.heartSprites = []
+    if (this.textures.exists('heart')) {
+      for (let i = 0; i < 5; i++) {
+        const spr = this.add.image(24 + i * 21, 40, 'heart')
+        spr.setDisplaySize(18, 18)
+        spr.setDepth(10)
+        this.heartSprites.push(spr)
+      }
+      this.heartsText.setVisible(false)
+    }
+
     // Shield status HUD (centered under timer)
     this.shieldHudText = this.add.text(width / 2, 40, '', {
       fontSize: '11px',
@@ -142,14 +153,26 @@ export class UIScene extends Phaser.Scene {
 
     const hp = gs.playerHP || 0
     const maxHp = gs.maxHP || 5
-    let str = ''
 
-    for (let i = 0; i < maxHp; i++) {
-      str += i < hp ? '❤️' : '🖤'
+    if (this.heartSprites && this.heartSprites.length > 0) {
+      for (let i = 0; i < this.heartSprites.length; i++) {
+        const spr = this.heartSprites[i]
+        if (i < hp) {
+          spr.setAlpha(1.0)
+          spr.clearTint()
+        } else {
+          spr.setAlpha(0.28)
+          spr.setTint(0x222222)
+        }
+      }
+    } else {
+      let str = ''
+      for (let i = 0; i < maxHp; i++) {
+        str += i < hp ? '❤️' : '🖤'
+      }
+      this.heartsText.setText(str)
+      this.heartsText.setAlpha(1)
     }
-
-    this.heartsText.setText(str)
-    this.heartsText.setAlpha(1)
   }
 
   drawMinimap() {
@@ -187,30 +210,45 @@ export class UIScene extends Phaser.Scene {
     }
 
     // Eggs
-    gs.eggList.forEach(e => {
-      if (e.collected) return
-      const ex = ox + (e.x / (gs.mapCols * gs.TILE)) * this.MM_W
-      const ey = oy + (e.y / (gs.mapRows * gs.TILE)) * this.MM_H
-      const eggColors = {
-        normal: 0xffffff, fire: 0xFF4500,
-        thunder: 0xFFD700, golden: 0xFFD700
-      }
-      g.fillStyle(eggColors[e.type] || 0xffffff, 1)
-      g.fillCircle(ex, ey, 2)
-    })
+    if (gs.eggList) {
+      gs.eggList.forEach(e => {
+        if (e.collected) return
+        const ex = ox + (e.x / (gs.mapCols * gs.TILE)) * this.MM_W
+        const ey = oy + (e.y / (gs.mapRows * gs.TILE)) * this.MM_H
+        const eggColors = {
+          normal: 0xffffff, fire: 0xFF4500,
+          thunder: 0xFFD700, golden: 0xFFD700
+        }
+        g.fillStyle(eggColors[e.type] || 0xffffff, 1)
+        g.fillCircle(ex, ey, 2)
+      })
+    }
 
     // Weapons
-    gs.weaponList.forEach(w => {
-      if (w.collected) return
-      const wx = ox + (w.x / (gs.mapCols * gs.TILE)) * this.MM_W
-      const wy = oy + (w.y / (gs.mapRows * gs.TILE)) * this.MM_H
-      const wColors = {
-        bomb: 0xFF6600, ice: 0x00BFFF,
-        lightning: 0xFFD700, boomerang: 0xC8A25A
-      }
-      g.fillStyle(wColors[w.type] || 0xffffff, 1)
-      g.fillRect(wx - 2, wy - 2, 4, 4)
-    })
+    if (gs.weaponList) {
+      gs.weaponList.forEach(w => {
+        if (w.collected) return
+        const wx = ox + (w.x / (gs.mapCols * gs.TILE)) * this.MM_W
+        const wy = oy + (w.y / (gs.mapRows * gs.TILE)) * this.MM_H
+        const wColors = {
+          bomb: 0xFF6600, ice: 0x00BFFF,
+          lightning: 0xFFD700, boomerang: 0xC8A25A
+        }
+        g.fillStyle(wColors[w.type] || 0xffffff, 1)
+        g.fillRect(wx - 2, wy - 2, 4, 4)
+      })
+    }
+
+    // Shields
+    if (gs.shieldList) {
+      gs.shieldList.forEach(s => {
+        if (s.collected) return
+        const sx = ox + (s.x / (gs.mapCols * gs.TILE)) * this.MM_W
+        const sy = oy + (s.y / (gs.mapRows * gs.TILE)) * this.MM_H
+        g.fillStyle(0x00ffff, 1)
+        g.fillRect(sx - 2, sy - 2, 4, 4)
+      })
+    }
 
     // Portal
     const portalX = ox + ((gs.portalCol * gs.TILE + gs.TILE / 2) / (gs.mapCols * gs.TILE)) * this.MM_W

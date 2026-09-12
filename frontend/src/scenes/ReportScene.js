@@ -13,6 +13,7 @@ export class ReportScene extends Phaser.Scene {
     const reportData = {
       playerName: data.playerName || 'Player',
       chosenBird: data.chosenBird || 'Ember',
+      evolutionStage: data.evolutionStage || 1,
       totalScore: data.totalScore || 0,
       saplingsCollected: data.saplingsCollected || 0,
       animalsRescued: data.animalsRescued || 0,
@@ -208,20 +209,26 @@ export class ReportScene extends Phaser.Scene {
     }).setOrigin(1, 0.5)
 
     // Buttons below grade box, not overlapping it.
-    const btnY = panelY + panelH * 0.88
+    const nextBtnLabel = reportData.escaped ? 'NEXT LEVEL' : 'RETRY LEVEL'
+    this.makeButton(panelX + panelW * 0.36, btnY, nextBtnLabel, () => {
+      this.scene.stop('ReportScene')
+      this.scene.stop('GameScene')
 
-    this.makeButton(panelX + panelW * 0.36, btnY, 'NEXT LEVEL', () => {
-      if (this.scene.manager.keys.GameScene2) {
-        this.scene.stop('ReportScene')
-        this.scene.stop('GameScene')
-
+      if (reportData.escaped && (this.scene.get('GameScene2') || (this.scene.manager && this.scene.manager.keys && this.scene.manager.keys.GameScene2))) {
         this.scene.start('GameScene2', {
           playerName: reportData.playerName,
           chosenBird: reportData.chosenBird,
-          previousScore: reportData.totalScore
+          score: reportData.totalScore,
+          previousScore: reportData.totalScore,
+          evolutionStage: reportData.evolutionStage || 1,
+          playerHP: 5,
+          maxHP: 5
         })
       } else {
-        this.showMessage(width / 2, btnY - 52, 'Level 2 is not added yet.')
+        this.scene.start('GameScene', {
+          playerName: reportData.playerName,
+          chosenBird: reportData.chosenBird
+        })
       }
     })
 
@@ -256,14 +263,7 @@ export class ReportScene extends Phaser.Scene {
     this.scene.start('MenuScene')
   }
 
-  update() {
-    // Check for ESC in ReportScene when FlashCardScene is NOT active
-    if (!this.scene.isActive('FlashCardScene')) {
-      if (this.escKey && Phaser.Input.Keyboard.JustDown(this.escKey)) {
-        this.goToMenu()
-      }
-    }
-  }
+  update() {}
 
   getGrade(data) {
     const score = data.totalScore || 0

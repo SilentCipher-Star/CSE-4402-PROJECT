@@ -38,6 +38,7 @@ export class GameScene extends Phaser.Scene {
     this.firstHitNotified = false
     this.emergencyReviving = false
     this.animalNotificationFrozen = false
+    this.cardFreezeTimestamp = 0
     this.shieldActive = false
     this.shieldTimeRemaining = 0
     this.shieldTimerEvent = null
@@ -45,6 +46,7 @@ export class GameScene extends Phaser.Scene {
     this.terminalOpen = false
     this.stealthMode = false
     this.gameEnding = false
+    this.weaponList = []
   }
   create() {
     this.TILE = 48
@@ -72,6 +74,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, this.worldW, this.worldH)
     this.cameras.main.setBounds(0, 0, this.worldW, this.worldH)
     this.drawWorld()
+    this.weaponList = []
     this.eggList = []
     this.spawnEggs()
     this.monsterList = []
@@ -264,8 +267,8 @@ export class GameScene extends Phaser.Scene {
       // Heart spots in enemy dens
       [40, 8], [41, 28], [25, 41],
 
-      // weapons
-      [7, 7], [15, 9], [21, 15], [37, 18],
+      // shields & weapons
+      [7, 7], [30, 18], [12, 38], [15, 9], [21, 15], [37, 18],
 
       // portal
       [1, 47]
@@ -726,6 +729,7 @@ export class GameScene extends Phaser.Scene {
 
     // Freeze the screen
     this.animalNotificationFrozen = true
+    this.cardFreezeTimestamp = this.time ? this.time.now : Date.now()
     this.player.setVelocity(0, 0)
     this.monsterList.forEach(m => {
       if (m.body && m.body.active) m.body.setVelocity(0, 0)
@@ -793,7 +797,6 @@ export class GameScene extends Phaser.Scene {
     this.animalsRescued = this.animalsSaved
     const rescueScore = animal.type === 'rhino' ? 200 : 100
     this.score += rescueScore
-    this.monstersKilled++
 
     if (animal.cage) {
       animal.cage.destroy()
@@ -1168,7 +1171,8 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({
       targets: toDestroy,
       alpha: 0,
-      scale: 0.1,
+      scaleX: 0.1,
+      scaleY: 0.1,
       duration: 350,
       ease: 'Back.easeIn',
       onComplete: () => {
@@ -1209,7 +1213,7 @@ export class GameScene extends Phaser.Scene {
       repeat: 6,
       onComplete: () => {
         if (this.player && this.player.active) {
-          this.player.setAlpha(1)
+          this.player.setAlpha(this.shieldActive ? 0.45 : 1)
           this.playerHitCooldown = false
         }
       }
@@ -2140,6 +2144,7 @@ export class GameScene extends Phaser.Scene {
     const reportData = {
       playerName: this.playerName,
       chosenBird: this.chosenBird,
+      evolutionStage: this.evolutionStage || 1,
 
       totalScore: this.score,
       saplingsCollected: this.eggsCollected,
@@ -2174,7 +2179,9 @@ export class GameScene extends Phaser.Scene {
                       this.cursors.up.isDown || this.cursors.down.isDown
 
     if (this.animalNotificationFrozen) {
-      if (moveInput) {
+      const now = (this.time && this.time.now) ? this.time.now : Date.now()
+      const elapsed = now - (this.cardFreezeTimestamp || 0)
+      if (moveInput && elapsed > 250) {
         this.dismissWildlifeCard()
       } else {
         this.player.setVelocity(0, 0)

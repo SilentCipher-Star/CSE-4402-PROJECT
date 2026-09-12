@@ -242,13 +242,14 @@ export class Terminal {
 
     // Monster turns green and starts attacking others
     m.hacked = true
-    m.graphic.setAlpha(0.6)
+    const spr = m.body || m.graphic
+    if (spr) spr.setAlpha(0.6)
     gs.showFloatingText(m.body.x, m.body.y - 30, '💻 HACKED', '#00ff00')
 
     gs.time.delayedCall(5000, () => {
       if (m.alive) {
         m.hacked = false
-        m.graphic.setAlpha(1)
+        if (spr) spr.setAlpha(1)
       }
       this.print(`Monster #${id} hack expired.`, '#888888')
     })

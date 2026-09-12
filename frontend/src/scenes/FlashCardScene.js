@@ -118,21 +118,7 @@ export class FlashCardScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-RIGHT', () => this.nextCard())
   }
 
-  update() {
-    if (this.cards.length > 0) {
-      if (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.right)) {
-        this.nextCard()
-      }
-
-      if (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.left)) {
-        this.prevCard()
-      }
-    }
-
-    if (this.escKey && Phaser.Input.Keyboard.JustDown(this.escKey)) {
-      this.closeScene()
-    }
-  }
+  update() {}
 
   makeBackButton(x, y, label, onClick) {
     const btnW = 190
