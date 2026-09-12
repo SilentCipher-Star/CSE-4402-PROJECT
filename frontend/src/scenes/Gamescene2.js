@@ -944,7 +944,9 @@ const positions = [
     this.shieldTimeRemaining = duration
 
     // Make player translucent / invisible
-    this.player.setAlpha(0.45)
+    if (this.player && this.player.active) {
+      this.player.setAlpha(0.45)
+    }
 
     if (!this.playerShieldGfx) {
       this.playerShieldGfx = this.add.graphics().setDepth(25)
@@ -952,24 +954,13 @@ const positions = [
 
     if (this.shieldTimerEvent) {
       this.shieldTimerEvent.remove(false)
+      this.shieldTimerEvent = null
     }
-
-    this.shieldTimerEvent = this.time.addEvent({
-      delay: 1000,
-      repeat: duration - 1,
-      callback: () => {
-        if (this.animalNotificationFrozen) return
-        this.shieldTimeRemaining--
-        if (this.shieldTimeRemaining <= 0) {
-          this.deactivateShield()
-        }
-      }
-    })
 
     this.showFloatingText(
       this.player.x,
       this.player.y - 35,
-      '🛡️ SHIELD ACTIVE! Invisible (10s)',
+      `🛡️ SHIELD ACTIVE! Invisible (${duration}s)`,
       '#00ffff'
     )
   }
@@ -2898,7 +2889,7 @@ const positions = [
     }
   }
 
-  update() {
+  update(time, delta) {
     if (this.gameEnding) return
 
     // Check if player pressed any movement key to unfreeze animal notification
@@ -2921,8 +2912,18 @@ const positions = [
       }
     }
 
-    const delta = this.game.loop.delta
-    this.updateWarmth(delta)
+    const frameDelta = (delta !== undefined && delta !== null) ? delta : (this.game && this.game.loop ? this.game.loop.delta : 16.6)
+    const dt = (frameDelta > 0 && frameDelta < 500) ? (frameDelta / 1000) : (1 / 60)
+
+    // ── Shield duration countdown (strictly temporary 10s) ──────
+    if (this.shieldActive) {
+      this.shieldTimeRemaining = Math.max(0, this.shieldTimeRemaining - dt)
+      if (this.shieldTimeRemaining <= 0) {
+        this.deactivateShield()
+      }
+    }
+
+    this.updateWarmth(frameDelta)
     this.isRescuing = false
     this.maybePlayerFootprint()
 

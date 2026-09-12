@@ -363,7 +363,7 @@ export class UIScene extends Phaser.Scene {
     if (this.shieldHudText && this.gameScene) {
       if (this.gameScene.shieldActive && this.gameScene.shieldTimeRemaining > 0) {
         this.shieldHudText.setVisible(true)
-        this.shieldHudText.setText(`🛡️ INVISIBLE SHIELD: ${this.gameScene.shieldTimeRemaining}s`)
+        this.shieldHudText.setText(`🛡️ INVISIBLE SHIELD: ${Math.ceil(this.gameScene.shieldTimeRemaining)}s`)
       } else {
         this.shieldHudText.setVisible(false)
       }

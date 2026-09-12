@@ -962,7 +962,9 @@ export class GameScene extends Phaser.Scene {
     this.shieldTimeRemaining = duration
 
     // Make player translucent / invisible
-    this.player.setAlpha(0.45)
+    if (this.player && this.player.active) {
+      this.player.setAlpha(0.45)
+    }
 
     if (!this.playerShieldGfx) {
       this.playerShieldGfx = this.add.graphics().setDepth(15)
@@ -970,24 +972,13 @@ export class GameScene extends Phaser.Scene {
 
     if (this.shieldTimerEvent) {
       this.shieldTimerEvent.remove(false)
+      this.shieldTimerEvent = null
     }
-
-    this.shieldTimerEvent = this.time.addEvent({
-      delay: 1000,
-      repeat: duration - 1,
-      callback: () => {
-        if (this.animalNotificationFrozen) return
-        this.shieldTimeRemaining--
-        if (this.shieldTimeRemaining <= 0) {
-          this.deactivateShield()
-        }
-      }
-    })
 
     this.showFloatingText(
       this.player.x,
       this.player.y - 35,
-      '🛡️ SHIELD ACTIVE! Invisible (10s)',
+      `🛡️ SHIELD ACTIVE! Invisible (${duration}s)`,
       '#00ffff'
     )
   }
@@ -2167,6 +2158,11 @@ export class GameScene extends Phaser.Scene {
       this.activeWildlifeCard = null
     }
     this.animalNotificationFrozen = false
+    if (this.shieldActive) this.deactivateShield()
+    if (this.playerShieldGfx) {
+      this.playerShieldGfx.destroy()
+      this.playerShieldGfx = null
+    }
 
     this.saveScore()
     this.scene.stop('UIScene')
@@ -2221,6 +2217,15 @@ export class GameScene extends Phaser.Scene {
           if (m.body && m.body.active) m.body.setVelocity(0, 0)
         })
         return
+      }
+    }
+
+    // ── Shield duration countdown (strictly temporary 10s) ──────
+    if (this.shieldActive) {
+      const dt = (delta && delta > 0 && delta < 500) ? (delta / 1000) : (1 / 60)
+      this.shieldTimeRemaining = Math.max(0, this.shieldTimeRemaining - dt)
+      if (this.shieldTimeRemaining <= 0) {
+        this.deactivateShield()
       }
     }
 
