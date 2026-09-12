@@ -204,91 +204,117 @@ export class GameScene2 extends Phaser.Scene {
 
     for (let r = 0; r < rows; r++) {
       const row = []
-      for (let c = 0; c < cols; c++) row.push(5)
+      for (let c = 0; c < cols; c++) row.push(0) // 0: snow_ground (walkable)
       map.push(row)
     }
 
-    // seeded random so the layout is stable across reloads
-    let seed = 928371
-    const rand = () => {
-      seed = (seed * 1664525 + 1013904223) % 4294967296
-      return seed / 4294967296
+    // Helper: set rectangle
+    const fillRect = (c1, r1, c2, r2, tile) => {
+      for (let r = Math.max(1, r1); r <= Math.min(rows - 2, r2); r++) {
+        for (let c = Math.max(1, c1); c <= Math.min(cols - 2, c2); c++) {
+          map[r][c] = tile
+        }
+      }
     }
 
-    // Paints one themed blob (forest / cliff / water / pile-patch)
-    // at the given fill density, so each theme reads as ONE coherent
-    // region instead of everything being mixed and scattered across
-    // the whole map.
-    //   value      = tile type to paint (1 forest, 2 cliff, 3 water, 6 pile)
-    //   fillChance = how solid the blob is (1 = packed solid, lower = looser/sparser)
-    const paintBlob = (cx, cy, r, value, fillChance) => {
-      for (let y = cy - r; y <= cy + r; y++) {
-        for (let x = cx - r; x <= cx + r; x++) {
-          if (x < 1 || x >= cols - 1 || y < 1 || y >= rows - 1) continue
-          const dx = x - cx
-          const dy = y - cy
-          const dist = Math.sqrt(dx * dx + dy * dy)
-          // uneven edge (not a perfect circle) so it reads as a natural blob
-          const edge = r * (0.55 + rand() * 0.5)
-          if (dist <= edge && rand() < fillChance) {
-            map[y][x] = value
+    // Helper: filled circular blob
+    const fillBlob = (cx, cy, radius, tile) => {
+      for (let r = Math.max(1, cy - radius); r <= Math.min(rows - 2, cy + radius); r++) {
+        for (let c = Math.max(1, cx - radius); c <= Math.min(cols - 2, cx + radius); c++) {
+          if ((c - cx) * (c - cx) + (r - cy) * (r - cy) <= radius * radius) {
+            map[r][c] = tile
           }
         }
       }
     }
 
-    // ── ONE solid forest region down the left side ────────────────
-    paintBlob(9, 11, 8, 1, 0.88)
-    paintBlob(7, 31, 7, 1, 0.85)
-
-    // ── just a handful of standalone trees near the centre ────────
-    paintBlob(25, 23, 4, 1, 0.3)
-
-    // ── ONE solid cliff/rock region down the right side ───────────
-    paintBlob(41, 12, 7, 2, 0.88)
-    paintBlob(42, 31, 6, 2, 0.85)
-
-    // ── frozen water — a single confined lake, not scattered ──────
-    paintBlob(43, 42, 4, 3, 0.75)
-
-    // ── snow piles clustered together in their own patch ──────────
-    paintBlob(16, 40, 5, 6, 0.55)
-
-    const clearCircle = (cx, cy, r) => {
-      for (let y = cy - r; y <= cy + r; y++) {
-        for (let x = cx - r; x <= cx + r; x++) {
-          if (x < 0 || x >= cols || y < 0 || y >= rows) continue
-          const dx = x - cx
-          const dy = y - cy
-          if (dx * dx + dy * dy <= r * r) map[y][x] = 5
+    // Helper: carve walkable circle
+    const carveCircle = (cx, cy, radius, tile = 5) => {
+      for (let r = Math.max(1, cy - radius); r <= Math.min(rows - 2, cy + radius); r++) {
+        for (let c = Math.max(1, cx - radius); c <= Math.min(cols - 2, cx + radius); c++) {
+          if ((c - cx) * (c - cx) + (r - cy) * (r - cy) <= radius * radius) {
+            map[r][c] = tile
+          }
         }
       }
     }
 
-    // wide (3-tile) winding clearings between the regions, so open
-    // ground reads as continuous space rather than a single-tile trail
-    const carveLine = (x1, y1, x2, y2, width) => {
-      const steps = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * 3
+    // Helper: carve walkable line/trail (width 1 clears a 3-tile wide path)
+    const carveLine = (c1, r1, c2, r2, width = 1, tile = 5) => {
+      const steps = Math.max(Math.abs(c2 - c1), Math.abs(r2 - r1)) * 2
       for (let i = 0; i <= steps; i++) {
         const t = steps === 0 ? 0 : i / steps
-        const x = Math.round(Phaser.Math.Linear(x1, x2, t))
-        const y = Math.round(Phaser.Math.Linear(y1, y2, t))
-        clearCircle(x, y, width)
+        const c = Math.round(c1 + (c2 - c1) * t)
+        const r = Math.round(r1 + (r2 - r1) * t)
+        carveCircle(c, r, width, tile)
       }
     }
 
-    clearCircle(2, 2, 4)
-    carveLine(2, 2, 46, 5, 3)
-    carveLine(2, 15, 46, 17, 3)
-    carveLine(2, 24, 46, 24, 3)
-    carveLine(2, 34, 46, 35, 3)
-    carveLine(2, 43, 46, 44, 3)
-    carveLine(6, 6, 6, 42, 3)
-    carveLine(27, 6, 27, 43, 3)
-    carveLine(46, 5, 46, 41, 3)
+    // 1. Forest regions (Tile 1: pine_large, pine_small, dead_tree, snow_stump - SOLID WALL)
+    fillBlob(8, 12, 7, 1)
+    fillBlob(8, 30, 7, 1)
+    fillBlob(22, 10, 6, 1)
+    fillBlob(14, 40, 6, 1)
+    fillBlob(33, 28, 6, 1)
+    fillBlob(4, 5, 4, 1)
 
-    // every gameplay spawn point must stay walkable no matter how the
-    // regions above landed
+    // 2. Snow Cliff Mountain Ridges (Tile 2: snow_cliff - SOLID WALL)
+    fillRect(38, 2, 43, 14, 2)
+    fillRect(24, 17, 30, 21, 2)
+    fillRect(12, 14, 15, 23, 2)
+    fillRect(42, 25, 47, 33, 2)
+    fillRect(19, 36, 26, 40, 2)
+    fillRect(2, 26, 5, 33, 2)
+
+    // 3. Snowy Rock Boulder Formations (Tile 4: snow_rock - SOLID WALL)
+    fillBlob(20, 15, 4, 4)
+    fillBlob(36, 19, 4, 4)
+    fillBlob(10, 25, 3, 4)
+    fillBlob(38, 34, 4, 4)
+    fillBlob(28, 43, 4, 4)
+    fillBlob(3, 38, 3, 4)
+    fillBlob(25, 3, 3, 4)
+
+    // 4. Snow Piles / Banks (Tile 6: snow_pile, snow_bank - SOLID WALL)
+    fillBlob(16, 32, 3, 6)
+    fillBlob(34, 8, 3, 6)
+    fillBlob(26, 25, 3, 6)
+    fillBlob(44, 22, 3, 6)
+
+    // 5. Network of Walkable Trails (Tile 5: dark_snow / path - WALKABLE)
+    carveLine(1, 1, 47, 1, 1, 5)
+    carveLine(1, 1, 1, 47, 1, 5)
+    carveLine(1, 47, 47, 47, 1, 5)
+    carveLine(47, 1, 47, 47, 1, 5)
+    carveLine(1, 9, 47, 9, 1, 5)
+    carveLine(1, 16, 47, 16, 1, 5)
+    carveLine(1, 23, 47, 23, 1, 5)
+    carveLine(1, 32, 47, 32, 1, 5)
+    carveLine(1, 42, 47, 42, 1, 5)
+    carveLine(11, 1, 11, 47, 1, 5)
+    carveLine(18, 1, 18, 47, 1, 5)
+    carveLine(24, 1, 24, 47, 1, 5)
+    carveLine(33, 1, 33, 47, 1, 5)
+    carveLine(44, 1, 44, 47, 1, 5)
+
+    // 6. Ice Sheets / Glacial Plains (Tile 7: ice - WALKABLE!)
+    fillBlob(38, 38, 9, 7)  // Southeastern Ice Basin
+    fillBlob(17, 6, 4, 7)   // Northern ice meadow
+    fillBlob(6, 18, 3, 7)   // Taiga ice patch
+    fillBlob(28, 12, 5, 7)  // Central ice pond shore
+
+    // 7. Frozen Water Lakes & Rivers (Tile 3: frozen_water - WALKABLE!)
+    fillBlob(38, 38, 6, 3)  // Big Southeastern Frozen Lake
+    fillBlob(28, 12, 3, 3)  // Central Frozen Pond
+    fillBlob(15, 18, 2, 3)  // Forest clearing pond
+    // Frozen river channel connecting north to south
+    for (let r = 4; r <= 21; r++) {
+      const c = 30 + (r % 4 < 2 ? 1 : -1)
+      map[r][c] = 3
+      map[r][c + 1] = 3
+    }
+
+    // 8. Ensure all gameplay spawn points are on walkable tiles (clear any accidental wall overlap)
     const importantSpots = [
       [1, 1],
       [3, 1], [11, 1], [20, 3], [4, 8], [13, 8], [17, 10], [32, 10], [3, 13], [24, 15], [20, 20], [6, 22], [3, 24], [45, 25], [45, 35],
@@ -296,27 +322,22 @@ export class GameScene2 extends Phaser.Scene {
       [5, 3], [16, 5], [24, 7], [16, 10], [11, 13], [14, 17], [7, 21], [4, 25], [40, 30],
       [11, 3], [24, 8], [32, 18], [13, 27],
       [45, 43],
-
-      // extra hunter spawns (more all over the map)
       [30, 3], [44, 6], [9, 17], [27, 17], [38, 20],
       [44, 24], [6, 35], [27, 35], [38, 38], [20, 43],
-
-      // extra wildlife spawns (more all over the map)
       [30, 5], [44, 8], [9, 15], [27, 20], [38, 17],
       [15, 22], [6, 38], [38, 35],
-
-      // campfires (warmth system)
       [8, 4], [24, 24], [40, 40], [16, 30],
-
-      // alarm traps
       [12, 5], [33, 13], [20, 33], [42, 20],
-
-      // hunter camps
       [19, 6], [44, 14], [6, 44], [33, 44]
     ]
-    importantSpots.forEach(([c, r]) => clearCircle(c, r, 2))
+    importantSpots.forEach(([c, r]) => {
+      // If landed on a solid wall tile (1, 2, 4, 6), clear it to walkable path
+      if (map[r] && (map[r][c] === 1 || map[r][c] === 2 || map[r][c] === 4 || map[r][c] === 6)) {
+        carveCircle(c, r, 1, 5)
+      }
+    })
 
-    // frozen boundary wall around the whole map
+    // 9. Frozen boundary wall around the whole map (Tile 2: snow_cliff)
     for (let c = 0; c < cols; c++) { map[0][c] = 2; map[rows - 1][c] = 2 }
     for (let r = 0; r < rows; r++) { map[r][0] = 2; map[r][cols - 1] = 2 }
 
@@ -390,18 +411,6 @@ export class GameScene2 extends Phaser.Scene {
       return seed / 4294967296
     }
 
-    // Every PNG in this set is a fully opaque, self-contained tile —
-    // background snow and the object (tree/rock/log/etc.) are baked
-    // into the same square, with no transparency at all. That means
-    // exactly ONE image belongs on each grid cell — never a ground
-    // tile with a second image layered on top, since two opaque
-    // images of slightly different sizes stacked on the same cell is
-    // what caused the misaligned/overlapping look.
-    //
-    // A few tiles (the trees and the log) render a little taller
-    // than one cell so their canopy can rise upward for a natural
-    // look, anchored at the bottom of their OWN cell only — never
-    // shifted sideways — so they never bleed into a neighbouring
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         const t = this.mapData[row][col]
@@ -411,28 +420,32 @@ export class GameScene2 extends Phaser.Scene {
 
         let key
 
-        if (isEdge) {
+        if (isEdge || t === 2) {
+          // snow cliff mountain ridge (solid obstacle)
           key = 'snow_cliff'
+        } else if (t === 4) {
+          // snowy rock boulder obstacle (solid obstacle)
+          key = 'snow_rock'
         } else if (t === 1) {
-          // forest region (solid trees, stumps, and fallen logs)
+          // forest region (solid trees, stumps, dead trees, logs)
           const roll = rand()
           key = roll < 0.40 ? 'pine_large' : roll < 0.70 ? 'pine_small' : roll < 0.85 ? 'dead_tree' : roll < 0.93 ? 'snow_stump' : 'frozen_log'
-        } else if (t === 2) {
-          // cliff/rock region (solid wall/rock)
-          const roll = rand()
-          key = roll < 0.60 ? 'ice_wall' : roll < 0.85 ? 'snow_rock' : 'icicle'
         } else if (t === 3) {
-          // confined frozen-water lake (impassable water)
+          // frozen water lake / river - WALKABLE!
           key = 'frozen_water'
+        } else if (t === 7) {
+          // ice sheets / plains - WALKABLE!
+          key = 'ice'
         } else if (t === 6) {
-          // clustered snow-pile patch (solid snow obstacles)
-          key = rand() < 0.75 ? 'snow_pile' : 'snow_bank'
+          // clustered snow-pile patch (solid snow obstacle)
+          key = rand() < 0.70 ? 'snow_pile' : 'snow_bank'
+        } else if (t === 5) {
+          // dark snow trail (walkable)
+          key = 'dark_snow'
         } else {
-          // plain open ground — purely walkable floor variation
+          // open snow ground (walkable)
           const roll = rand()
-          if (roll < 0.75) key = 'snow_ground'
-          else if (roll < 0.92) key = 'dark_snow'
-          else key = 'ice'
+          key = roll < 0.85 ? 'snow_ground' : 'dark_snow'
         }
 
         const cellCenterX = col * this.TILE + this.TILE / 2
@@ -445,10 +458,7 @@ export class GameScene2 extends Phaser.Scene {
       }
     }
 
-    // ============================================================
-    // Gentle ambient snow sparkle for atmosphere (purely cosmetic,
-    // drawn last so it sits on top of everything).
-    // ============================================================
+    // Ambient snow sparkle for atmosphere
     for (let i = 0; i < 150; i++) {
       const x = Phaser.Math.Between(20, this.worldW - 20)
       const y = Phaser.Math.Between(20, this.worldH - 20)
@@ -466,7 +476,9 @@ export class GameScene2 extends Phaser.Scene {
     if (row < 0 || row >= this.mapRows || col < 0 || col >= this.mapCols) return true
     if (!this.mapData || !this.mapData[row]) return true
     const t = this.mapData[row][col]
-    return t !== 5
+    // SOLID WALLS: 1 (trees/stumps/logs), 2 (snow_cliff), 4 (snow_rock), 6 (snow piles)
+    // WALKABLE GROUND: 0 (snow_ground), 3 (frozen_water), 5 (dark_snow), 7 (ice)
+    return t === 1 || t === 2 || t === 4 || t === 6
   }
 
   spawnEggs() {
@@ -2097,8 +2109,9 @@ const positions = [
     const topRow = Math.floor((this.player.y - halfH + 3) / this.TILE)
     const botRow = Math.floor((this.player.y + halfH - 3) / this.TILE)
     if (this.isWall(targetCol, topRow) || this.isWall(targetCol, botRow)) {
+      const movingLeft = vx < 0
       vx = 0
-      if (vx < 0) this.player.x = Math.max(this.player.x, (targetCol + 1) * this.TILE + halfW)
+      if (movingLeft) this.player.x = Math.max(this.player.x, (targetCol + 1) * this.TILE + halfW)
       else this.player.x = Math.min(this.player.x, targetCol * this.TILE - halfW)
     }
   }
@@ -2110,8 +2123,9 @@ const positions = [
     const leftCol = Math.floor((this.player.x - halfW + 3) / this.TILE)
     const rightCol = Math.floor((this.player.x + halfW - 3) / this.TILE)
     if (this.isWall(leftCol, targetRow) || this.isWall(rightCol, targetRow)) {
+      const movingUp = vy < 0
       vy = 0
-      if (vy < 0) this.player.y = Math.max(this.player.y, (targetRow + 1) * this.TILE + halfH)
+      if (movingUp) this.player.y = Math.max(this.player.y, (targetRow + 1) * this.TILE + halfH)
       else this.player.y = Math.min(this.player.y, targetRow * this.TILE - halfH)
     }
   }
