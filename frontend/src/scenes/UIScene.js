@@ -162,6 +162,17 @@ export class UIScene extends Phaser.Scene {
     const hp = gs.playerHP !== undefined ? gs.playerHP : 0
     const maxHp = gs.maxHP || 5
 
+    if ((!this.heartSprites || this.heartSprites.length === 0) && this.textures.exists('heart')) {
+      this.heartSprites = []
+      for (let i = 0; i < maxHp; i++) {
+        const spr = this.add.image(24 + i * 21, 40, 'heart')
+        spr.setDisplaySize(18, 18)
+        spr.setDepth(10)
+        this.heartSprites.push(spr)
+      }
+      this.heartsText.setVisible(false)
+    }
+
     if (this.heartSprites && this.heartSprites.length > 0) {
       this.heartsText.setVisible(false)
       for (let i = 0; i < this.heartSprites.length; i++) {
@@ -228,11 +239,11 @@ export class UIScene extends Phaser.Scene {
         const ex = ox + (e.x / (cols * gs.TILE)) * this.MM_W
         const ey = oy + (e.y / (rows * gs.TILE)) * this.MM_H
         const eggColors = {
-          normal: 0xffffff, fire: 0xFF4500,
-          thunder: 0xFFD700, golden: 0xFFD700
+          normal: 0x44ff44, fire: 0xff4500,
+          thunder: 0xffd700, golden: 0xffffff
         }
-        g.fillStyle(eggColors[e.type] || 0xffffff, 1)
-        g.fillCircle(ex, ey, 2)
+        g.fillStyle(eggColors[e.type] || 0x44ff44, 1)
+        g.fillCircle(ex, ey, e.type === 'golden' ? 3 : 2)
       })
     }
 
@@ -259,6 +270,17 @@ export class UIScene extends Phaser.Scene {
         const sy = oy + (s.y / (rows * gs.TILE)) * this.MM_H
         g.fillStyle(0x00ffff, 1)
         g.fillRect(sx - 2, sy - 2, 4, 4)
+      })
+    }
+
+    // Heart Shrines (pulsating green dots on minimap)
+    if (gs.heartShrines) {
+      gs.heartShrines.forEach(s => {
+        if (s.used) return
+        const hx = ox + (s.x / (cols * gs.TILE)) * this.MM_W
+        const hy = oy + (s.y / (rows * gs.TILE)) * this.MM_H
+        g.fillStyle(0x00ff88, 1)
+        g.fillCircle(hx, hy, 3)
       })
     }
 
