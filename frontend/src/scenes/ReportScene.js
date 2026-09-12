@@ -10,18 +10,19 @@ export class ReportScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor('rgba(0,0,0,0)')
 
+    const d = data || (this.sys && this.sys.settings && this.sys.settings.data) || {}
     const reportData = {
-      playerName: data.playerName || 'Player',
-      chosenBird: data.chosenBird || 'Ember',
-      evolutionStage: data.evolutionStage || 1,
-      totalScore: data.totalScore || 0,
-      saplingsCollected: data.saplingsCollected || 0,
-      animalsRescued: data.animalsRescued || 0,
-      monstersKilled: data.monstersKilled || 0,
-      co2Absorbed: data.co2Absorbed || 0,
-      timeTaken: data.timeTaken || 0,
-      flashCards: data.flashCards || [],
-      escaped: data.escaped
+      playerName: d.playerName || 'Player',
+      chosenBird: d.chosenBird || 'Ember',
+      evolutionStage: d.evolutionStage || 1,
+      totalScore: d.totalScore || 0,
+      saplingsCollected: d.saplingsCollected || 0,
+      animalsRescued: d.animalsRescued || 0,
+      monstersKilled: d.monstersKilled || 0,
+      co2Absorbed: d.co2Absorbed || 0,
+      timeTaken: d.timeTaken || 0,
+      flashCards: d.flashCards || [],
+      escaped: d.escaped
     }
 
     // Dark tint only. The paused game stays visible behind this.
@@ -209,9 +210,12 @@ export class ReportScene extends Phaser.Scene {
     }).setOrigin(1, 0.5)
 
     // Buttons below grade box, not overlapping it.
+    const btnY = panelY + panelH * 0.88
     const nextBtnLabel = reportData.escaped ? 'NEXT LEVEL' : 'RETRY LEVEL'
     this.makeButton(panelX + panelW * 0.36, btnY, nextBtnLabel, () => {
-      this.scene.stop('ReportScene')
+      if (this.isLeaving) return
+      this.isLeaving = true
+
       this.scene.stop('GameScene')
 
       if (reportData.escaped && (this.scene.get('GameScene2') || (this.scene.manager && this.scene.manager.keys && this.scene.manager.keys.GameScene2))) {
@@ -258,7 +262,6 @@ export class ReportScene extends Phaser.Scene {
   goToMenu() {
     if (this.isLeaving) return
     this.isLeaving = true
-    this.scene.stop('ReportScene')
     this.scene.stop('GameScene')
     this.scene.start('MenuScene')
   }

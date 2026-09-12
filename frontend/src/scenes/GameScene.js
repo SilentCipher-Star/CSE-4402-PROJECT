@@ -139,6 +139,12 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-BACKTICK', () => {
       this.terminal.toggle()
     })
+    this.events.once('shutdown', () => {
+      if (this.terminal) {
+        this.terminal.destroy()
+        this.terminal = null
+      }
+    })
   }
   parseMap() {
     const rows = 50
@@ -2111,8 +2117,10 @@ export class GameScene extends Phaser.Scene {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: this.playerName, chosenBird: this.chosenBird })
-      })
-      const player = await pr.json()
+      }).catch(() => null)
+      if (!pr || !pr.ok) return
+      const player = await pr.json().catch(() => null)
+      if (!player || !player.id) return
       await fetch('http://localhost:8080/api/score/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2121,7 +2129,7 @@ export class GameScene extends Phaser.Scene {
           score: this.score, eggsSaved: this.eggsCollected,
           timeSeconds: 180 - this.timeLeft
         })
-      })
+      }).catch(() => null)
     } catch (e) {
       console.log('Score not saved — backend offline')
     }
@@ -2136,7 +2144,29 @@ export class GameScene extends Phaser.Scene {
     if (this.gameEnding) return
     this.gameEnding = true
 
-    if (this.terminal) this.terminal.destroy()
+    this.physics.pause()
+    if (this.player && this.player.setVelocity) {
+      this.player.setVelocity(0, 0)
+    }
+
+    if (this.terminal) {
+      this.terminal.destroy()
+      this.terminal = null
+    }
+
+    if (this.emergencyCard) {
+      this.emergencyCard.destroy()
+      this.emergencyCard = null
+    }
+    if (this.emergencyReviveTimer) {
+      this.emergencyReviveTimer.remove(false)
+      this.emergencyReviveTimer = null
+    }
+    if (this.activeWildlifeCard) {
+      this.activeWildlifeCard.destroy()
+      this.activeWildlifeCard = null
+    }
+    this.animalNotificationFrozen = false
 
     this.saveScore()
     this.scene.stop('UIScene')
@@ -2172,6 +2202,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time, delta) {
+    if (this.gameEnding) return
+
     // Check if player pressed any movement key to unfreeze animal notification
     const moveInput = this.wasd.left.isDown || this.wasd.right.isDown ||
                       this.wasd.up.isDown || this.wasd.down.isDown ||

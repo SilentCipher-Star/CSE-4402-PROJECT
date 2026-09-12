@@ -5,6 +5,12 @@ export class UIScene extends Phaser.Scene {
 
   init(data) { this.gameScene = data.gameScene }
 
+  preload() {
+    if (!this.textures.exists('heart')) {
+      this.load.image('heart', 'resource/ui/heart.png')
+    }
+  }
+
   create() {
     const { width, height } = this.scale
 
@@ -41,6 +47,8 @@ export class UIScene extends Phaser.Scene {
         this.heartSprites.push(spr)
       }
       this.heartsText.setVisible(false)
+    } else {
+      this.heartsText.setVisible(true)
     }
 
     // Shield status HUD (centered under timer)
@@ -151,10 +159,11 @@ export class UIScene extends Phaser.Scene {
     const gs = this.gameScene
     if (!gs) return
 
-    const hp = gs.playerHP || 0
+    const hp = gs.playerHP !== undefined ? gs.playerHP : 0
     const maxHp = gs.maxHP || 5
 
     if (this.heartSprites && this.heartSprites.length > 0) {
+      this.heartsText.setVisible(false)
       for (let i = 0; i < this.heartSprites.length; i++) {
         const spr = this.heartSprites[i]
         if (i < hp) {
@@ -166,6 +175,7 @@ export class UIScene extends Phaser.Scene {
         }
       }
     } else {
+      this.heartsText.setVisible(true)
       let str = ''
       for (let i = 0; i < maxHp; i++) {
         str += i < hp ? '❤️' : '🖤'
@@ -178,12 +188,12 @@ export class UIScene extends Phaser.Scene {
   drawMinimap() {
     const g = this.mmGraphic
     const gs = this.gameScene
-    if (!gs || !gs.mapData) return
+    if (!gs || !gs.mapData || !g) return
 
     g.clear()
 
-    const rows = gs.mapRows
-    const cols = gs.mapCols
+    const rows = gs.mapRows || gs.mapData.length
+    const cols = gs.mapCols || (gs.mapData[0] ? gs.mapData[0].length : 50)
     const cellW = this.MM_W / cols
     const cellH = this.MM_H / rows
     const ox = this.MM_X
@@ -191,6 +201,7 @@ export class UIScene extends Phaser.Scene {
 
     // Tiles
     for (let row = 0; row < rows; row++) {
+      if (!gs.mapData[row]) continue
       for (let col = 0; col < cols; col++) {
         const t = gs.mapData[row][col]
         let color = 0x2d5a1b
@@ -213,8 +224,8 @@ export class UIScene extends Phaser.Scene {
     if (gs.eggList) {
       gs.eggList.forEach(e => {
         if (e.collected) return
-        const ex = ox + (e.x / (gs.mapCols * gs.TILE)) * this.MM_W
-        const ey = oy + (e.y / (gs.mapRows * gs.TILE)) * this.MM_H
+        const ex = ox + (e.x / (cols * gs.TILE)) * this.MM_W
+        const ey = oy + (e.y / (rows * gs.TILE)) * this.MM_H
         const eggColors = {
           normal: 0xffffff, fire: 0xFF4500,
           thunder: 0xFFD700, golden: 0xFFD700
@@ -228,8 +239,8 @@ export class UIScene extends Phaser.Scene {
     if (gs.weaponList) {
       gs.weaponList.forEach(w => {
         if (w.collected) return
-        const wx = ox + (w.x / (gs.mapCols * gs.TILE)) * this.MM_W
-        const wy = oy + (w.y / (gs.mapRows * gs.TILE)) * this.MM_H
+        const wx = ox + (w.x / (cols * gs.TILE)) * this.MM_W
+        const wy = oy + (w.y / (rows * gs.TILE)) * this.MM_H
         const wColors = {
           bomb: 0xFF6600, ice: 0x00BFFF,
           lightning: 0xFFD700, boomerang: 0xC8A25A
@@ -243,34 +254,38 @@ export class UIScene extends Phaser.Scene {
     if (gs.shieldList) {
       gs.shieldList.forEach(s => {
         if (s.collected) return
-        const sx = ox + (s.x / (gs.mapCols * gs.TILE)) * this.MM_W
-        const sy = oy + (s.y / (gs.mapRows * gs.TILE)) * this.MM_H
+        const sx = ox + (s.x / (cols * gs.TILE)) * this.MM_W
+        const sy = oy + (s.y / (rows * gs.TILE)) * this.MM_H
         g.fillStyle(0x00ffff, 1)
         g.fillRect(sx - 2, sy - 2, 4, 4)
       })
     }
 
     // Portal
-    const portalX = ox + ((gs.portalCol * gs.TILE + gs.TILE / 2) / (gs.mapCols * gs.TILE)) * this.MM_W
-    const portalY = oy + ((gs.portalRow * gs.TILE + gs.TILE / 2) / (gs.mapRows * gs.TILE)) * this.MM_H
-    g.fillStyle(0xAA99FF, 1)
-    g.fillCircle(portalX, portalY, 3)
-    g.lineStyle(1, 0xAA99FF, 0.5)
-    g.strokeCircle(portalX, portalY, 5)
+    if (gs.portalCol !== undefined && gs.portalRow !== undefined) {
+      const portalX = ox + ((gs.portalCol * gs.TILE + gs.TILE / 2) / (cols * gs.TILE)) * this.MM_W
+      const portalY = oy + ((gs.portalRow * gs.TILE + gs.TILE / 2) / (rows * gs.TILE)) * this.MM_H
+      g.fillStyle(0xAA99FF, 1)
+      g.fillCircle(portalX, portalY, 3)
+      g.lineStyle(1, 0xAA99FF, 0.5)
+      g.strokeCircle(portalX, portalY, 5)
+    }
 
     // Monsters
-    gs.monsterList.forEach(m => {
-      if (!m.alive || !m.body || !m.body.active) return
-      const mx = ox + (m.body.x / (gs.mapCols * gs.TILE)) * this.MM_W
-      const my = oy + (m.body.y / (gs.mapRows * gs.TILE)) * this.MM_H
-      g.fillStyle(m.chasing ? 0xff0000 : 0xcc2222, 1)
-      g.fillCircle(mx, my, m.chasing ? 3 : 2)
-    })
+    if (gs.monsterList) {
+      gs.monsterList.forEach(m => {
+        if (!m || !m.alive || !m.body || !m.body.active || m.body.x === undefined) return
+        const mx = ox + (m.body.x / (cols * gs.TILE)) * this.MM_W
+        const my = oy + (m.body.y / (rows * gs.TILE)) * this.MM_H
+        g.fillStyle(m.chasing ? 0xff0000 : 0xcc2222, 1)
+        g.fillCircle(mx, my, m.chasing ? 3 : 2)
+      })
+    }
 
     // Player
     if (gs.player) {
-      const px = ox + (gs.player.x / (gs.mapCols * gs.TILE)) * this.MM_W
-      const py = oy + (gs.player.y / (gs.mapRows * gs.TILE)) * this.MM_H
+      const px = ox + (gs.player.x / (cols * gs.TILE)) * this.MM_W
+      const py = oy + (gs.player.y / (rows * gs.TILE)) * this.MM_H
       g.fillStyle(0x000000, 0.5)
       g.fillCircle(px, py, 5)
       g.fillStyle(0xffffff, 1)
@@ -284,13 +299,15 @@ export class UIScene extends Phaser.Scene {
     }
 
     // Camera viewport
-    const cam = gs.cameras.main
-    const vx = ox + (cam.scrollX / (gs.mapCols * gs.TILE)) * this.MM_W
-    const vy = oy + (cam.scrollY / (gs.mapRows * gs.TILE)) * this.MM_H
-    const vw = (cam.width / (gs.mapCols * gs.TILE)) * this.MM_W
-    const vh = (cam.height / (gs.mapRows * gs.TILE)) * this.MM_H
-    g.lineStyle(1, 0xffffff, 0.25)
-    g.strokeRect(vx, vy, vw, vh)
+    const cam = (gs.cameras && gs.cameras.main) ? gs.cameras.main : null
+    if (cam) {
+      const vx = ox + (cam.scrollX / (cols * gs.TILE)) * this.MM_W
+      const vy = oy + (cam.scrollY / (rows * gs.TILE)) * this.MM_H
+      const vw = (cam.width / (cols * gs.TILE)) * this.MM_W
+      const vh = (cam.height / (rows * gs.TILE)) * this.MM_H
+      g.lineStyle(1, 0xffffff, 0.25)
+      g.strokeRect(vx, vy, vw, vh)
+    }
   }
 
   update() {

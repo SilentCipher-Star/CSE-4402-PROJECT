@@ -371,6 +371,11 @@ export class Terminal {
   }
 
   destroy() {
-    document.body.removeChild(this.input)
+    if (this.input) {
+      if (this.input.parentNode) {
+        this.input.parentNode.removeChild(this.input)
+      }
+      this.input = null
+    }
   }
 }
