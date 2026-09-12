@@ -200,146 +200,165 @@ export class GameScene2 extends Phaser.Scene {
   parseMap() {
     const rows = 50
     const cols = 50
-    const map = []
 
-    for (let r = 0; r < rows; r++) {
-      const row = []
-      for (let c = 0; c < cols; c++) row.push(0) // 0: snow_ground (walkable)
-      map.push(row)
+    // Start with solid arctic taiga forest (Tile 1: pine trees, dead trees, stumps, logs)
+    // like GameScene1 starts with solid forest walls
+    const map = Array.from({ length: rows }, () => Array(cols).fill(1))
+
+    // Frozen boundary mountain wall around the whole perimeter (Tile 2: snow_cliff)
+    for (let c = 0; c < cols; c++) { map[0][c] = 2; map[rows - 1][c] = 2 }
+    for (let r = 0; r < rows; r++) { map[r][0] = 2; map[r][cols - 1] = 2 }
+
+    const inBounds = (c, r) => c > 0 && c < cols - 1 && r > 0 && r < rows - 1
+
+    const setCell = (c, r, tile) => {
+      if (inBounds(c, r)) map[r][c] = tile
     }
 
-    // Helper: set rectangle
-    const fillRect = (c1, r1, c2, r2, tile) => {
-      for (let r = Math.max(1, r1); r <= Math.min(rows - 2, r2); r++) {
-        for (let c = Math.max(1, c1); c <= Math.min(cols - 2, c2); c++) {
+    const carveRect = (c1, r1, c2, r2, tile = 5) => {
+      for (let r = Math.max(1, Math.min(r1, r2)); r <= Math.min(rows - 2, Math.max(r1, r2)); r++) {
+        for (let c = Math.max(1, Math.min(c1, c2)); c <= Math.min(cols - 2, Math.max(c1, c2)); c++) {
           map[r][c] = tile
         }
       }
     }
 
-    // Helper: filled circular blob
-    const fillBlob = (cx, cy, radius, tile) => {
-      for (let r = Math.max(1, cy - radius); r <= Math.min(rows - 2, cy + radius); r++) {
-        for (let c = Math.max(1, cx - radius); c <= Math.min(cols - 2, cx + radius); c++) {
-          if ((c - cx) * (c - cx) + (r - cy) * (r - cy) <= radius * radius) {
-            map[r][c] = tile
-          }
-        }
-      }
-    }
-
-    // Helper: carve walkable circle
-    const carveCircle = (cx, cy, radius, tile = 5) => {
-      for (let r = Math.max(1, cy - radius); r <= Math.min(rows - 2, cy + radius); r++) {
-        for (let c = Math.max(1, cx - radius); c <= Math.min(cols - 2, cx + radius); c++) {
-          if ((c - cx) * (c - cx) + (r - cy) * (r - cy) <= radius * radius) {
-            map[r][c] = tile
-          }
-        }
-      }
-    }
-
-    // Helper: carve walkable line/trail (width 1 clears a 3-tile wide path)
-    const carveLine = (c1, r1, c2, r2, width = 1, tile = 5) => {
+    const carveLine = (fromPt, toPt, width = 2, tile = 5) => {
+      const [c1, r1] = fromPt
+      const [c2, r2] = toPt
       const steps = Math.max(Math.abs(c2 - c1), Math.abs(r2 - r1)) * 2
       for (let i = 0; i <= steps; i++) {
-        const t = steps === 0 ? 0 : i / steps
-        const c = Math.round(c1 + (c2 - c1) * t)
-        const r = Math.round(r1 + (r2 - r1) * t)
-        carveCircle(c, r, width, tile)
+        const factor = steps === 0 ? 0 : i / steps
+        const cc = Math.round(c1 + (c2 - c1) * factor)
+        const rr = Math.round(r1 + (r2 - r1) * factor)
+        const half = Math.floor(width / 2)
+        for (let dc = -half; dc <= Math.ceil(width / 2) - 1; dc++) {
+          for (let dr = -half; dr <= Math.ceil(width / 2) - 1; dr++) {
+            setCell(cc + dc, rr + dr, tile)
+          }
+        }
       }
     }
 
-    // 1. Forest regions (Tile 1: pine_large, pine_small, dead_tree, snow_stump - SOLID WALL)
-    fillBlob(8, 12, 7, 1)
-    fillBlob(8, 30, 7, 1)
-    fillBlob(22, 10, 6, 1)
-    fillBlob(14, 40, 6, 1)
-    fillBlob(33, 28, 6, 1)
-    fillBlob(4, 5, 4, 1)
-
-    // 2. Snow Cliff Mountain Ridges (Tile 2: snow_cliff - SOLID WALL)
-    fillRect(38, 2, 43, 14, 2)
-    fillRect(24, 17, 30, 21, 2)
-    fillRect(12, 14, 15, 23, 2)
-    fillRect(42, 25, 47, 33, 2)
-    fillRect(19, 36, 26, 40, 2)
-    fillRect(2, 26, 5, 33, 2)
-
-    // 3. Snowy Rock Boulder Formations (Tile 4: snow_rock - SOLID WALL)
-    fillBlob(20, 15, 4, 4)
-    fillBlob(36, 19, 4, 4)
-    fillBlob(10, 25, 3, 4)
-    fillBlob(38, 34, 4, 4)
-    fillBlob(28, 43, 4, 4)
-    fillBlob(3, 38, 3, 4)
-    fillBlob(25, 3, 3, 4)
-
-    // 4. Snow Piles / Banks (Tile 6: snow_pile, snow_bank - SOLID WALL)
-    fillBlob(16, 32, 3, 6)
-    fillBlob(34, 8, 3, 6)
-    fillBlob(26, 25, 3, 6)
-    fillBlob(44, 22, 3, 6)
-
-    // 5. Network of Walkable Trails (Tile 5: dark_snow / path - WALKABLE)
-    carveLine(1, 1, 47, 1, 1, 5)
-    carveLine(1, 1, 1, 47, 1, 5)
-    carveLine(1, 47, 47, 47, 1, 5)
-    carveLine(47, 1, 47, 47, 1, 5)
-    carveLine(1, 9, 47, 9, 1, 5)
-    carveLine(1, 16, 47, 16, 1, 5)
-    carveLine(1, 23, 47, 23, 1, 5)
-    carveLine(1, 32, 47, 32, 1, 5)
-    carveLine(1, 42, 47, 42, 1, 5)
-    carveLine(11, 1, 11, 47, 1, 5)
-    carveLine(18, 1, 18, 47, 1, 5)
-    carveLine(24, 1, 24, 47, 1, 5)
-    carveLine(33, 1, 33, 47, 1, 5)
-    carveLine(44, 1, 44, 47, 1, 5)
-
-    // 6. Ice Sheets / Glacial Plains (Tile 7: ice - WALKABLE!)
-    fillBlob(38, 38, 9, 7)  // Southeastern Ice Basin
-    fillBlob(17, 6, 4, 7)   // Northern ice meadow
-    fillBlob(6, 18, 3, 7)   // Taiga ice patch
-    fillBlob(28, 12, 5, 7)  // Central ice pond shore
-
-    // 7. Frozen Water Lakes & Rivers (Tile 3: frozen_water - WALKABLE!)
-    fillBlob(38, 38, 6, 3)  // Big Southeastern Frozen Lake
-    fillBlob(28, 12, 3, 3)  // Central Frozen Pond
-    fillBlob(15, 18, 2, 3)  // Forest clearing pond
-    // Frozen river channel connecting north to south
-    for (let r = 4; r <= 21; r++) {
-      const c = 30 + (r % 4 < 2 ? 1 : -1)
-      map[r][c] = 3
-      map[r][c + 1] = 3
+    const carvePath = (pts, width = 2, tile = 5) => {
+      for (let i = 0; i < pts.length - 1; i++) {
+        carveLine(pts[i], pts[i + 1], width, tile)
+      }
     }
 
-    // 8. Ensure all gameplay spawn points are on walkable tiles (clear any accidental wall overlap)
+    // ── 1. Mountain Ridges (Tile 2: snow_cliff - IMPASSABLE SOLID WALL) ──
+    carveRect(36, 2, 38, 14, 2)
+    carveRect(22, 16, 26, 18, 2)
+    carveRect(10, 18, 12, 24, 2)
+    carveRect(41, 26, 43, 33, 2)
+    carveRect(21, 37, 25, 39, 2)
+    carveRect(2, 28, 4, 32, 2)
+    carveRect(16, 2, 17, 8, 2)
+    carveRect(28, 6, 29, 13, 2)
+
+    // ── 2. Boulder Formations (Tile 4: snow_rock - IMPASSABLE SOLID WALL) ──
+    const boulders = [
+      [8, 7], [9, 7], [8, 8],
+      [22, 12], [23, 12], [23, 13],
+      [35, 22], [36, 22], [35, 23],
+      [14, 29], [14, 30], [15, 30],
+      [29, 31], [30, 31], [29, 32],
+      [37, 30], [38, 30], [37, 31],
+      [26, 42], [27, 42], [27, 43],
+      [2, 36], [3, 36], [2, 37],
+      [46, 10], [47, 10], [46, 11],
+      [26, 2], [27, 2], [26, 3],
+      [39, 7], [40, 7], [39, 8]
+    ]
+    boulders.forEach(([c, r]) => setCell(c, r, 4))
+
+    // ── 3. Snow Drift Obstacles (Tile 6: snow_pile / snow_bank - IMPASSABLE SOLID WALL) ──
+    const snowDrifts = [
+      [7, 12], [7, 13], [18, 26], [18, 27],
+      [31, 7], [32, 7], [25, 27], [25, 28],
+      [43, 21], [43, 22], [15, 35], [15, 36],
+      [35, 41], [36, 41], [4, 42], [5, 42]
+    ]
+    snowDrifts.forEach(([c, r]) => setCell(c, r, 6))
+
+    // ── 4. Labyrinth Lanes & Corridors (Tile 5: dark_snow / path - WALKABLE) ──
+    // Northern Highway (Start [1, 1] -> Campfires -> Weapons -> North-East Plateau)
+    carvePath([[1, 1], [12, 1], [12, 4], [8, 4], [5, 4], [5, 1], [1, 1]], 2, 5)
+    carvePath([[12, 1], [21, 1], [21, 4], [16, 4], [16, 6], [19, 6]], 2, 5)
+    carvePath([[21, 1], [31, 1], [31, 4], [24, 4], [24, 8], [20, 8], [20, 3]], 2, 5)
+    carvePath([[31, 1], [45, 1], [45, 7], [44, 7], [44, 9], [34, 9], [34, 8]], 2, 5)
+
+    // Central-West Taiga Corridors (Shelters, Wildlife Cages, Hunters)
+    carvePath([[5, 4], [5, 11], [2, 11], [2, 14], [4, 14], [4, 8]], 2, 5)
+    carvePath([[5, 8], [14, 8], [14, 11], [17, 11], [17, 9], [11, 9], [11, 14], [3, 14]], 2, 5)
+    carvePath([[5, 11], [9, 11], [9, 18], [15, 18], [15, 16], [11, 16], [11, 13]], 2, 5)
+    carvePath([[9, 18], [6, 18], [6, 23], [4, 23], [4, 26], [7, 26], [7, 21]], 2, 5)
+    carvePath([[3, 24], [7, 24], [7, 28], [14, 28], [14, 26], [13, 26], [13, 27]], 2, 5)
+    carvePath([[15, 18], [15, 23], [14, 23], [14, 26]], 2, 5)
+
+    // Central Glacier Thoroughfare (Connecting East and West Across Mountains)
+    carvePath([[14, 8], [21, 8], [21, 11], [25, 11], [25, 16], [20, 16], [20, 21], [27, 21]], 2, 5)
+    carvePath([[25, 16], [33, 16], [33, 11], [31, 11], [31, 10], [32, 10]], 2, 5)
+    carvePath([[33, 16], [33, 19], [39, 19], [39, 16], [38, 16], [38, 17]], 2, 5)
+    carvePath([[33, 19], [33, 25], [28, 25], [28, 20], [27, 20]], 2, 5)
+    carvePath([[28, 25], [24, 25], [24, 24], [20, 24], [20, 31], [16, 31], [16, 29]], 2, 5)
+
+    // South-Western Snowy Route (Forest Hunter Camp -> Ancient Trees)
+    carvePath([[7, 28], [7, 36], [5, 36], [5, 39], [7, 39], [7, 45], [5, 45], [5, 44], [6, 44]], 2, 5)
+    carvePath([[7, 36], [12, 36], [12, 33], [17, 33], [17, 30], [16, 30]], 2, 5)
+    carvePath([[12, 36], [16, 36], [16, 39], [21, 39], [21, 44], [20, 44], [20, 43]], 2, 5)
+    carvePath([[21, 44], [28, 44], [28, 41], [34, 41], [34, 45], [33, 45], [33, 44]], 2, 5)
+    carvePath([[21, 36], [28, 36], [28, 41]], 2, 5)
+
+    // South-Eastern Lake & Glacial Basin Route (Leading to Portal [45, 43])
+    carvePath([[33, 25], [45, 25], [45, 36], [37, 36], [37, 34], [38, 34], [38, 35]], 2, 5)
+    carvePath([[45, 25], [45, 14], [43, 14], [43, 15], [44, 15], [44, 14]], 2, 5)
+    carvePath([[45, 36], [45, 44], [44, 44], [44, 43], [45, 43]], 2, 5)
+    carvePath([[34, 41], [41, 41], [41, 39], [39, 39], [39, 41], [40, 41], [40, 40]], 2, 5)
+    carvePath([[45, 30], [39, 30], [39, 35]], 2, 5)
+
+    // ── 5. Glacial Ice Arenas & Skating Clearings (Tile 7: ice - WALKABLE!) ──
+    carveRect(17, 3, 23, 6, 7)    // Northern Ice Meadow
+    carveRect(26, 12, 30, 15, 7)  // Central Glacier Clearing
+    carveRect(36, 36, 43, 42, 7)  // Southeastern Glacial Ice Plains
+
+    // ── 6. Frozen Water Channels & Lakes (Tile 3: frozen_water - WALKABLE!) ──
+    // Frozen river channel cutting north-to-south that players can walk across
+    for (let r = 5; r <= 22; r++) {
+      const c = 29 + (r % 4 < 2 ? 1 : 0)
+      setCell(c, r, 3)
+      setCell(c + 1, r, 3)
+    }
+
+    // Southeastern Frozen Lake
+    carveRect(37, 37, 42, 41, 3)
+
+    // ── 7. Entity Walkability Assurance ──
+    // Guarantee all 67 POIs are clear, walkable tiles
     const importantSpots = [
       [1, 1],
       [3, 1], [11, 1], [20, 3], [4, 8], [13, 8], [17, 10], [32, 10], [3, 13], [24, 15], [20, 20], [6, 22], [3, 24], [45, 25], [45, 35],
       [5, 1], [20, 1], [5, 5], [20, 5], [5, 8], [34, 8], [5, 10], [20, 10],
+      [30, 5], [44, 8], [9, 15], [27, 20], [38, 17], [15, 22], [6, 38], [38, 35],
       [5, 3], [16, 5], [24, 7], [16, 10], [11, 13], [14, 17], [7, 21], [4, 25], [40, 30],
+      [30, 3], [44, 6], [9, 17], [27, 17], [38, 20], [44, 24], [6, 35], [27, 35], [38, 38], [20, 43],
       [11, 3], [24, 8], [32, 18], [13, 27],
-      [45, 43],
-      [30, 3], [44, 6], [9, 17], [27, 17], [38, 20],
-      [44, 24], [6, 35], [27, 35], [38, 38], [20, 43],
-      [30, 5], [44, 8], [9, 15], [27, 20], [38, 17],
-      [15, 22], [6, 38], [38, 35],
       [8, 4], [24, 24], [40, 40], [16, 30],
       [12, 5], [33, 13], [20, 33], [42, 20],
-      [19, 6], [44, 14], [6, 44], [33, 44]
+      [19, 6], [44, 14], [6, 44], [33, 44],
+      [45, 43]
     ]
+
     importantSpots.forEach(([c, r]) => {
-      // If landed on a solid wall tile (1, 2, 4, 6), clear it to walkable path
-      if (map[r] && (map[r][c] === 1 || map[r][c] === 2 || map[r][c] === 4 || map[r][c] === 6)) {
-        carveCircle(c, r, 1, 5)
+      const t = map[r] ? map[r][c] : 1
+      if (t === 1 || t === 2 || t === 4 || t === 6) {
+        for (let dc = -1; dc <= 1; dc++) {
+          for (let dr = -1; dr <= 1; dr++) {
+            if (inBounds(c + dc, r + dr)) map[r + dr][c + dc] = 5
+          }
+        }
       }
     })
-
-    // 9. Frozen boundary wall around the whole map (Tile 2: snow_cliff)
-    for (let c = 0; c < cols; c++) { map[0][c] = 2; map[rows - 1][c] = 2 }
-    for (let r = 0; r < rows; r++) { map[r][0] = 2; map[r][cols - 1] = 2 }
 
     return map
   }
