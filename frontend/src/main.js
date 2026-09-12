@@ -28,12 +28,12 @@ const config = {
     MenuScene,
     StoryScene,
     GameScene,
-    UIScene,
     ReportScene,
     FlashCardScene,
     ShowcaseScene,
     GameScene2,
-    FlashcardScene2
+    FlashcardScene2,
+    UIScene
   ]
 }
 
