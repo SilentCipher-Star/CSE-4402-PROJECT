@@ -87,6 +87,11 @@ export class GameScene extends Phaser.Scene {
     this.player.setCollideWorldBounds(true)
     this.player.body.setSize(28, 28)
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
+    this.input.keyboard.enabled = true
+    this.input.keyboard.enableGlobalCapture()
+    this.input.on('pointerdown', () => {
+      this.input.keyboard.focus()
+    })
     this.wasd = this.input.keyboard.addKeys({
       up: Phaser.Input.Keyboard.KeyCodes.W,
       down: Phaser.Input.Keyboard.KeyCodes.S,
@@ -97,6 +102,10 @@ export class GameScene extends Phaser.Scene {
     this.spaceKey = this.input.keyboard.addKey(
       Phaser.Input.Keyboard.KeyCodes.SPACE
     )
+    this.collectKey = this.input.keyboard.addKey(
+      Phaser.Input.Keyboard.KeyCodes.E
+    )
+    this.activeWildlifeCard = null
     this.time.addEvent({
       delay: 1000,
       callback: () => { if (this.timeLeft > 0) this.timeLeft-- },
@@ -408,18 +417,18 @@ export class GameScene extends Phaser.Scene {
 
   spawnAnimals() {
     const animals = [
-      { col: 4, row: 4, type: 'deer' },
-      { col: 13, row: 9, type: 'deer' },
-      { col: 20, row: 12, type: 'deer' },
-      { col: 34, row: 21, type: 'deer' },
-      { col: 18, row: 32, type: 'deer' },
-      { col: 10, row: 37, type: 'deer' },
+      { col: 4, row: 4, type: 'deer', species: 'Spotted Deer', fact: 'Spotted deer form close-knit herds and alert other forest wildlife to predators.' },
+      { col: 13, row: 9, type: 'deer', species: 'Hog Deer', fact: 'Hog deer run through brush with heads held low, vital for forest undergrowth seed dispersal.' },
+      { col: 20, row: 12, type: 'deer', species: 'Sambar Deer', fact: 'Sambar deer are the largest deer species in tropical Asia and strong swimmers.' },
+      { col: 34, row: 21, type: 'deer', species: 'Barking Deer', fact: 'Also called Muntjacs, their distinctive bark warns the canopy of approaching danger.' },
+      { col: 18, row: 32, type: 'deer', species: 'Spotted Deer', fact: 'Their spotted coats remain into adulthood, providing dappled woodland camouflage.' },
+      { col: 10, row: 37, type: 'deer', species: 'Musk Deer', fact: 'Solitary forest dwellers that play a crucial role in sub-alpine plant pollination.' },
 
-      { col: 27, row: 15, type: 'rhino' },
-      { col: 36, row: 18, type: 'rhino' },
-      { col: 29, row: 24, type: 'rhino' },
-      { col: 24, row: 28, type: 'rhino' },
-      { col: 42, row: 44, type: 'rhino' }
+      { col: 27, row: 15, type: 'rhino', species: 'Javan Rhinoceros', fact: 'One of the rarest large mammals on Earth, with fewer than 80 individuals surviving.' },
+      { col: 36, row: 18, type: 'rhino', species: 'Indian Rhinoceros', fact: 'Also known as the Greater One-Horned Rhino, their armor-like skin shields them in dense brush.' },
+      { col: 29, row: 24, type: 'rhino', species: 'Sumatran Rhinoceros', fact: 'The smallest and hairiest living rhino species, critically endangered by habitat fragmentation.' },
+      { col: 24, row: 28, type: 'rhino', species: 'Black Rhinoceros', fact: 'Browsers with prehensile upper lips that shape thorny thicket ecosystems.' },
+      { col: 42, row: 44, type: 'rhino', species: 'White Rhinoceros', fact: 'Megaherbivores whose heavy grazing creates natural firebreaks across grasslands.' }
     ]
 
     animals.forEach(a => {
@@ -449,10 +458,21 @@ export class GameScene extends Phaser.Scene {
       cage.lineStyle(2, 0xffcc66, 0.75)
       cage.strokeCircle(x, y, 25)
 
+      const prompt = this.add.text(x, y - (a.type === 'rhino' ? 44 : 36), 'Press E', {
+        fontSize: '10px',
+        fontFamily: 'Arial Black',
+        color: '#FFD700',
+        stroke: '#000000',
+        strokeThickness: 3
+      }).setOrigin(0.5).setDepth(15).setVisible(false)
+
       this.animalList.push({
         type: a.type,
+        species: a.species,
+        fact: a.fact,
         body,
         cage,
+        prompt,
         rescued: false,
         leaving: false,
         roamTimer: 0,
@@ -604,8 +624,14 @@ export class GameScene extends Phaser.Scene {
     if (!this.animalList) return
 
     this.animalList.forEach(animal => {
-      if (animal.rescued || animal.leaving) return
-      if (!animal.body || !animal.body.active) return
+      if (animal.rescued || animal.leaving) {
+        if (animal.prompt && animal.prompt.visible) animal.prompt.setVisible(false)
+        return
+      }
+      if (!animal.body || !animal.body.active) {
+        if (animal.prompt && animal.prompt.visible) animal.prompt.setVisible(false)
+        return
+      }
 
       const dist = Phaser.Math.Distance.Between(
         this.player.x,
@@ -614,18 +640,91 @@ export class GameScene extends Phaser.Scene {
         animal.body.y
       )
 
-      if (dist < 42) {
+      const canSave = dist < 55
+
+      if (animal.prompt) {
+        animal.prompt.setVisible(canSave)
+        animal.prompt.setPosition(
+          animal.body.x,
+          animal.body.y - (animal.type === 'rhino' ? 44 : 36)
+        )
+      }
+
+      if (canSave && Phaser.Input.Keyboard.JustDown(this.collectKey)) {
         this.releaseAnimal(animal)
       }
     })
   }
+
+  showWildlifeCard(species, fact) {
+    if (this.activeWildlifeCard) {
+      this.activeWildlifeCard.forEach(el => {
+        if (el && el.destroy) el.destroy()
+      })
+      this.activeWildlifeCard = null
+    }
+
+    const { width, height } = this.scale
+
+    const card = this.add.graphics().setScrollFactor(0).setDepth(400)
+    card.fillStyle(0x0a1420, 0.97)
+    card.fillRoundedRect(width / 2 - 180, height / 2 - 90, 360, 180, 16)
+    card.lineStyle(3, 0xFFD700, 1)
+    card.strokeRoundedRect(width / 2 - 180, height / 2 - 90, 360, 180, 16)
+
+    const title = this.add.text(width / 2, height / 2 - 60, '🐾 SPECIES RESCUED!', {
+      fontSize: '15px', fontFamily: 'Arial Black', color: '#FFD700'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
+
+    const name = this.add.text(width / 2, height / 2 - 30, species, {
+      fontSize: '20px', fontFamily: 'Arial Black', color: '#ffffff'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
+
+    const factText = this.add.text(width / 2, height / 2 + 10, fact, {
+      fontSize: '11px', fontFamily: 'Arial', color: '#aaccdd',
+      wordWrap: { width: 320 }, align: 'center'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
+
+    const total = this.animalList ? this.animalList.length : 11
+    const counter = this.add.text(width / 2, height / 2 + 60, `Journal: ${this.animalsSaved} / ${total} species`, {
+      fontSize: '11px', fontFamily: 'Arial Black', color: '#00d4ff'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
+
+    const elements = [card, title, name, factText, counter]
+    this.activeWildlifeCard = elements
+    elements.forEach(el => { el.setAlpha(0) })
+    this.tweens.add({
+      targets: elements, alpha: 1, duration: 250
+    })
+
+    this.time.delayedCall(2600, () => {
+      this.tweens.add({
+        targets: elements, alpha: 0, duration: 300,
+        onComplete: () => {
+          elements.forEach(el => {
+            if (el && el.destroy) el.destroy()
+          })
+          if (this.activeWildlifeCard === elements) {
+            this.activeWildlifeCard = null
+          }
+        }
+      })
+    })
+  }
+
   releaseAnimal(animal) {
     if (!animal || animal.rescued || animal.leaving) return
 
     animal.rescued = true
     animal.leaving = true
 
+    if (animal.prompt) {
+      animal.prompt.destroy()
+      animal.prompt = null
+    }
+
     this.animalsSaved++
+    this.animalsRescued = this.animalsSaved
     const rescueScore = animal.type === 'rhino' ? 200 : 100
     this.score += rescueScore
     this.monstersKilled++
@@ -635,10 +734,15 @@ export class GameScene extends Phaser.Scene {
       animal.cage = null
     }
 
+    const speciesName = animal.species || (animal.type === 'rhino' ? 'Javan Rhinoceros' : 'Spotted Deer')
+    const factText = animal.fact || ''
+
+    this.showWildlifeCard(speciesName, factText)
+
     this.showFloatingText(
       animal.body.x,
       animal.body.y - 30,
-      `🐾 ${animal.type === 'rhino' ? 'Rhino' : 'Deer'} Saved! +${rescueScore}`,
+      `🐾 ${speciesName} Saved! +${rescueScore}`,
       '#aaffaa'
     )
 
@@ -1679,7 +1783,7 @@ export class GameScene extends Phaser.Scene {
 
     const nextX = this.player.x + (vx * 0.05)
     const nextY = this.player.y + (vy * 0.05)
-    const hw = 16
+    const hw = 14
     const leftTile = Math.floor((nextX - hw) / this.TILE)
     const rightTile = Math.floor((nextX + hw) / this.TILE)
     const topTile = Math.floor((nextY - hw) / this.TILE)
@@ -1687,10 +1791,53 @@ export class GameScene extends Phaser.Scene {
     const curRow = Math.floor(this.player.y / this.TILE)
     const curCol = Math.floor(this.player.x / this.TILE)
 
-    if (vx < 0 && this.isWall(leftTile, curRow)) vx = 0
-    if (vx > 0 && this.isWall(rightTile, curRow)) vx = 0
-    if (vy < 0 && this.isWall(curCol, topTile)) vy = 0
-    if (vy > 0 && this.isWall(curCol, bottomTile)) vy = 0
+    if (vx < 0 && this.isWall(leftTile, curRow)) {
+      vx = 0
+      this.player.x = Math.max(this.player.x, (leftTile + 1) * this.TILE + hw)
+    }
+    if (vx > 0 && this.isWall(rightTile, curRow)) {
+      vx = 0
+      this.player.x = Math.min(this.player.x, rightTile * this.TILE - hw)
+    }
+    if (vy < 0 && this.isWall(curCol, topTile)) {
+      vy = 0
+      this.player.y = Math.max(this.player.y, (topTile + 1) * this.TILE + hw)
+    }
+    if (vy > 0 && this.isWall(curCol, bottomTile)) {
+      vy = 0
+      this.player.y = Math.min(this.player.y, bottomTile * this.TILE - hw)
+    }
+
+    // Prevent diagonal corner-cutting into wall vertices
+    if (vx !== 0 && vy !== 0) {
+      const checkX = vx < 0 ? (this.player.x - hw + vx * 0.05) : (this.player.x + hw + vx * 0.05)
+      const checkY = vy < 0 ? (this.player.y - hw + vy * 0.05) : (this.player.y + hw + vy * 0.05)
+      const cCol = Math.floor(checkX / this.TILE)
+      const cRow = Math.floor(checkY / this.TILE)
+      if (this.isWall(cCol, cRow)) {
+        const dx = Math.abs(checkX - (cCol * this.TILE + (vx > 0 ? 0 : this.TILE)))
+        const dy = Math.abs(checkY - (cRow * this.TILE + (vy > 0 ? 0 : this.TILE)))
+        if (dx > dy) vx = 0
+        else vy = 0
+      }
+    }
+
+    // Safety net: if player is ever inside a wall tile, smoothly push out to nearest open tile
+    const checkCurC = Math.floor(this.player.x / this.TILE)
+    const checkCurR = Math.floor(this.player.y / this.TILE)
+    if (this.isWall(checkCurC, checkCurR)) {
+      const neighbors = [
+        { c: checkCurC, r: checkCurR - 1 }, { c: checkCurC, r: checkCurR + 1 },
+        { c: checkCurC - 1, r: checkCurR }, { c: checkCurC + 1, r: checkCurR }
+      ]
+      const openTile = neighbors.find(n => !this.isWall(n.c, n.r))
+      if (openTile) {
+        this.player.setPosition(
+          openTile.c * this.TILE + this.TILE / 2,
+          openTile.r * this.TILE + this.TILE / 2
+        )
+      }
+    }
 
     this.player.setVelocity(vx, vy)
 
@@ -1807,7 +1954,7 @@ export class GameScene extends Phaser.Scene {
       this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
     })
 
-    this.updateAnimals()
+    this.updateAnimals(delta)
     this.checkAnimalRescue()
 
     // Egg collection
@@ -1899,15 +2046,16 @@ export class GameScene extends Phaser.Scene {
 
     // Bird bounce
     this.bobTimer += 1
+    const baseSize = (this.chosenBird === 'Ember') ? this.TILE : (this.TILE + 8)
     if (this.isMoving) {
       if (this.bobTimer > 8) {
-        this.player.setDisplaySize((this.TILE + 8) + 5, (this.TILE + 8) - 5)
+        this.player.setDisplaySize(baseSize + 5, baseSize - 5)
       } else {
-        this.player.setDisplaySize((this.TILE + 8) - 2, (this.TILE + 8) + 5)
+        this.player.setDisplaySize(baseSize - 2, baseSize + 5)
       }
       if (this.bobTimer > 15) this.bobTimer = 0
     } else {
-      this.player.setDisplaySize(this.TILE + 8, this.TILE + 8)
+      this.player.setDisplaySize(baseSize, baseSize)
     }
   }
 }
