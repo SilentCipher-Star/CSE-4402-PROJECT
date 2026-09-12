@@ -187,11 +187,10 @@ export class GameScene2 extends Phaser.Scene {
       1 * this.TILE + this.TILE / 2,
       b + '_right'
     )
-    this.player.setDisplaySize(this.TILE + 8, this.TILE + 8)
-    const playerSize = (this.chosenBird === 'Ember') ? this.TILE : (this.TILE + 8)
-    this.player.setDisplaySize(playerSize, playerSize)
+    this.playerBaseSize = (this.chosenBird === 'Ember') ? 32 : 34
+    this.player.setDisplaySize(this.playerBaseSize, this.playerBaseSize)
     this.player.setCollideWorldBounds(true)
-    this.player.body.setSize(28, 28)
+    this.player.body.setSize(20, 20)
     this.player.setDepth(20)
 
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
@@ -346,9 +345,14 @@ export class GameScene2 extends Phaser.Scene {
       [19, 6], [44, 14], [6, 44], [33, 44]
     ]
 
+    importantSpots.forEach(([c, r]) => clearCircle(c, r, 2))
+
     // ── Obstacle formations: frozen logs (4), icicles (7), dead trees (8) ──
+    const isImportant = (c, r) => {
+      return importantSpots.some(([ic, ir]) => Math.abs(ic - c) <= 1 && Math.abs(ir - r) <= 1)
+    }
     const placeObstacle = (c, r, tileType) => {
-      if (c >= 1 && c < cols - 1 && r >= 1 && r < rows - 1) {
+      if (c >= 1 && c < cols - 1 && r >= 1 && r < rows - 1 && !isImportant(c, r)) {
         map[r][c] = tileType
       }
     }
@@ -359,7 +363,16 @@ export class GameScene2 extends Phaser.Scene {
       [28, 28], [29, 28], [30, 28],
       [10, 36], [11, 36],
       [35, 12], [36, 12],
-      [18, 16], [19, 16]
+      [18, 16], [19, 16],
+      [8, 26], [8, 27],
+      [23, 10], [24, 10],
+      [39, 22], [40, 22],
+      [15, 34], [16, 34],
+      [31, 40], [32, 40],
+      [4, 17], [4, 18],
+      [42, 34], [43, 34],
+      [21, 14], [22, 14],
+      [13, 31], [14, 31]
     ]
     logFormations.forEach(([c, r]) => placeObstacle(c, r, 4))
 
@@ -369,7 +382,16 @@ export class GameScene2 extends Phaser.Scene {
       [38, 8], [39, 8],
       [18, 26], [19, 26],
       [32, 38], [33, 38],
-      [12, 22], [13, 22]
+      [12, 22], [13, 22],
+      [36, 16], [37, 16],
+      [25, 30], [25, 31],
+      [17, 38], [18, 38],
+      [41, 26], [42, 26],
+      [7, 10], [7, 11],
+      [29, 12], [30, 12],
+      [11, 44], [12, 44],
+      [34, 4], [35, 4],
+      [3, 30], [4, 30]
     ]
     icicleFormations.forEach(([c, r]) => placeObstacle(c, r, 7))
 
@@ -379,11 +401,16 @@ export class GameScene2 extends Phaser.Scene {
       [26, 18], [27, 18],
       [14, 42], [15, 42],
       [36, 32], [37, 32],
-      [21, 35], [22, 35]
+      [21, 35], [22, 35],
+      [10, 8], [10, 9],
+      [33, 24], [34, 24],
+      [19, 30], [20, 30],
+      [43, 18], [44, 18],
+      [5, 31], [5, 32],
+      [17, 14], [17, 15],
+      [28, 41], [29, 41]
     ]
     deadTreeFormations.forEach(([c, r]) => placeObstacle(c, r, 8))
-
-    importantSpots.forEach(([c, r]) => clearCircle(c, r, 2))
 
     // frozen boundary wall around the whole map
     for (let c = 0; c < cols; c++) { map[0][c] = 2; map[rows - 1][c] = 2 }
@@ -495,7 +522,7 @@ export class GameScene2 extends Phaser.Scene {
     // look, anchored at the bottom of their OWN cell only — never
     // shifted sideways — so they never bleed into a neighbouring
     // column.
-    const risesAbove = new Set(['pine_large', 'pine_small', 'dead_tree', 'ice_wall'])
+    const risesAbove = new Set(['pine_large', 'pine_small', 'ice_wall'])
 
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
@@ -511,7 +538,7 @@ export class GameScene2 extends Phaser.Scene {
         } else if (t === 1) {
           // forest region
           const roll = rand()
-          key = roll < 0.6 ? 'pine_large' : 'pine_small'
+          key = roll < 0.45 ? 'pine_large' : roll < 0.75 ? 'pine_small' : 'dead_tree'
         } else if (t === 2) {
           // cliff/rock region
           key = 'ice_wall'
@@ -531,11 +558,9 @@ export class GameScene2 extends Phaser.Scene {
           // dead tree obstacle
           key = 'dead_tree'
         } else {
-          // plain open ground — walkable snow floor variation
+          // plain open ground — walkable snow floor variation only
           const roll = rand()
-          if (roll < 0.85) key = 'snow_ground'
-          else if (roll < 0.97) key = 'dark_snow'
-          else key = 'snow_stump'
+          key = roll < 0.80 ? 'snow_ground' : 'dark_snow'
         }
 
         const cellCenterX = col * this.TILE + this.TILE / 2
@@ -586,10 +611,10 @@ export class GameScene2 extends Phaser.Scene {
   }
 
   isWall(col, row) {
-    if (row < 0 || row >= this.mapRows) return true
-    if (col < 0 || col >= this.mapCols) return true
+    if (row < 0 || row >= this.mapRows || col < 0 || col >= this.mapCols) return true
+    if (!this.mapData || !this.mapData[row]) return true
     const t = this.mapData[row][col]
-    return t === 1 || t === 2 || t === 3 || t === 4 || t === 7 || t === 8
+    return t === 1 || t === 2 || t === 4 || t === 6 || t === 7 || t === 8
   }
 
   spawnEggs() {
@@ -826,23 +851,23 @@ const positions = [
   createHunterAt(x, y) {
     // Sprite instead of drawn graphic
     const sprite = this.add.sprite(x, y, 'hunter_front')
-    sprite.setDisplaySize(48, 58)
+    sprite.setDisplaySize(52, 64)
     sprite.setOrigin(0.5, 0.6)
     sprite.setDepth(10)
 
     // Shadow beneath hunter
-    const shadow = this.add.ellipse(x, y + 22, 30, 10, 0x000000, 0.35)
+    const shadow = this.add.ellipse(x, y + 26, 32, 11, 0x000000, 0.35)
     shadow.setDepth(9)
 
     const body = this.physics.add.image(x, y, null).setVisible(false)
-    body.body.setSize(28, 28)
+    body.body.setSize(30, 30)
     body.setCollideWorldBounds(true)
     body.setVelocity(60, 0)
 
     const hpBar = this.add.graphics()
-    this.drawHPBar(hpBar, x, y - 28, 2, 2)
+    this.drawHPBar(hpBar, x, y - 34, 2, 2)
 
-    const alert = this.add.text(x, y - 40, '❗', { fontSize: '16px' })
+    const alert = this.add.text(x, y - 46, '❗', { fontSize: '16px' })
       .setOrigin(0.5).setVisible(false)
 
     const hunter = {
@@ -973,7 +998,7 @@ const positions = [
   drawMonster(m, x, y, frozen) {
     // m here is the whole monster object now, not just graphic
     m.graphic.setPosition(x, y)
-    if (m.shadow) m.shadow.setPosition(x, y + 22)
+    if (m.shadow) m.shadow.setPosition(x, y + 26)
     if (frozen) {
       m.graphic.setTint(0x88ccff)
     } else {
@@ -2368,15 +2393,67 @@ const positions = [
       this.player.setTexture(b + '_front'); this.isMoving = true
     }
 
-    const nextX = this.player.x + vx * 0.05
-    const nextY = this.player.y + vy * 0.05
-    const hw = 16
+    const nextX = this.player.x + (vx * 0.05)
+    const nextY = this.player.y + (vy * 0.05)
+    const hw = 12
+    const leftTile = Math.floor((nextX - hw) / this.TILE)
+    const rightTile = Math.floor((nextX + hw) / this.TILE)
+    const topTile = Math.floor((nextY - hw) / this.TILE)
+    const bottomTile = Math.floor((nextY + hw) / this.TILE)
     const curRow = Math.floor(this.player.y / this.TILE)
     const curCol = Math.floor(this.player.x / this.TILE)
-    if (vx < 0 && this.isWall(Math.floor((nextX - hw) / this.TILE), curRow)) vx = 0
-    if (vx > 0 && this.isWall(Math.floor((nextX + hw) / this.TILE), curRow)) vx = 0
-    if (vy < 0 && this.isWall(curCol, Math.floor((nextY - hw) / this.TILE))) vy = 0
-    if (vy > 0 && this.isWall(curCol, Math.floor((nextY + hw) / this.TILE))) vy = 0
+
+    // Check all 3 vertical points along the left side
+    if (vx < 0 && (this.isWall(leftTile, curRow) || this.isWall(leftTile, topTile) || this.isWall(leftTile, bottomTile))) {
+      vx = 0
+      this.player.x = Math.max(this.player.x, (leftTile + 1) * this.TILE + hw)
+    }
+    // Check all 3 vertical points along the right side
+    if (vx > 0 && (this.isWall(rightTile, curRow) || this.isWall(rightTile, topTile) || this.isWall(rightTile, bottomTile))) {
+      vx = 0
+      this.player.x = Math.min(this.player.x, rightTile * this.TILE - hw)
+    }
+    // Check all 3 horizontal points along the top side
+    if (vy < 0 && (this.isWall(curCol, topTile) || this.isWall(leftTile, topTile) || this.isWall(rightTile, topTile))) {
+      vy = 0
+      this.player.y = Math.max(this.player.y, (topTile + 1) * this.TILE + hw)
+    }
+    // Check all 3 horizontal points along the bottom side
+    if (vy > 0 && (this.isWall(curCol, bottomTile) || this.isWall(leftTile, bottomTile) || this.isWall(rightTile, bottomTile))) {
+      vy = 0
+      this.player.y = Math.min(this.player.y, bottomTile * this.TILE - hw)
+    }
+
+    // Prevent diagonal corner-cutting into wall vertices
+    if (vx !== 0 && vy !== 0) {
+      const checkX = vx < 0 ? (this.player.x - hw + vx * 0.05) : (this.player.x + hw + vx * 0.05)
+      const checkY = vy < 0 ? (this.player.y - hw + vy * 0.05) : (this.player.y + hw + vy * 0.05)
+      const cCol = Math.floor(checkX / this.TILE)
+      const cRow = Math.floor(checkY / this.TILE)
+      if (this.isWall(cCol, cRow)) {
+        const dx = Math.abs(checkX - (cCol * this.TILE + (vx > 0 ? 0 : this.TILE)))
+        const dy = Math.abs(checkY - (cRow * this.TILE + (vy > 0 ? 0 : this.TILE)))
+        if (dx > dy) vx = 0
+        else vy = 0
+      }
+    }
+
+    // Safety net: if player is ever inside a wall tile, smoothly push out to nearest open tile
+    const checkCurC = Math.floor(this.player.x / this.TILE)
+    const checkCurR = Math.floor(this.player.y / this.TILE)
+    if (this.isWall(checkCurC, checkCurR)) {
+      const neighbors = [
+        { c: checkCurC, r: checkCurR - 1 }, { c: checkCurC, r: checkCurR + 1 },
+        { c: checkCurC - 1, r: checkCurR }, { c: checkCurC + 1, r: checkCurR }
+      ]
+      const openTile = neighbors.find(n => !this.isWall(n.c, n.r))
+      if (openTile) {
+        this.player.setPosition(
+          openTile.c * this.TILE + this.TILE / 2,
+          openTile.r * this.TILE + this.TILE / 2
+        )
+      }
+    }
 
     this.player.setVelocity(vx, vy)
 
@@ -2388,7 +2465,7 @@ const positions = [
 
       if (m.frozen) {
         this.drawMonster(m, m.body.x, m.body.y, true)
-        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 34, m.hp, m.maxHp)
         return
       }
 
@@ -2398,7 +2475,7 @@ const positions = [
         m.body.setPosition(m.spawnX, m.spawnY)
         m.body.setVelocity(0, 0); m.patrolTimer = 0
         this.drawMonster(m, m.body.x, m.body.y, false)
-        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 34, m.hp, m.maxHp)
         return
       }
 
@@ -2431,7 +2508,7 @@ const positions = [
           } else if (finalVy !== 0) {
             m.graphic.setTexture(finalVy > 0 ? 'hunter_front' : 'hunter_back')
           }
-          m.graphic.setDisplaySize(48, 58)
+          m.graphic.setDisplaySize(52, 64)
 
           if (Phaser.Math.Distance.Between(m.body.x, m.body.y, target.x, target.y) < 34) {
             this.loseTrappedAnimal(target, 'hunter')
@@ -2441,7 +2518,7 @@ const positions = [
 
           this.maybeLayHunterFootprint(m)
           this.drawMonster(m, m.body.x, m.body.y, false)
-          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 34, m.hp, m.maxHp)
           return
         }
       }
@@ -2467,7 +2544,7 @@ const positions = [
         } else if (finalVy !== 0) {
           m.graphic.setTexture(finalVy > 0 ? 'hunter_front' : 'hunter_back')
         }
-        m.graphic.setDisplaySize(48, 58)
+        m.graphic.setDisplaySize(52, 64)
 
         if (!this.shieldActive && distToPlayer < 36 && !this.playerHitCooldown) {
           this.playerHitCooldown = true
@@ -2502,7 +2579,7 @@ const positions = [
         } else if (d.vy !== 0) {
           m.graphic.setTexture(d.vy > 0 ? 'hunter_front' : 'hunter_back')
         }
-        m.graphic.setDisplaySize(48, 58)
+        m.graphic.setDisplaySize(52, 64)
       }
 
       for (let i = 0; i < this.eggList.length; i++) {
@@ -2764,11 +2841,15 @@ w.fleeing = nearestHunterDist < 90
   this.drawPortal()
 
   this.bobTimer += 1
+  const baseSize = this.playerBaseSize || 34
   if (this.isMoving) {
-    this.player.setDisplaySize(this.bobTimer > 8 ? (this.TILE + 8) + 5 : (this.TILE + 8) - 2, this.bobTimer > 8 ? (this.TILE + 8) - 5 : (this.TILE + 8) + 5)
+    this.player.setDisplaySize(
+      this.bobTimer > 8 ? baseSize + 3 : baseSize - 2,
+      this.bobTimer > 8 ? baseSize - 3 : baseSize + 3
+    )
     if (this.bobTimer > 15) this.bobTimer = 0
   } else {
-    this.player.setDisplaySize(this.TILE + 8, this.TILE + 8)
+    this.player.setDisplaySize(baseSize, baseSize)
   }
 }
 }
