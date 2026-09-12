@@ -402,9 +402,6 @@ export class GameScene2 extends Phaser.Scene {
     // than one cell so their canopy can rise upward for a natural
     // look, anchored at the bottom of their OWN cell only — never
     // shifted sideways — so they never bleed into a neighbouring
-    // column.
-    const risesAbove = new Set(['pine_large', 'pine_small', 'dead_tree', 'ice_wall'])
-
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         const t = this.mapData[row][col]
@@ -417,55 +414,34 @@ export class GameScene2 extends Phaser.Scene {
         if (isEdge) {
           key = 'snow_cliff'
         } else if (t === 1) {
-          // forest region
+          // forest region (solid trees, stumps, and fallen logs)
           const roll = rand()
-          key = roll < 0.55 ? 'pine_large' : roll < 0.9 ? 'pine_small' : 'dead_tree'
+          key = roll < 0.40 ? 'pine_large' : roll < 0.70 ? 'pine_small' : roll < 0.85 ? 'dead_tree' : roll < 0.93 ? 'snow_stump' : 'frozen_log'
         } else if (t === 2) {
-          // cliff/rock region
-          key = 'ice_wall'
+          // cliff/rock region (solid wall/rock)
+          const roll = rand()
+          key = roll < 0.60 ? 'ice_wall' : roll < 0.85 ? 'snow_rock' : 'icicle'
         } else if (t === 3) {
-          // the one confined frozen-water lake
+          // confined frozen-water lake (impassable water)
           key = 'frozen_water'
         } else if (t === 6) {
-          // the clustered snow-pile patch
-          key = rand() < 0.8 ? 'snow_pile' : 'snow_bank'
+          // clustered snow-pile patch (solid snow obstacles)
+          key = rand() < 0.75 ? 'snow_pile' : 'snow_bank'
         } else {
-          // plain open ground — just quiet floor variation, no
-          // scattered props (those live in their own zones above)
+          // plain open ground — purely walkable floor variation
           const roll = rand()
-          if (roll < 0.82) key = 'snow_ground'
-          else if (roll < 0.96) key = 'dark_snow'
-          else if (roll < 0.985) key = 'snow_stump'
-          else key = 'frozen_log'
+          if (roll < 0.75) key = 'snow_ground'
+          else if (roll < 0.92) key = 'dark_snow'
+          else key = 'ice'
         }
 
         const cellCenterX = col * this.TILE + this.TILE / 2
         const cellCenterY = row * this.TILE + this.TILE / 2
-        const cellBottomY = row * this.TILE + this.TILE
-
-        // Even at an exact TILE x TILE size, sub-pixel rounding and
-        // texture-edge filtering can leave a hairline gap between two
-        // "perfectly" adjacent tiles. Rounding positions to whole
-        // pixels and overscanning each flat tile by ~2px (so
-        // neighbours overlap a hair instead of just touching) hides
-        // that seam completely.
         const bleed = 2
 
-        const img = this.add.image(0, 0, key)
-
-        if (risesAbove.has(key)) {
-          // anchored to the bottom edge of THIS cell only — grows
-          // upward, stays centred on its own column
-          img.setOrigin(0.5, 1)
-          img.setPosition(Math.round(cellCenterX), Math.round(cellBottomY))
-          img.setDisplaySize(this.TILE + bleed, this.TILE * 1.35)
-        } else {
-          // fills its own cell exactly, edge to edge, with a slight
-          // overscan so there's no visible seam
-          img.setOrigin(0.5, 0.5)
-          img.setPosition(Math.round(cellCenterX), Math.round(cellCenterY))
-          img.setDisplaySize(this.TILE + bleed, this.TILE + bleed)
-        }
+        const img = this.add.image(Math.round(cellCenterX), Math.round(cellCenterY), key)
+          .setOrigin(0.5, 0.5)
+          .setDisplaySize(this.TILE + bleed, this.TILE + bleed)
       }
     }
 
@@ -487,10 +463,10 @@ export class GameScene2 extends Phaser.Scene {
   }
 
   isWall(col, row) {
-    if (row < 0 || row >= this.mapRows) return true
-    if (col < 0 || col >= this.mapCols) return true
+    if (row < 0 || row >= this.mapRows || col < 0 || col >= this.mapCols) return true
+    if (!this.mapData || !this.mapData[row]) return true
     const t = this.mapData[row][col]
-    return t === 1 || t === 2 || t === 3
+    return t !== 5
   }
 
   spawnEggs() {
@@ -2110,15 +2086,66 @@ const positions = [
     this.player.setTexture(b + '_front'); this.isMoving = true
   }
 
-  const nextX = this.player.x + vx * 0.05
-  const nextY = this.player.y + vy * 0.05
-  const hw = 16
-  const curRow = Math.floor(this.player.y / this.TILE)
-  const curCol = Math.floor(this.player.x / this.TILE)
-  if (vx < 0 && this.isWall(Math.floor((nextX - hw) / this.TILE), curRow)) vx = 0
-  if (vx > 0 && this.isWall(Math.floor((nextX + hw) / this.TILE), curRow)) vx = 0
-  if (vy < 0 && this.isWall(curCol, Math.floor((nextY - hw) / this.TILE))) vy = 0
-  if (vy > 0 && this.isWall(curCol, Math.floor((nextY + hw) / this.TILE))) vy = 0
+  const halfW = 14
+  const halfH = 14
+  const checkDt = 0.05
+
+  // Check horizontal collision across full vertical height of player body
+  if (vx !== 0) {
+    const checkX = vx < 0 ? (this.player.x - halfW + vx * checkDt) : (this.player.x + halfW + vx * checkDt)
+    const targetCol = Math.floor(checkX / this.TILE)
+    const topRow = Math.floor((this.player.y - halfH + 3) / this.TILE)
+    const botRow = Math.floor((this.player.y + halfH - 3) / this.TILE)
+    if (this.isWall(targetCol, topRow) || this.isWall(targetCol, botRow)) {
+      vx = 0
+      if (vx < 0) this.player.x = Math.max(this.player.x, (targetCol + 1) * this.TILE + halfW)
+      else this.player.x = Math.min(this.player.x, targetCol * this.TILE - halfW)
+    }
+  }
+
+  // Check vertical collision across full horizontal width of player body
+  if (vy !== 0) {
+    const checkY = vy < 0 ? (this.player.y - halfH + vy * checkDt) : (this.player.y + halfH + vy * checkDt)
+    const targetRow = Math.floor(checkY / this.TILE)
+    const leftCol = Math.floor((this.player.x - halfW + 3) / this.TILE)
+    const rightCol = Math.floor((this.player.x + halfW - 3) / this.TILE)
+    if (this.isWall(leftCol, targetRow) || this.isWall(rightCol, targetRow)) {
+      vy = 0
+      if (vy < 0) this.player.y = Math.max(this.player.y, (targetRow + 1) * this.TILE + halfH)
+      else this.player.y = Math.min(this.player.y, targetRow * this.TILE - halfH)
+    }
+  }
+
+  // Prevent diagonal corner-cutting into wall vertices
+  if (vx !== 0 && vy !== 0) {
+    const checkX = vx < 0 ? (this.player.x - halfW + vx * checkDt) : (this.player.x + halfW + vx * checkDt)
+    const checkY = vy < 0 ? (this.player.y - halfH + vy * checkDt) : (this.player.y + halfH + vy * checkDt)
+    const cCol = Math.floor(checkX / this.TILE)
+    const cRow = Math.floor(checkY / this.TILE)
+    if (this.isWall(cCol, cRow)) {
+      const dx = Math.abs(checkX - (cCol * this.TILE + (vx > 0 ? 0 : this.TILE)))
+      const dy = Math.abs(checkY - (cRow * this.TILE + (vy > 0 ? 0 : this.TILE)))
+      if (dx > dy) vx = 0
+      else vy = 0
+    }
+  }
+
+  // Safety net: if ever inside a wall tile, smoothly push out to nearest open tile
+  const curC = Math.floor(this.player.x / this.TILE)
+  const curR = Math.floor(this.player.y / this.TILE)
+  if (this.isWall(curC, curR)) {
+    const neighbors = [
+      { c: curC, r: curR - 1 }, { c: curC, r: curR + 1 },
+      { c: curC - 1, r: curR }, { c: curC + 1, r: curR }
+    ]
+    const openTile = neighbors.find(n => !this.isWall(n.c, n.r))
+    if (openTile) {
+      this.player.setPosition(
+        openTile.c * this.TILE + this.TILE / 2,
+        openTile.r * this.TILE + this.TILE / 2
+      )
+    }
+  }
 
   this.player.setVelocity(vx, vy)
 
