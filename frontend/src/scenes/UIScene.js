@@ -121,7 +121,7 @@ export class UIScene extends Phaser.Scene {
     bot.fillStyle(0x000000, 0.5)
     bot.fillRect(0, height - 14, width, 14)
     this.add.text(width / 2, height - 12,
-      'Press H to revive heart (-100 score)   •   Walk over weapons for powers   •   Reach the portal to escape!', {
+      'Rescue animals (move to dismiss)   •   Hearts in monster dens: press H (-100)   •   Portal to escape', {
       fontSize: '9px', fontFamily: 'Arial', color: '#d8ffd0'
     }).setOrigin(0.5, 0)
 
@@ -331,12 +331,17 @@ export class UIScene extends Phaser.Scene {
         const hp = this.gameScene.playerHP || 0
         const maxHp = this.gameScene.maxHP || 5
         const cost = this.gameScene.HEART_REVIVE_COST || 100
+        const nearHeart = this.gameScene.getNearestHeartShrine && this.gameScene.getNearestHeartShrine(65)
+
         if (hp >= maxHp) {
           this.reviveLabel.setText('[H] Full')
           this.reviveContainer.setAlpha(0.35)
+        } else if (!nearHeart) {
+          this.reviveLabel.setText('[H] Find ❤️')
+          this.reviveContainer.setAlpha(0.5)
         } else if (this.gameScene.score < cost) {
           this.reviveLabel.setText(`[H] +❤️ ${cost}`)
-          this.reviveContainer.setAlpha(0.5)
+          this.reviveContainer.setAlpha(0.6)
         } else {
           this.reviveLabel.setText('[H] Revive!')
           this.reviveContainer.setAlpha(1)

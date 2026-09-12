@@ -37,6 +37,7 @@ export class GameScene extends Phaser.Scene {
     this.HEART_REVIVE_COST = 100
     this.firstHitNotified = false
     this.emergencyReviving = false
+    this.animalNotificationFrozen = false
     this.terminalOpen = false
     this.stealthMode = false
     this.gameEnding = false
@@ -119,7 +120,7 @@ export class GameScene extends Phaser.Scene {
     this.activeWildlifeCard = null
     this.time.addEvent({
       delay: 1000,
-      callback: () => { if (this.timeLeft > 0) this.timeLeft-- },
+      callback: () => { if (!this.animalNotificationFrozen && this.timeLeft > 0) this.timeLeft-- },
       repeat: 180  // FIX 1: was 179, needs 180 repeats to count down from 180 to 0
     })
     this.scene.launch('UIScene', { gameScene: this })
@@ -214,13 +215,38 @@ export class GameScene extends Phaser.Scene {
       [44, 47]
     ])
 
-    // Optional narrow branches, still ONE tile wide
+    // ZONE 1: North-East Bandit Outpost & Labyrinth (Heavy enemy den with Heart 1)
+    carvePath([[21, 15], [21, 10], [30, 10], [30, 5], [42, 5], [42, 10], [45, 10], [45, 14], [37, 14], [37, 18]])
+    carvePath([[34, 5], [34, 10], [40, 10]])
+    carvePath([[38, 8], [42, 8]])
+    carvePath([[26, 10], [26, 6], [30, 6]])
+    carveCell(40, 8)
+    carveCell(40, 7)
+    carveCell(41, 8)
+
+    // ZONE 2: Central Sunken Marshlands & Labyrinth (Heavy enemy den with Heart 2)
+    carvePath([[37, 18], [44, 18], [44, 24], [38, 24]])
+    carvePath([[33, 24], [43, 24], [43, 33], [34, 33], [34, 28], [28, 28]])
+    carvePath([[38, 24], [38, 33]])
+    carvePath([[40, 28], [43, 28]])
+    carvePath([[30, 24], [30, 30], [35, 30]])
+    carveCell(41, 28)
+    carveCell(42, 28)
+    carveCell(41, 29)
+
+    // ZONE 3: South-Central Shadow Grotto & Ravine (Heavy enemy den with Heart 3)
+    carvePath([[25, 28], [30, 33], [25, 37], [18, 37]])
+    carvePath([[15, 34], [15, 39], [25, 39], [25, 43], [30, 43], [30, 47]])
+    carvePath([[20, 39], [20, 44], [25, 44]])
+    carvePath([[23, 41], [27, 41]])
+    carvePath([[18, 37], [18, 41], [23, 41]])
+    carveCell(25, 41)
+    carveCell(26, 41)
+    carveCell(25, 42)
+
+    // Other narrow branches & shortcuts
     carvePath([[11, 9], [15, 9]])
     carvePath([[7, 7], [15, 7], [15, 9]])
-    carvePath([[21, 15], [21, 10], [30, 10], [30, 6], [42, 6]])
-    carvePath([[37, 18], [44, 18], [44, 24], [38, 24]])
-    carvePath([[33, 24], [40, 24], [40, 30], [35, 30]])
-    carvePath([[25, 28], [30, 33], [25, 37], [18, 37]])
     carvePath([[15, 34], [15, 39], [12, 39]])
     carvePath([[5, 40], [2, 40], [2, 44]])
 
@@ -230,6 +256,9 @@ export class GameScene extends Phaser.Scene {
       [19, 12], [15, 15], [29, 15], [37, 18],
       [33, 21], [28, 26], [25, 28], [21, 30],
       [18, 32], [15, 34], [44, 47],
+
+      // Heart spots in enemy dens
+      [40, 8], [41, 28], [25, 41],
 
       // weapons
       [7, 7], [15, 9], [21, 15], [37, 18],
@@ -374,6 +403,7 @@ export class GameScene extends Phaser.Scene {
   }
   spawnMonsters() {
     const positions = [
+      // Main patrol hunters
       { col: 6, row: 1 },
       { col: 5, row: 9 },
       { col: 11, row: 9 },
@@ -383,6 +413,21 @@ export class GameScene extends Phaser.Scene {
       { col: 33, row: 21 },
       { col: 25, row: 28 },
       { col: 18, row: 32 },
+
+      // Den 1: North-East Outpost (Guarding Heart at 40, 8)
+      { col: 38, row: 6 },
+      { col: 42, row: 8 },
+      { col: 40, row: 10 },
+
+      // Den 2: Central Marshlands (Guarding Heart at 41, 28)
+      { col: 38, row: 26 },
+      { col: 43, row: 26 },
+      { col: 41, row: 31 },
+
+      // Den 3: South-Central Shadow Grotto (Guarding Heart at 25, 41)
+      { col: 20, row: 39 },
+      { col: 25, row: 43 },
+      { col: 26, row: 40 },
     ]
 
     positions.forEach((m) => {
@@ -675,52 +720,58 @@ export class GameScene extends Phaser.Scene {
       this.activeWildlifeCard = null
     }
 
+    // Freeze the screen
+    this.animalNotificationFrozen = true
+    this.player.setVelocity(0, 0)
+    this.monsterList.forEach(m => {
+      if (m.body && m.body.active) m.body.setVelocity(0, 0)
+      m.chasing = false
+    })
+
     const { width, height } = this.scale
 
     const card = this.add.graphics().setScrollFactor(0).setDepth(400)
     card.fillStyle(0x0a1420, 0.97)
-    card.fillRoundedRect(width / 2 - 180, height / 2 - 90, 360, 180, 16)
+    card.fillRoundedRect(width / 2 - 180, height / 2 - 95, 360, 190, 16)
     card.lineStyle(3, 0xFFD700, 1)
-    card.strokeRoundedRect(width / 2 - 180, height / 2 - 90, 360, 180, 16)
+    card.strokeRoundedRect(width / 2 - 180, height / 2 - 95, 360, 190, 16)
 
-    const title = this.add.text(width / 2, height / 2 - 60, '🐾 SPECIES RESCUED!', {
+    const title = this.add.text(width / 2, height / 2 - 68, '🐾 SPECIES RESCUED!', {
       fontSize: '15px', fontFamily: 'Arial Black', color: '#FFD700'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const name = this.add.text(width / 2, height / 2 - 30, species, {
+    const name = this.add.text(width / 2, height / 2 - 38, species, {
       fontSize: '20px', fontFamily: 'Arial Black', color: '#ffffff'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const factText = this.add.text(width / 2, height / 2 + 10, fact, {
+    const factText = this.add.text(width / 2, height / 2 + 2, fact, {
       fontSize: '11px', fontFamily: 'Arial', color: '#aaccdd',
       wordWrap: { width: 320 }, align: 'center'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
     const total = this.animalList ? this.animalList.length : 11
-    const counter = this.add.text(width / 2, height / 2 + 60, `Journal: ${this.animalsSaved} / ${total} species`, {
+    const counter = this.add.text(width / 2, height / 2 + 45, `Journal: ${this.animalsSaved} / ${total} species`, {
       fontSize: '11px', fontFamily: 'Arial Black', color: '#00d4ff'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const elements = [card, title, name, factText, counter]
-    this.activeWildlifeCard = elements
-    elements.forEach(el => { el.setAlpha(0) })
-    this.tweens.add({
-      targets: elements, alpha: 1, duration: 250
-    })
+    const resumeHint = this.add.text(width / 2, height / 2 + 72, '👉 Move in any direction (W,A,S,D / Arrows) to resume', {
+      fontSize: '10px', fontFamily: 'Arial Black', color: '#ffdd77'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    this.time.delayedCall(2600, () => {
-      this.tweens.add({
-        targets: elements, alpha: 0, duration: 300,
-        onComplete: () => {
-          elements.forEach(el => {
-            if (el && el.destroy) el.destroy()
-          })
-          if (this.activeWildlifeCard === elements) {
-            this.activeWildlifeCard = null
-          }
-        }
+    const elements = [card, title, name, factText, counter, resumeHint]
+    this.activeWildlifeCard = elements
+    elements.forEach(el => { el.setAlpha(1) })
+  }
+
+  dismissWildlifeCard() {
+    if (!this.animalNotificationFrozen && !this.activeWildlifeCard) return
+    this.animalNotificationFrozen = false
+    if (this.activeWildlifeCard) {
+      this.activeWildlifeCard.forEach(el => {
+        if (el && el.destroy) el.destroy()
       })
-    })
+      this.activeWildlifeCard = null
+    }
   }
 
   releaseAnimal(animal) {
@@ -932,14 +983,14 @@ export class GameScene extends Phaser.Scene {
 
   spawnHeartShrines() {
     const shrineSpots = [
-      { col: 12, row: 12 },
-      { col: 28, row: 24 },
-      { col: 16, row: 44 }
+      { col: 40, row: 8, name: 'North Outpost Heart' },
+      { col: 41, row: 28, name: 'Central Marsh Heart' },
+      { col: 25, row: 41, name: 'Shadow Grotto Heart' }
     ]
 
     this.heartShrines = []
 
-    shrineSpots.forEach(s => {
+    shrineSpots.forEach((s, idx) => {
       if (this.isWall(s.col, s.row)) return
       const x = s.col * this.TILE + this.TILE / 2
       const y = s.row * this.TILE + this.TILE / 2
@@ -975,12 +1026,40 @@ export class GameScene extends Phaser.Scene {
         strokeThickness: 3
       }).setOrigin(0.5).setDepth(6)
 
-      this.heartShrines.push({ x, y, baseGfx, heartImg, prompt })
+      this.heartShrines.push({ id: idx, col: s.col, row: s.row, x, y, baseGfx, heartImg, prompt, used: false })
     })
   }
 
+  getNearestHeartShrine(maxDist = 65) {
+    if (!this.heartShrines || this.heartShrines.length === 0) return null
+    let nearest = null
+    let minDist = maxDist
+
+    this.heartShrines.forEach(s => {
+      if (s.used) return
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, s.x, s.y)
+      if (d < minDist) {
+        minDist = d
+        nearest = s
+      }
+    })
+    return nearest
+  }
+
   reviveHeart() {
-    if (this.gameEnding) return
+    if (this.gameEnding || this.animalNotificationFrozen) return
+
+    const targetShrine = this.getNearestHeartShrine(65)
+
+    if (!targetShrine) {
+      this.showFloatingText(
+        this.player.x,
+        this.player.y - 35,
+        '⚠️ Reach a Heart in monster zones to revive!',
+        '#ffaa44'
+      )
+      return
+    }
 
     if (this.playerHP >= this.maxHP) {
       this.showFloatingText(this.player.x, this.player.y - 35, '❤️ Hearts Already Full!', '#ffdd44')
@@ -1000,6 +1079,23 @@ export class GameScene extends Phaser.Scene {
     // Deduct score & add 1 heart
     this.score -= this.HEART_REVIVE_COST
     this.playerHP = Math.min(this.playerHP + 1, this.maxHP)
+
+    // MAKE THE HEART DISAPPEAR
+    targetShrine.used = true
+    const toDestroy = [targetShrine.heartImg, targetShrine.baseGfx, targetShrine.prompt].filter(Boolean)
+    this.tweens.add({
+      targets: toDestroy,
+      alpha: 0,
+      scale: 0.1,
+      duration: 350,
+      ease: 'Back.easeIn',
+      onComplete: () => {
+        toDestroy.forEach(el => {
+          if (el && el.destroy) el.destroy()
+        })
+      }
+    })
+    this.heartShrines = this.heartShrines.filter(s => s !== targetShrine)
 
     // Clear emergency state if active
     if (this.emergencyReviveTimer) {
@@ -1976,6 +2072,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time, delta) {
+    // Check if player pressed any movement key to unfreeze animal notification
+    const moveInput = this.wasd.left.isDown || this.wasd.right.isDown ||
+                      this.wasd.up.isDown || this.wasd.down.isDown ||
+                      this.cursors.left.isDown || this.cursors.right.isDown ||
+                      this.cursors.up.isDown || this.cursors.down.isDown
+
+    if (this.animalNotificationFrozen) {
+      if (moveInput) {
+        this.dismissWildlifeCard()
+      } else {
+        this.player.setVelocity(0, 0)
+        this.monsterList.forEach(m => {
+          if (m.body && m.body.active) m.body.setVelocity(0, 0)
+        })
+        return
+      }
+    }
+
     const speed = this.evolutionStage >= 2 ? 190 : 140
     let vx = 0, vy = 0
     this.isMoving = false
@@ -2153,7 +2267,7 @@ export class GameScene extends Phaser.Scene {
 
           if (!this.firstHitNotified) {
             this.firstHitNotified = true
-            this.showFloatingText(this.player.x, this.player.y - 52, '💡 Press [H] to Revive Heart (-100 Score)', '#ffeb3b')
+            this.showFloatingText(this.player.x, this.player.y - 52, '💡 Find Hearts in monster dens to Revive (-100)', '#ffeb3b')
           }
 
           this.time.delayedCall(400, () => {
@@ -2164,8 +2278,9 @@ export class GameScene extends Phaser.Scene {
 
           if (this.playerHP <= 0) {
             this.playerHP = 0
-            if (this.score >= this.HEART_REVIVE_COST && !this.emergencyReviving) {
-              this.triggerEmergencyRevive()
+            const nearbyHeart = this.getNearestHeartShrine(90)
+            if (nearbyHeart && this.score >= this.HEART_REVIVE_COST && !this.emergencyReviving) {
+              this.triggerEmergencyRevive(nearbyHeart)
             } else {
               this.endGame(false)
             }
