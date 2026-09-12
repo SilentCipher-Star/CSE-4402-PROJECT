@@ -97,10 +97,6 @@ export class GameScene extends Phaser.Scene {
     this.spaceKey = this.input.keyboard.addKey(
       Phaser.Input.Keyboard.KeyCodes.SPACE
     )
-    this.collectKey = this.input.keyboard.addKey(
-      Phaser.Input.Keyboard.KeyCodes.E
-    )
-    this.activeWildlifeCard = null
     this.time.addEvent({
       delay: 1000,
       callback: () => { if (this.timeLeft > 0) this.timeLeft-- },
@@ -453,23 +449,10 @@ export class GameScene extends Phaser.Scene {
       cage.lineStyle(2, 0xffcc66, 0.75)
       cage.strokeCircle(x, y, 25)
 
-      const species = a.type === 'rhino' ? 'Javan Rhinoceros' : 'Spotted Deer'
-      const fact = a.type === 'rhino'
-        ? 'Critically endangered tropical giants. Fewer than 80 remain worldwide.'
-        : 'Graceful forest herbivores vital for seed dispersal and ecosystem balance.'
-
-      const prompt = this.add.text(x, y - (a.type === 'rhino' ? 44 : 36), 'Press E', {
-        fontSize: '10px', fontFamily: 'Arial Black',
-        color: '#FFD700', stroke: '#000000', strokeThickness: 3
-      }).setOrigin(0.5).setDepth(11).setVisible(false)
-
       this.animalList.push({
         type: a.type,
-        species,
-        fact,
         body,
         cage,
-        prompt,
         rescued: false,
         leaving: false,
         roamTimer: 0,
@@ -621,14 +604,8 @@ export class GameScene extends Phaser.Scene {
     if (!this.animalList) return
 
     this.animalList.forEach(animal => {
-      if (animal.rescued || animal.leaving) {
-        if (animal.prompt && animal.prompt.visible) animal.prompt.setVisible(false)
-        return
-      }
-      if (!animal.body || !animal.body.active) {
-        if (animal.prompt && animal.prompt.visible) animal.prompt.setVisible(false)
-        return
-      }
+      if (animal.rescued || animal.leaving) return
+      if (!animal.body || !animal.body.active) return
 
       const dist = Phaser.Math.Distance.Between(
         this.player.x,
@@ -637,88 +614,16 @@ export class GameScene extends Phaser.Scene {
         animal.body.y
       )
 
-      const canSave = dist < 55
-
-      if (animal.prompt) {
-        animal.prompt.setVisible(canSave)
-        animal.prompt.setPosition(
-          animal.body.x,
-          animal.body.y - (animal.type === 'rhino' ? 44 : 36)
-        )
-      }
-
-      if (canSave && Phaser.Input.Keyboard.JustDown(this.collectKey)) {
+      if (dist < 42) {
         this.releaseAnimal(animal)
       }
     })
   }
-
-  showWildlifeCard(species, fact) {
-    if (this.activeWildlifeCard) {
-      this.activeWildlifeCard.forEach(el => {
-        if (el && el.destroy) el.destroy()
-      })
-      this.activeWildlifeCard = null
-    }
-
-    const { width, height } = this.scale
-
-    const card = this.add.graphics().setScrollFactor(0).setDepth(400)
-    card.fillStyle(0x0a1420, 0.97)
-    card.fillRoundedRect(width / 2 - 180, height / 2 - 90, 360, 180, 16)
-    card.lineStyle(3, 0xFFD700, 1)
-    card.strokeRoundedRect(width / 2 - 180, height / 2 - 90, 360, 180, 16)
-
-    const title = this.add.text(width / 2, height / 2 - 60, '🐾 ANIMAL RESCUED!', {
-      fontSize: '15px', fontFamily: 'Arial Black', color: '#FFD700'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
-
-    const name = this.add.text(width / 2, height / 2 - 30, species, {
-      fontSize: '20px', fontFamily: 'Arial Black', color: '#ffffff'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
-
-    const factText = this.add.text(width / 2, height / 2 + 10, fact, {
-      fontSize: '11px', fontFamily: 'Arial', color: '#aaccdd',
-      wordWrap: { width: 320 }, align: 'center'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
-
-    const total = this.animalList ? this.animalList.length : 11
-    const counter = this.add.text(width / 2, height / 2 + 60, `Saved: ${this.animalsSaved} / ${total} animals`, {
-      fontSize: '11px', fontFamily: 'Arial Black', color: '#00d4ff'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
-
-    const elements = [card, title, name, factText, counter]
-    this.activeWildlifeCard = elements
-    elements.forEach(el => { el.setAlpha(0) })
-    this.tweens.add({
-      targets: elements, alpha: 1, duration: 250
-    })
-
-    this.time.delayedCall(2600, () => {
-      this.tweens.add({
-        targets: elements, alpha: 0, duration: 300,
-        onComplete: () => {
-          elements.forEach(el => {
-            if (el && el.destroy) el.destroy()
-          })
-          if (this.activeWildlifeCard === elements) {
-            this.activeWildlifeCard = null
-          }
-        }
-      })
-    })
-  }
-
   releaseAnimal(animal) {
     if (!animal || animal.rescued || animal.leaving) return
 
     animal.rescued = true
     animal.leaving = true
-
-    if (animal.prompt) {
-      animal.prompt.destroy()
-      animal.prompt = null
-    }
 
     this.animalsSaved++
     const rescueScore = animal.type === 'rhino' ? 200 : 100
@@ -730,12 +635,10 @@ export class GameScene extends Phaser.Scene {
       animal.cage = null
     }
 
-    this.showWildlifeCard(animal.species || (animal.type === 'rhino' ? 'Javan Rhinoceros' : 'Spotted Deer'), animal.fact || '')
-
     this.showFloatingText(
       animal.body.x,
       animal.body.y - 30,
-      `🐾 ${animal.species || (animal.type === 'rhino' ? 'Rhino' : 'Deer')} Saved! +${rescueScore}`,
+      `🐾 ${animal.type === 'rhino' ? 'Rhino' : 'Deer'} Saved! +${rescueScore}`,
       '#aaffaa'
     )
 
