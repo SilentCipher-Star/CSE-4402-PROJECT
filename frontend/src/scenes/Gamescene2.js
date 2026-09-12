@@ -17,7 +17,7 @@ export class GameScene2 extends Phaser.Scene {
     this.load.image('pine_large', 'resource/tiles/10_pine_tree_large.png')
     this.load.image('pine_small', 'resource/tiles/11_pine_tree_small.png')
     this.load.image('dead_tree', 'resource/tiles/12_dead_tree.png')
-    this.load.image('stump', 'resource/tiles/13_stump.png')
+    this.load.image('snow_stump', 'resource/tiles/13_stump.png')
     this.load.image('icicle', 'resource/tiles/14_icicle.png')
     this.load.image('snow_pile', 'resource/tiles/15_snow_pile.png')
     this.load.image('card_arctic_willow', 'resource/flashcards/card_arctic_willow.png')
@@ -376,7 +376,7 @@ export class GameScene2 extends Phaser.Scene {
     const tileKeys = [
       'snow_ground', 'dark_snow', 'ice', 'frozen_water', 'snow_cliff',
       'snow_rock', 'ice_wall', 'snow_bank', 'frozen_log',
-      'pine_large', 'pine_small', 'dead_tree', 'stump', 'icicle', 'snow_pile'
+      'pine_large', 'pine_small', 'dead_tree', 'snow_stump', 'icicle', 'snow_pile'
     ]
     tileKeys.forEach(key => {
       const tex = this.textures.get(key)
@@ -435,7 +435,7 @@ export class GameScene2 extends Phaser.Scene {
           const roll = rand()
           if (roll < 0.82) key = 'snow_ground'
           else if (roll < 0.96) key = 'dark_snow'
-          else if (roll < 0.985) key = 'stump'
+          else if (roll < 0.985) key = 'snow_stump'
           else key = 'frozen_log'
         }
 
