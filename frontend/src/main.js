@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 
-// import { GameScene2 } from './scenes/GameScene2'
+import { GameScene2 } from './scenes/Gamescene2.js'
+import { FlashcardScene2 } from './scenes/FlashcardScene2.js'
 import { ReportScene } from './scenes/ReportScene.js'
 import { FlashCardScene } from './scenes/FlashCardScene.js'
 import { ShowcaseScene } from './scenes/ShowcaseScene.js'
@@ -30,7 +31,9 @@ const config = {
     UIScene,
     ReportScene,
     FlashCardScene,
-    ShowcaseScene
+    ShowcaseScene,
+    GameScene2,
+    FlashcardScene2
   ]
 }
 
