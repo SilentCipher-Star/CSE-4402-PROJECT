@@ -87,7 +87,6 @@ export class GameScene2 extends Phaser.Scene {
     this.forestHealth = 100
     this.totalSaplings = 14
     this.wildlifeJournal = data.wildlifeJournal || []
-    this.animalsSaved = (this.wildlifeJournal || []).length
 
     // ❄️ Warmth system
     this.warmth = 100
@@ -192,9 +191,6 @@ export class GameScene2 extends Phaser.Scene {
     })
 
     this.scene.launch('UIScene', { gameScene: this })
-    const ui = this.scene.get('UIScene')
-    if (ui) ui.gameScene = this
-    this.scene.bringToTop('UIScene')
 
     this.terminal = new Terminal(this)
     this.input.keyboard.on('keydown-TILDE', () => this.terminal.toggle())
@@ -491,12 +487,10 @@ export class GameScene2 extends Phaser.Scene {
   }
 
   isWall(col, row) {
-    if (row < 0 || row >= this.mapRows || col < 0 || col >= this.mapCols) return true
-    if (!this.mapData || !this.mapData[row]) return true
+    if (row < 0 || row >= this.mapRows) return true
+    if (col < 0 || col >= this.mapCols) return true
     const t = this.mapData[row][col]
-    // SOLID WALLS: 1 (trees/forest), 2 (cliffs/rocks/ice wall), 6 (snow piles)
-    // WALKABLE GROUND: 3 (frozen_water lake - player can walk over frozen water & ice!), 5 (snow ground)
-    return t === 1 || t === 2 || t === 6
+    return t === 1 || t === 2 || t === 3
   }
 
   spawnEggs() {
@@ -1488,7 +1482,6 @@ const positions = [
     w.rescued = true
     w.discovered = true
     this.wildlifeJournal.push(w.species)
-    this.animalsSaved = (this.wildlifeJournal || []).length
     this.score += 150
     this.showFloatingText(w.x, w.y - 30, '❤️ RESCUED!', '#66ff99')
     this.hideWildlifeUI(w)
@@ -2117,68 +2110,15 @@ const positions = [
     this.player.setTexture(b + '_front'); this.isMoving = true
   }
 
-  const halfW = 14
-  const halfH = 14
-  const checkDt = 0.05
-
-  // Check horizontal collision across full vertical height of player body
-  if (vx !== 0) {
-    const checkX = vx < 0 ? (this.player.x - halfW + vx * checkDt) : (this.player.x + halfW + vx * checkDt)
-    const targetCol = Math.floor(checkX / this.TILE)
-    const topRow = Math.floor((this.player.y - halfH + 3) / this.TILE)
-    const botRow = Math.floor((this.player.y + halfH - 3) / this.TILE)
-    if (this.isWall(targetCol, topRow) || this.isWall(targetCol, botRow)) {
-      const movingLeft = vx < 0
-      vx = 0
-      if (movingLeft) this.player.x = Math.max(this.player.x, (targetCol + 1) * this.TILE + halfW)
-      else this.player.x = Math.min(this.player.x, targetCol * this.TILE - halfW)
-    }
-  }
-
-  // Check vertical collision across full horizontal width of player body
-  if (vy !== 0) {
-    const checkY = vy < 0 ? (this.player.y - halfH + vy * checkDt) : (this.player.y + halfH + vy * checkDt)
-    const targetRow = Math.floor(checkY / this.TILE)
-    const leftCol = Math.floor((this.player.x - halfW + 3) / this.TILE)
-    const rightCol = Math.floor((this.player.x + halfW - 3) / this.TILE)
-    if (this.isWall(leftCol, targetRow) || this.isWall(rightCol, targetRow)) {
-      const movingUp = vy < 0
-      vy = 0
-      if (movingUp) this.player.y = Math.max(this.player.y, (targetRow + 1) * this.TILE + halfH)
-      else this.player.y = Math.min(this.player.y, targetRow * this.TILE - halfH)
-    }
-  }
-
-  // Prevent diagonal corner-cutting into wall vertices
-  if (vx !== 0 && vy !== 0) {
-    const checkX = vx < 0 ? (this.player.x - halfW + vx * checkDt) : (this.player.x + halfW + vx * checkDt)
-    const checkY = vy < 0 ? (this.player.y - halfH + vy * checkDt) : (this.player.y + halfH + vy * checkDt)
-    const cCol = Math.floor(checkX / this.TILE)
-    const cRow = Math.floor(checkY / this.TILE)
-    if (this.isWall(cCol, cRow)) {
-      const dx = Math.abs(checkX - (cCol * this.TILE + (vx > 0 ? 0 : this.TILE)))
-      const dy = Math.abs(checkY - (cRow * this.TILE + (vy > 0 ? 0 : this.TILE)))
-      if (dx > dy) vx = 0
-      else vy = 0
-    }
-  }
-
-  // Safety net: if ever inside a wall tile, smoothly push out to nearest open tile
-  const curC = Math.floor(this.player.x / this.TILE)
-  const curR = Math.floor(this.player.y / this.TILE)
-  if (this.isWall(curC, curR)) {
-    const neighbors = [
-      { c: curC, r: curR - 1 }, { c: curC, r: curR + 1 },
-      { c: curC - 1, r: curR }, { c: curC + 1, r: curR }
-    ]
-    const openTile = neighbors.find(n => !this.isWall(n.c, n.r))
-    if (openTile) {
-      this.player.setPosition(
-        openTile.c * this.TILE + this.TILE / 2,
-        openTile.r * this.TILE + this.TILE / 2
-      )
-    }
-  }
+  const nextX = this.player.x + vx * 0.05
+  const nextY = this.player.y + vy * 0.05
+  const hw = 16
+  const curRow = Math.floor(this.player.y / this.TILE)
+  const curCol = Math.floor(this.player.x / this.TILE)
+  if (vx < 0 && this.isWall(Math.floor((nextX - hw) / this.TILE), curRow)) vx = 0
+  if (vx > 0 && this.isWall(Math.floor((nextX + hw) / this.TILE), curRow)) vx = 0
+  if (vy < 0 && this.isWall(curCol, Math.floor((nextY - hw) / this.TILE))) vy = 0
+  if (vy > 0 && this.isWall(curCol, Math.floor((nextY + hw) / this.TILE))) vy = 0
 
   this.player.setVelocity(vx, vy)
 
@@ -2420,7 +2360,6 @@ if (playerDistCol < 100) console.log('dist:', Math.round(playerDistCol), 'fleein
       if (canCollect && Phaser.Input.Keyboard.JustDown(this.collectKey)) {
         w.collected = true
         this.wildlifeJournal.push(w.species)
-        this.animalsSaved = (this.wildlifeJournal || []).length
         w.graphic.setAlpha(0.4)
         if (w.prompt) w.prompt.setVisible(false)
         this.showWildlifeCard(w.species, w.fact)

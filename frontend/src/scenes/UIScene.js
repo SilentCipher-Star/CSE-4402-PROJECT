@@ -259,7 +259,10 @@ export class UIScene extends Phaser.Scene {
 
     this.scoreText.setText('Score: ' + this.gameScene.score)
     this.eggText.setText('🌱 ' + this.gameScene.eggsCollected)
-    this.animalText.setText('🐾 ' + this.gameScene.animalsSaved)
+    const animalCount = (this.gameScene.animalsSaved !== undefined)
+      ? this.gameScene.animalsSaved
+      : (this.gameScene.wildlifeJournal ? this.gameScene.wildlifeJournal.length : 0)
+    this.animalText.setText('🐾 ' + animalCount)
 
     const stages = { 1: '⭐ Stage 1', 2: '✨ Stage 2', 3: '🔥 EVOLVED' }
     this.evoText.setText(stages[this.gameScene.evolutionStage] || '⭐ Stage 1')
