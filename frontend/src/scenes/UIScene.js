@@ -170,15 +170,7 @@ export class UIScene extends Phaser.Scene {
     }
 
     this.heartsText.setText(str)
-
-    // Flash hearts red when low
-    if (hp === 1) {
-      this.heartsText.setAlpha(
-        0.5 + Math.sin(Date.now() / 150) * 0.5
-      )
-    } else {
-      this.heartsText.setAlpha(1)
-    }
+    this.heartsText.setAlpha(1)
   }
 
   drawMinimap() {
@@ -347,7 +339,7 @@ export class UIScene extends Phaser.Scene {
           this.reviveContainer.setAlpha(0.5)
         } else {
           this.reviveLabel.setText('[H] Revive!')
-          this.reviveContainer.setAlpha(0.85 + Math.sin(Date.now() / 200) * 0.15)
+          this.reviveContainer.setAlpha(1)
         }
       } else {
         this.reviveContainer.setVisible(false)

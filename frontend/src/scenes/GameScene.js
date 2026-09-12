@@ -956,20 +956,11 @@ export class GameScene extends Phaser.Scene {
         heartImg.setDisplaySize(28, 28)
         heartImg.setDepth(5)
 
+        // Minimal, calm float without scale pumping
         this.tweens.add({
           targets: heartImg,
-          y: y - 14,
-          duration: 1200,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut'
-        })
-
-        this.tweens.add({
-          targets: heartImg,
-          scaleX: 1.15,
-          scaleY: 1.15,
-          duration: 800,
+          y: y - 4,
+          duration: 1800,
           yoyo: true,
           repeat: -1,
           ease: 'Sine.easeInOut'
@@ -1046,21 +1037,18 @@ export class GameScene extends Phaser.Scene {
       }
     })
 
-    // Heart particle burst
+    // Minimal floating heart effect
     if (this.textures.exists('heart')) {
-      for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI * 2
-        const pHeart = this.add.image(this.player.x, this.player.y, 'heart')
-        pHeart.setDisplaySize(22, 22)
+      for (let i = 0; i < 3; i++) {
+        const pHeart = this.add.image(this.player.x - 12 + i * 12, this.player.y - 12, 'heart')
+        pHeart.setDisplaySize(16, 16)
         pHeart.setDepth(30)
         this.tweens.add({
           targets: pHeart,
-          x: this.player.x + Math.cos(angle) * 55,
-          y: this.player.y + Math.sin(angle) * 55 - 15,
+          y: this.player.y - 32,
           alpha: 0,
-          scale: 0.2,
-          duration: 750,
-          ease: 'Cubic.easeOut',
+          duration: 600,
+          ease: 'Sine.easeOut',
           onComplete: () => pHeart.destroy()
         })
       }
@@ -1102,15 +1090,7 @@ export class GameScene extends Phaser.Scene {
     container.add(card)
 
     if (this.textures.exists('heart')) {
-      const heartIcon = this.add.image(cx, cy - 42, 'heart').setDisplaySize(38, 38)
-      this.tweens.add({
-        targets: heartIcon,
-        scaleX: 1.25,
-        scaleY: 1.25,
-        duration: 400,
-        yoyo: true,
-        repeat: -1
-      })
+      const heartIcon = this.add.image(cx, cy - 42, 'heart').setDisplaySize(32, 32)
       container.add(heartIcon)
     }
 
@@ -2304,10 +2284,8 @@ export class GameScene extends Phaser.Scene {
         const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, shrine.x, shrine.y)
         if (dist < 75) {
           shrine.prompt.setAlpha(1)
-          shrine.prompt.setScale(1.15)
         } else {
           shrine.prompt.setAlpha(0.65)
-          shrine.prompt.setScale(1.0)
         }
       })
     }
