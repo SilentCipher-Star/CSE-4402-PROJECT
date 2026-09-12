@@ -205,10 +205,11 @@ export class UIScene extends Phaser.Scene {
       for (let col = 0; col < cols; col++) {
         const t = gs.mapData[row][col]
         let color = 0x2d5a1b
-        if (t === 1) color = 0x1a3a0a
+        if (t === 1 || t === 8) color = 0x1a3a0a
         if (t === 2) color = 0x1a3a6e
         if (t === 3) color = 0x888888
-        if (t === 4) color = 0x4a3000
+        if (t === 4) color = 0x5a3d28
+        if (t === 7) color = 0x88ddff
         if (t === 5) color = 0xc8a96e
         g.fillStyle(color, 1)
         g.fillRect(

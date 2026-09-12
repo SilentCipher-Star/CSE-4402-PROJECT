@@ -77,7 +77,15 @@ export class GameScene2 extends Phaser.Scene {
     this.timeLeft = 200
     this.bobTimer = 0
     this.isMoving = false
-    this.currentWeapon = 'normal'
+    const birdPowerMap = {
+      Ember: 'fire',
+      Frost: 'ice',
+      Volt: 'lightning',
+      Shade: 'bomb',
+      Gale: 'boomerang'
+    }
+    this.currentWeapon = birdPowerMap[this.chosenBird] || 'fire'
+    this.basePower = this.currentWeapon
     this.playerHitCooldown = false
     this.playerHP = data.playerHP || 5
     this.maxHP = data.maxHP || 5
@@ -87,6 +95,19 @@ export class GameScene2 extends Phaser.Scene {
     this.forestHealth = 100
     this.totalSaplings = 14
     this.wildlifeJournal = data.wildlifeJournal || []
+
+    // 🛡️ Shield system
+    this.shieldActive = false
+    this.shieldTimeRemaining = 0
+    this.shieldTimerEvent = null
+    this.playerShieldGfx = null
+    this.shieldList = []
+    this.weaponList = []
+
+    // 🐾 Animal notification freeze
+    this.animalNotificationFrozen = false
+    this.cardFreezeTimestamp = 0
+    this.activeWildlifeCard = null
 
     // ❄️ Warmth system
     this.warmth = 100
@@ -143,7 +164,8 @@ export class GameScene2 extends Phaser.Scene {
     this.monsterList = []
     this.spawnMonsters()
     this.weaponList = []
-    this.spawnWeapons()
+    this.shieldList = []
+    this.spawnShields()
     this.spawnWildlife()
 
     this.campfireList = []
@@ -186,7 +208,7 @@ export class GameScene2 extends Phaser.Scene {
 
     this.time.addEvent({
       delay: 1000,
-      callback: () => { if (this.timeLeft > 0) this.timeLeft-- },
+      callback: () => { if (!this.animalNotificationFrozen && this.timeLeft > 0) this.timeLeft-- },
       repeat: 199
     })
 
@@ -195,6 +217,12 @@ export class GameScene2 extends Phaser.Scene {
     this.terminal = new Terminal(this)
     this.input.keyboard.on('keydown-TILDE', () => this.terminal.toggle())
     this.input.keyboard.on('keydown-BACKTICK', () => this.terminal.toggle())
+    this.events.once('shutdown', () => {
+      if (this.terminal) {
+        this.terminal.destroy()
+        this.terminal = null
+      }
+    })
   }
 
   parseMap() {
@@ -297,6 +325,9 @@ export class GameScene2 extends Phaser.Scene {
       [11, 3], [24, 8], [32, 18], [13, 27],
       [45, 43],
 
+      // shield pickups
+      [12, 8], [30, 15], [22, 32], [38, 28],
+
       // extra hunter spawns (more all over the map)
       [30, 3], [44, 6], [9, 17], [27, 17], [38, 20],
       [44, 24], [6, 35], [27, 35], [38, 38], [20, 43],
@@ -314,6 +345,44 @@ export class GameScene2 extends Phaser.Scene {
       // hunter camps
       [19, 6], [44, 14], [6, 44], [33, 44]
     ]
+
+    // ── Obstacle formations: frozen logs (4), icicles (7), dead trees (8) ──
+    const placeObstacle = (c, r, tileType) => {
+      if (c >= 1 && c < cols - 1 && r >= 1 && r < rows - 1) {
+        map[r][c] = tileType
+      }
+    }
+
+    // Fallen frozen log barriers (4)
+    const logFormations = [
+      [14, 12], [15, 12], [16, 12],
+      [28, 28], [29, 28], [30, 28],
+      [10, 36], [11, 36],
+      [35, 12], [36, 12],
+      [18, 16], [19, 16]
+    ]
+    logFormations.forEach(([c, r]) => placeObstacle(c, r, 4))
+
+    // Sharp icicle clusters (7)
+    const icicleFormations = [
+      [22, 12], [23, 12],
+      [38, 8], [39, 8],
+      [18, 26], [19, 26],
+      [32, 38], [33, 38],
+      [12, 22], [13, 22]
+    ]
+    icicleFormations.forEach(([c, r]) => placeObstacle(c, r, 7))
+
+    // Dead tree clusters (8)
+    const deadTreeFormations = [
+      [8, 20], [9, 20],
+      [26, 18], [27, 18],
+      [14, 42], [15, 42],
+      [36, 32], [37, 32],
+      [21, 35], [22, 35]
+    ]
+    deadTreeFormations.forEach(([c, r]) => placeObstacle(c, r, 8))
+
     importantSpots.forEach(([c, r]) => clearCircle(c, r, 2))
 
     // frozen boundary wall around the whole map
@@ -324,44 +393,67 @@ export class GameScene2 extends Phaser.Scene {
   }
 
   showWildlifeCard(species, fact) {
+    if (this.activeWildlifeCard) {
+      this.activeWildlifeCard.forEach(el => {
+        if (el && el.destroy) el.destroy()
+      })
+      this.activeWildlifeCard = null
+    }
+
+    // Freeze the screen
+    this.animalNotificationFrozen = true
+    this.cardFreezeTimestamp = (this.time && this.time.now) ? this.time.now : Date.now()
+    this.player.setVelocity(0, 0)
+    this.monsterList.forEach(m => {
+      if (m.body && m.body.active) m.body.setVelocity(0, 0)
+      m.chasing = false
+    })
+
     const { width, height } = this.scale
 
     const card = this.add.graphics().setScrollFactor(0).setDepth(400)
     card.fillStyle(0x0a1420, 0.97)
-    card.fillRoundedRect(width/2 - 180, height/2 - 90, 360, 180, 16)
+    card.fillRoundedRect(width / 2 - 180, height / 2 - 95, 360, 190, 16)
     card.lineStyle(3, 0xFFD700, 1)
-    card.strokeRoundedRect(width/2 - 180, height/2 - 90, 360, 180, 16)
+    card.strokeRoundedRect(width / 2 - 180, height / 2 - 95, 360, 190, 16)
 
-    const title = this.add.text(width/2, height/2 - 60, '🐧 SPECIES COLLECTED!', {
+    const title = this.add.text(width / 2, height / 2 - 68, '🐾 SPECIES RESCUED!', {
       fontSize: '15px', fontFamily: 'Arial Black', color: '#FFD700'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const name = this.add.text(width/2, height/2 - 30, species, {
+    const name = this.add.text(width / 2, height / 2 - 38, species, {
       fontSize: '20px', fontFamily: 'Arial Black', color: '#ffffff'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const factText = this.add.text(width/2, height/2 + 10, fact, {
+    const factText = this.add.text(width / 2, height / 2 + 2, fact, {
       fontSize: '11px', fontFamily: 'Arial', color: '#aaccdd',
       wordWrap: { width: 320 }, align: 'center'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const count = this.wildlifeJournal.length
-    const counter = this.add.text(width/2, height/2 + 60, `Journal: ${count} / 8 species`, {
+    const count = this.wildlifeJournal ? this.wildlifeJournal.length : 1
+    const total = this.wildlifeList ? this.wildlifeList.length : 8
+    const counter = this.add.text(width / 2, height / 2 + 45, `Journal: ${count} / ${total} species`, {
       fontSize: '11px', fontFamily: 'Arial Black', color: '#00d4ff'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const elements = [card, title, name, factText, counter]
-    elements.forEach(el => { el.setAlpha(0) })
-    this.tweens.add({
-      targets: elements, alpha: 1, duration: 250
-    })
+    const resumeHint = this.add.text(width / 2, height / 2 + 72, '👉 Move in any direction (W,A,S,D / Arrows) to resume', {
+      fontSize: '10px', fontFamily: 'Arial Black', color: '#ffdd77'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    this.time.delayedCall(2600, () => {
-      this.tweens.add({
-        targets: elements, alpha: 0, duration: 300,
-        onComplete: () => elements.forEach(el => el.destroy())
+    const elements = [card, title, name, factText, counter, resumeHint]
+    this.activeWildlifeCard = elements
+    elements.forEach(el => { el.setAlpha(1) })
+  }
+
+  dismissWildlifeCard() {
+    if (!this.animalNotificationFrozen && !this.activeWildlifeCard) return
+    this.animalNotificationFrozen = false
+    if (this.activeWildlifeCard) {
+      this.activeWildlifeCard.forEach(el => {
+        if (el && el.destroy) el.destroy()
       })
-    })
+      this.activeWildlifeCard = null
+    }
   }
 
   drawWorld() {
@@ -419,24 +511,31 @@ export class GameScene2 extends Phaser.Scene {
         } else if (t === 1) {
           // forest region
           const roll = rand()
-          key = roll < 0.55 ? 'pine_large' : roll < 0.9 ? 'pine_small' : 'dead_tree'
+          key = roll < 0.6 ? 'pine_large' : 'pine_small'
         } else if (t === 2) {
           // cliff/rock region
           key = 'ice_wall'
         } else if (t === 3) {
           // the one confined frozen-water lake
           key = 'frozen_water'
+        } else if (t === 4) {
+          // frozen log obstacle
+          key = 'frozen_log'
         } else if (t === 6) {
           // the clustered snow-pile patch
           key = rand() < 0.8 ? 'snow_pile' : 'snow_bank'
+        } else if (t === 7) {
+          // icicle obstacle
+          key = 'icicle'
+        } else if (t === 8) {
+          // dead tree obstacle
+          key = 'dead_tree'
         } else {
-          // plain open ground — just quiet floor variation, no
-          // scattered props (those live in their own zones above)
+          // plain open ground — walkable snow floor variation
           const roll = rand()
-          if (roll < 0.82) key = 'snow_ground'
-          else if (roll < 0.96) key = 'dark_snow'
-          else if (roll < 0.985) key = 'snow_stump'
-          else key = 'frozen_log'
+          if (roll < 0.85) key = 'snow_ground'
+          else if (roll < 0.97) key = 'dark_snow'
+          else key = 'snow_stump'
         }
 
         const cellCenterX = col * this.TILE + this.TILE / 2
@@ -490,7 +589,7 @@ export class GameScene2 extends Phaser.Scene {
     if (row < 0 || row >= this.mapRows) return true
     if (col < 0 || col >= this.mapCols) return true
     const t = this.mapData[row][col]
-    return t === 1 || t === 2 || t === 3
+    return t === 1 || t === 2 || t === 3 || t === 4 || t === 7 || t === 8
   }
 
   spawnEggs() {
@@ -760,29 +859,115 @@ const positions = [
     return hunter
   }
 
-  spawnWeapons() {
-    const weapons = [
-      { col: 11, row: 3, type: 'bomb', label: '💣', color: 0xFF6600, desc: 'Area explosion' },
-      { col: 24, row: 8, type: 'ice', label: '❄️', color: 0x00BFFF, desc: 'Freeze enemies' },
-      { col: 32, row: 18, type: 'lightning', label: '⚡', color: 0xFFD700, desc: 'Chain 3 enemies' },
-      { col: 13, row: 27, type: 'boomerang', label: '🪃', color: 0xC8A25A, desc: 'Double hit' },
+  spawnShields() {
+    const shieldSpots = [
+      { col: 12, row: 8 },
+      { col: 30, row: 15 },
+      { col: 22, row: 32 },
+      { col: 38, row: 28 }
     ]
-    weapons.forEach(w => {
-      if (this.isWall(w.col, w.row)) return
-      const x = w.col * this.TILE + this.TILE / 2
-      const y = w.row * this.TILE + this.TILE / 2
-      const bg = this.add.circle(x, y, 20, w.color, 0.9)
-      const label = this.add.text(x, y, w.label, { fontSize: '20px' }).setOrigin(0.5)
-      const desc = this.add.text(x, y + 28, w.desc, {
-        fontSize: '9px', fontFamily: 'Arial',
-        color: '#ffffff', stroke: '#000000', strokeThickness: 2
+
+    this.shieldList = []
+
+    shieldSpots.forEach(s => {
+      if (this.isWall(s.col, s.row)) return
+      const x = s.col * this.TILE + this.TILE / 2
+      const y = s.row * this.TILE + this.TILE / 2
+
+      const bg = this.add.circle(x, y, 18, 0x00e5ff, 0.25)
+      const ring = this.add.circle(x, y, 18).setStrokeStyle(2, 0x00ffff, 0.75)
+
+      const icon = this.add.text(x, y - 2, '🛡️', {
+        fontSize: '20px'
       }).setOrigin(0.5)
+
+      const label = this.add.text(x, y + 22, 'SHIELD (10s)', {
+        fontSize: '9px',
+        fontFamily: 'Arial Black',
+        color: '#00ffff',
+        stroke: '#000000',
+        strokeThickness: 2
+      }).setOrigin(0.5)
+
       this.tweens.add({
-        targets: bg, scaleX: 1.3, scaleY: 1.3, alpha: 0.5,
-        duration: 600, yoyo: true, repeat: -1
+        targets: [icon, bg, ring],
+        y: '-=4',
+        duration: 1200,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
       })
-      this.weaponList.push({ bg, label, desc, x, y, type: w.type, collected: false })
+
+      this.shieldList.push({
+        x,
+        y,
+        col: s.col,
+        row: s.row,
+        bg,
+        ring,
+        icon,
+        label,
+        collected: false
+      })
     })
+  }
+
+  activateShield(duration = 10) {
+    this.shieldActive = true
+    this.stealthMode = true
+    this.shieldTimeRemaining = duration
+
+    // Make player translucent / invisible
+    this.player.setAlpha(0.45)
+
+    if (!this.playerShieldGfx) {
+      this.playerShieldGfx = this.add.graphics().setDepth(25)
+    }
+
+    if (this.shieldTimerEvent) {
+      this.shieldTimerEvent.remove(false)
+    }
+
+    this.shieldTimerEvent = this.time.addEvent({
+      delay: 1000,
+      repeat: duration - 1,
+      callback: () => {
+        if (this.animalNotificationFrozen) return
+        this.shieldTimeRemaining--
+        if (this.shieldTimeRemaining <= 0) {
+          this.deactivateShield()
+        }
+      }
+    })
+
+    this.showFloatingText(
+      this.player.x,
+      this.player.y - 35,
+      '🛡️ SHIELD ACTIVE! Invisible (10s)',
+      '#00ffff'
+    )
+  }
+
+  deactivateShield() {
+    this.shieldActive = false
+    this.stealthMode = false
+    this.shieldTimeRemaining = 0
+    if (this.shieldTimerEvent) {
+      this.shieldTimerEvent.remove(false)
+      this.shieldTimerEvent = null
+    }
+    if (this.player && this.player.active) {
+      this.player.setAlpha(1.0)
+    }
+    if (this.playerShieldGfx) {
+      this.playerShieldGfx.clear()
+    }
+    this.showFloatingText(
+      this.player.x,
+      this.player.y - 35,
+      '🛡️ Shield expired',
+      '#aaaaaa'
+    )
   }
 
   drawMonster(m, x, y, frozen) {
@@ -1648,6 +1833,40 @@ const positions = [
     }
 
     switch (this.currentWeapon) {
+      case 'fire': {
+        makeRing(0xff4500, 10, range / 16, 300)
+
+        const flame = this.add.graphics()
+        flame.setPosition(this.player.x, this.player.y)
+        flame.fillStyle(0xff6600, 0.35)
+        flame.fillCircle(0, 0, 22)
+
+        this.tweens.add({
+          targets: flame,
+          scaleX: 4,
+          scaleY: 4,
+          alpha: 0,
+          duration: 350,
+          onComplete: () => flame.destroy()
+        })
+
+        this.hitMonstersInRange(
+          this.player.x,
+          this.player.y,
+          range,
+          1,
+          0xff4500
+        )
+
+        this.showFloatingText(
+          this.player.x,
+          this.player.y - 30,
+          '🔥 Fire Burst!',
+          '#ff8844'
+        )
+
+        break
+      }
       case 'normal': {
         makeRing(this.birdColor, 10, range / 10, 350)
         this.hitMonstersInRange(this.player.x, this.player.y, range, 1, this.birdColor)
@@ -1672,11 +1891,16 @@ const positions = [
           const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
           if (dist < range) {
             frozeAnyone = true
-            m.frozen = true
-            m.body.setVelocity(0, 0)
-            this.drawMonster(m, m.body.x, m.body.y, true)
-            this.showFloatingText(m.body.x, m.body.y - 20, '❄️ FROZEN!', '#00BFFF')
-            this.time.delayedCall(3000, () => { if (m.alive) { m.frozen = false; this.drawMonster(m, m.body.x, m.body.y, false) } })
+            if (this.shieldActive) {
+              m.hp = 0
+              this.killMonster(m)
+            } else {
+              m.frozen = true
+              m.body.setVelocity(0, 0)
+              this.drawMonster(m, m.body.x, m.body.y, true)
+              this.showFloatingText(m.body.x, m.body.y - 20, '❄️ FROZEN!', '#00BFFF')
+              this.time.delayedCall(3000, () => { if (m.alive) { m.frozen = false; this.drawMonster(m, m.body.x, m.body.y, false) } })
+            }
           }
         })
         if (!frozeAnyone) {
@@ -1704,8 +1928,15 @@ const positions = [
           const my = (ly + m.body.y) / 2 + Phaser.Math.Between(-20, 20)
           lightning.lineTo(mx, my); lightning.lineTo(m.body.x, m.body.y); lightning.strokePath()
           lx = m.body.x; ly = m.body.y
-          m.hp--; this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
-          this.showFloatingText(m.body.x, m.body.y - 20, '⚡ ZAP!', '#FFD700')
+          const dealt = this.shieldActive ? Math.max(3, m.hp) : 1
+          m.hp -= dealt
+          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+          this.showFloatingText(
+            m.body.x,
+            m.body.y - 20,
+            this.shieldActive ? '🗡️ Stealth Zap!' : '⚡ ZAP!',
+            this.shieldActive ? '#00ffff' : '#FFD700'
+          )
           if (m.hp <= 0) this.killMonster(m)
         })
         this.tweens.add({ targets: lightning, alpha: 0, duration: 300, onComplete: () => lightning.destroy() })
@@ -1733,7 +1964,8 @@ const positions = [
       const dist = Phaser.Math.Distance.Between(x, y, m.body.x, m.body.y)
       if (dist < range) {
         hit = true
-        m.hp -= damage
+        const dealt = this.shieldActive ? Math.max(damage * 3, m.hp) : damage
+        m.hp -= dealt
         this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
         m.graphic.setAlpha(0.3)
         this.time.delayedCall(150, () => { if (m.graphic) m.graphic.setAlpha(1) })
@@ -1752,7 +1984,7 @@ const positions = [
           })
         }
         if (m.hp <= 0) this.killMonster(m)
-        else this.showFloatingText(m.body.x, m.body.y - 20, '⚔️ Hit!', '#ffaaaa')
+        else this.showFloatingText(m.body.x, m.body.y - 20, this.shieldActive ? '🗡️ Stealth Hit!' : '⚔️ Hit!', this.shieldActive ? '#00ffff' : '#ffaaaa')
       }
     })
     if (!hit && this.currentWeapon === 'normal')
@@ -1812,6 +2044,12 @@ const positions = [
     this.footprints = []
     this.physics.pause()
     this.input.keyboard.enabled = false
+    this.dismissWildlifeCard()
+    if (this.shieldActive) this.deactivateShield()
+    if (this.playerShieldGfx) {
+      this.playerShieldGfx.destroy()
+      this.playerShieldGfx = null
+    }
     if (this.terminal) this.terminal.destroy()
     this.saveScore()
     this.scene.stop('UIScene')
@@ -2075,91 +2313,147 @@ const positions = [
   }
 
   update() {
-  if (this.gameEnding) return
+    if (this.gameEnding) return
 
-  const delta = this.game.loop.delta
-  this.updateWarmth(delta)
-  this.isRescuing = false
-  this.maybePlayerFootprint()
+    // Check if player pressed any movement key to unfreeze animal notification
+    const moveInput = (this.wasd && (this.wasd.left.isDown || this.wasd.right.isDown ||
+                      this.wasd.up.isDown || this.wasd.down.isDown)) ||
+                      (this.cursors && (this.cursors.left.isDown || this.cursors.right.isDown ||
+                      this.cursors.up.isDown || this.cursors.down.isDown))
 
-  const speed = (this.evolutionStage >= 2 ? 190 : 140) * (this.warmth <= 0 ? 0.8 : 1)
-  let vx = 0, vy = 0
-  this.isMoving = false
+    if (this.animalNotificationFrozen) {
+      const now = (this.time && this.time.now) ? this.time.now : Date.now()
+      const elapsed = now - (this.cardFreezeTimestamp || 0)
+      if (moveInput && elapsed > 250) {
+        this.dismissWildlifeCard()
+      } else {
+        this.player.setVelocity(0, 0)
+        this.monsterList.forEach(m => {
+          if (m.body && m.body.active) m.body.setVelocity(0, 0)
+        })
+        return
+      }
+    }
 
-  if (this.terminalOpen) {
-    this.player.setVelocity(0, 0)
-    this.monsterList.forEach(m => { if (m.alive && m.body && m.body.active) m.body.setVelocity(0, 0) })
-    this.portalAngle += 0.035
-    this.drawPortal()
-    return
-  }
+    const delta = this.game.loop.delta
+    this.updateWarmth(delta)
+    this.isRescuing = false
+    this.maybePlayerFootprint()
 
-  const b = this.chosenBird.toLowerCase()
-  if (this.wasd.left.isDown || this.cursors.left.isDown) {
-    vx = -speed; this.playerDir = 'left'
-    this.player.setTexture(b + '_left'); this.isMoving = true
-  } else if (this.wasd.right.isDown || this.cursors.right.isDown) {
-    vx = speed; this.playerDir = 'right'
-    this.player.setTexture(b + '_right'); this.isMoving = true
-  }
-  if (this.wasd.up.isDown || this.cursors.up.isDown) {
-    vy = -speed; this.playerDir = 'up'
-    this.player.setTexture(b + '_back'); this.isMoving = true
-  } else if (this.wasd.down.isDown || this.cursors.down.isDown) {
-    vy = speed; this.playerDir = 'down'
-    this.player.setTexture(b + '_front'); this.isMoving = true
-  }
+    const speed = (this.evolutionStage >= 2 ? 190 : 140) * (this.warmth <= 0 ? 0.8 : 1)
+    let vx = 0, vy = 0
+    this.isMoving = false
 
-  const nextX = this.player.x + vx * 0.05
-  const nextY = this.player.y + vy * 0.05
-  const hw = 16
-  const curRow = Math.floor(this.player.y / this.TILE)
-  const curCol = Math.floor(this.player.x / this.TILE)
-  if (vx < 0 && this.isWall(Math.floor((nextX - hw) / this.TILE), curRow)) vx = 0
-  if (vx > 0 && this.isWall(Math.floor((nextX + hw) / this.TILE), curRow)) vx = 0
-  if (vy < 0 && this.isWall(curCol, Math.floor((nextY - hw) / this.TILE))) vy = 0
-  if (vy > 0 && this.isWall(curCol, Math.floor((nextY + hw) / this.TILE))) vy = 0
-
-  this.player.setVelocity(vx, vy)
-
-  if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) this.useWeapon()
-
-  // ── Hunter AI ──────────────────────────────────────────────
-  this.monsterList.forEach(m => {
-    if (!m.alive || !m.body || !m.body.active) return
-
-    if (m.frozen) {
-      this.drawMonster(m, m.body.x, m.body.y, true)
-      this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+    if (this.terminalOpen) {
+      this.player.setVelocity(0, 0)
+      this.monsterList.forEach(m => { if (m.alive && m.body && m.body.active) m.body.setVelocity(0, 0) })
+      this.portalAngle += 0.035
+      this.drawPortal()
       return
     }
 
-    const mc = Math.floor(m.body.x / this.TILE)
-    const mr = Math.floor(m.body.y / this.TILE)
-    if (this.isWall(mc, mr)) {
-      m.body.setPosition(m.spawnX, m.spawnY)
-      m.body.setVelocity(0, 0); m.patrolTimer = 0
-      this.drawMonster(m, m.body.x, m.body.y, false)
-      this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
-      return
+    const b = this.chosenBird.toLowerCase()
+    if (this.wasd.left.isDown || this.cursors.left.isDown) {
+      vx = -speed; this.playerDir = 'left'
+      this.player.setTexture(b + '_left'); this.isMoving = true
+    } else if (this.wasd.right.isDown || this.cursors.right.isDown) {
+      vx = speed; this.playerDir = 'right'
+      this.player.setTexture(b + '_right'); this.isMoving = true
+    }
+    if (this.wasd.up.isDown || this.cursors.up.isDown) {
+      vy = -speed; this.playerDir = 'up'
+      this.player.setTexture(b + '_back'); this.isMoving = true
+    } else if (this.wasd.down.isDown || this.cursors.down.isDown) {
+      vy = speed; this.playerDir = 'down'
+      this.player.setTexture(b + '_front'); this.isMoving = true
     }
 
-    const distToPlayer = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
-    const alerted = m.alertedUntil && this.time.now < m.alertedUntil
-    const chaseRange = (m.alwaysChase || alerted) ? 9999 : this.stealthMode ? 0 : (this.evolutionStage >= 2 ? 110 : 140) * (this.blizzardActive ? 0.7 : 1)
+    const nextX = this.player.x + vx * 0.05
+    const nextY = this.player.y + vy * 0.05
+    const hw = 16
+    const curRow = Math.floor(this.player.y / this.TILE)
+    const curCol = Math.floor(this.player.x / this.TILE)
+    if (vx < 0 && this.isWall(Math.floor((nextX - hw) / this.TILE), curRow)) vx = 0
+    if (vx > 0 && this.isWall(Math.floor((nextX + hw) / this.TILE), curRow)) vx = 0
+    if (vy < 0 && this.isWall(curCol, Math.floor((nextY - hw) / this.TILE))) vy = 0
+    if (vy > 0 && this.isWall(curCol, Math.floor((nextY + hw) / this.TILE))) vy = 0
 
-    // 🪤 Investigating a trapped animal takes priority over patrolling,
-    // unless the player wanders close enough to draw the hunter's attention.
-    if (m.state === 'investigate' && distToPlayer >= chaseRange) {
-      const target = m.investigateTarget
-      if (!target || target.rescued || target.lost) {
+    this.player.setVelocity(vx, vy)
+
+    if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) this.useWeapon()
+
+    // ── Hunter AI ──────────────────────────────────────────────
+    this.monsterList.forEach(m => {
+      if (!m.alive || !m.body || !m.body.active) return
+
+      if (m.frozen) {
+        this.drawMonster(m, m.body.x, m.body.y, true)
+        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+        return
+      }
+
+      const mc = Math.floor(m.body.x / this.TILE)
+      const mr = Math.floor(m.body.y / this.TILE)
+      if (this.isWall(mc, mr)) {
+        m.body.setPosition(m.spawnX, m.spawnY)
+        m.body.setVelocity(0, 0); m.patrolTimer = 0
+        this.drawMonster(m, m.body.x, m.body.y, false)
+        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+        return
+      }
+
+      const distToPlayer = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
+      const alerted = m.alertedUntil && this.time.now < m.alertedUntil
+      const chaseRange = (m.alwaysChase || alerted) ? 9999 : (this.stealthMode || this.shieldActive) ? 0 : (this.evolutionStage >= 2 ? 110 : 140) * (this.blizzardActive ? 0.7 : 1)
+
+      // 🪤 Investigating a trapped animal takes priority over patrolling,
+      // unless the player wanders close enough to draw the hunter's attention.
+      if (m.state === 'investigate' && distToPlayer >= chaseRange) {
+        const target = m.investigateTarget
+        if (!target || target.rescued || target.lost) {
+          m.state = null
+          m.investigateTarget = null
+        } else {
+          m.alert.setVisible(true)
+          m.alert.setPosition(m.body.x, m.body.y - 42)
+          const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, target.x, target.y)
+          const ms = 65
+          const mvx = Math.cos(angle) * ms, mvy = Math.sin(angle) * ms
+          const nc = Math.floor((m.body.x + mvx * 0.05) / this.TILE)
+          const nr = Math.floor((m.body.y + mvy * 0.05) / this.TILE)
+          const finalVx = this.isWall(nc, mr) ? 0 : mvx
+          const finalVy = this.isWall(mc, nr) ? 0 : mvy
+          m.body.setVelocity(finalVx, finalVy)
+          this.animateHunterWalk(m)
+
+          if (Math.abs(finalVx) > Math.abs(finalVy)) {
+            if (finalVx !== 0) m.graphic.setTexture(finalVx > 0 ? 'hunter_right' : 'hunter_left')
+          } else if (finalVy !== 0) {
+            m.graphic.setTexture(finalVy > 0 ? 'hunter_front' : 'hunter_back')
+          }
+          m.graphic.setDisplaySize(48, 58)
+
+          if (Phaser.Math.Distance.Between(m.body.x, m.body.y, target.x, target.y) < 34) {
+            this.loseTrappedAnimal(target, 'hunter')
+            m.state = null
+            m.investigateTarget = null
+          }
+
+          this.maybeLayHunterFootprint(m)
+          this.drawMonster(m, m.body.x, m.body.y, false)
+          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+          return
+        }
+      }
+
+      if (distToPlayer < chaseRange) {
         m.state = null
         m.investigateTarget = null
-      } else {
+        m.chasing = true
         m.alert.setVisible(true)
         m.alert.setPosition(m.body.x, m.body.y - 42)
-        const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, target.x, target.y)
-        const ms = 65
+        const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, this.player.x, this.player.y)
+        const ms = 55
         const mvx = Math.cos(angle) * ms, mvy = Math.sin(angle) * ms
         const nc = Math.floor((m.body.x + mvx * 0.05) / this.TILE)
         const nr = Math.floor((m.body.y + mvy * 0.05) / this.TILE)
@@ -2175,56 +2469,20 @@ const positions = [
         }
         m.graphic.setDisplaySize(48, 58)
 
-        if (Phaser.Math.Distance.Between(m.body.x, m.body.y, target.x, target.y) < 34) {
-          this.loseTrappedAnimal(target, 'hunter')
-          m.state = null
-          m.investigateTarget = null
+        if (!this.shieldActive && distToPlayer < 36 && !this.playerHitCooldown) {
+          this.playerHitCooldown = true
+          this.playerHP--
+          this.cameras.main.shake(200, 0.008)
+          this.player.setTint(0xff0000)
+          this.showFloatingText(this.player.x, this.player.y - 30, '💔 -1 Heart', '#ff0000')
+          this.time.delayedCall(1500, () => {
+            this.player.clearTint()
+            if (this.evolutionStage === 2) this.player.setTint(0xaaffff)
+            if (this.evolutionStage === 3) this.player.setTint(0xFFD700)
+            this.playerHitCooldown = false
+          })
+          if (this.playerHP <= 0) this.endGame(false)
         }
-
-        this.maybeLayHunterFootprint(m)
-        this.drawMonster(m, m.body.x, m.body.y, false)
-        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
-        return
-      }
-    }
-
-    if (distToPlayer < chaseRange) {
-      m.state = null
-      m.investigateTarget = null
-      m.chasing = true
-      m.alert.setVisible(true)
-      m.alert.setPosition(m.body.x, m.body.y - 42)
-      const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, this.player.x, this.player.y)
-      const ms = 55
-      const mvx = Math.cos(angle) * ms, mvy = Math.sin(angle) * ms
-      const nc = Math.floor((m.body.x + mvx * 0.05) / this.TILE)
-      const nr = Math.floor((m.body.y + mvy * 0.05) / this.TILE)
-      const finalVx = this.isWall(nc, mr) ? 0 : mvx
-      const finalVy = this.isWall(mc, nr) ? 0 : mvy
-      m.body.setVelocity(finalVx, finalVy)
-      this.animateHunterWalk(m)
-
-      if (Math.abs(finalVx) > Math.abs(finalVy)) {
-        if (finalVx !== 0) m.graphic.setTexture(finalVx > 0 ? 'hunter_right' : 'hunter_left')
-      } else if (finalVy !== 0) {
-        m.graphic.setTexture(finalVy > 0 ? 'hunter_front' : 'hunter_back')
-      }
-      m.graphic.setDisplaySize(48, 58)
-
-      if (distToPlayer < 36 && !this.playerHitCooldown) {
-        this.playerHitCooldown = true
-        this.playerHP--
-        this.cameras.main.shake(200, 0.008)
-        this.player.setTint(0xff0000)
-        this.showFloatingText(this.player.x, this.player.y - 30, '💔 -1 Heart', '#ff0000')
-        this.time.delayedCall(1500, () => {
-          this.player.clearTint()
-          if (this.evolutionStage === 2) this.player.setTint(0xaaffff)
-          if (this.evolutionStage === 3) this.player.setTint(0xFFD700)
-          this.playerHitCooldown = false
-        })
-        if (this.playerHP <= 0) this.endGame(false)
-      }
 
     } else {
       m.chasing = false
@@ -2468,17 +2726,33 @@ w.fleeing = nearestHunterDist < 90
     })
   }
 
-  // ── Weapon pickup ─────────────────────────────────────────────
-  this.weaponList.forEach(w => {
-    if (w.collected) return
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, w.x, w.y) < 32) {
-      w.collected = true
-      w.bg.destroy(); w.label.destroy(); w.desc.destroy()
-      this.currentWeapon = w.type
-      const labels = { bomb: '💣 BOMB equipped!', ice: '❄️ ICE equipped!', lightning: '⚡ LIGHTNING equipped!', boomerang: '🪃 BOOMERANG equipped!' }
-      this.showFloatingText(this.player.x, this.player.y - 30, labels[w.type], '#ffffff')
-    }
-  })
+  // ── Shield pickup ─────────────────────────────────────────────
+  if (this.shieldList) {
+    this.shieldList.forEach(s => {
+      if (s.collected) return
+      const dist = Phaser.Math.Distance.Between(
+        this.player.x, this.player.y, s.x, s.y
+      )
+      if (dist < 32) {
+        s.collected = true
+        if (s.bg) s.bg.destroy()
+        if (s.ring) s.ring.destroy()
+        if (s.icon) s.icon.destroy()
+        if (s.label) s.label.destroy()
+        this.activateShield(10)
+      }
+    })
+  }
+
+  // ── Shield protective aura update ─────────────────────────────
+  if (this.shieldActive && this.playerShieldGfx && this.player && this.player.active) {
+    this.playerShieldGfx.clear()
+    const pulse = 0.5 + Math.sin(Date.now() / 250) * 0.25
+    this.playerShieldGfx.lineStyle(2, 0x00e5ff, pulse)
+    this.playerShieldGfx.strokeCircle(this.player.x, this.player.y, 24)
+    this.playerShieldGfx.fillStyle(0x00e5ff, 0.12 * pulse)
+    this.playerShieldGfx.fillCircle(this.player.x, this.player.y, 24)
+  }
 
   // ── Portal check ────────────────────────────────────────────
   const px = this.portalCol * this.TILE + this.TILE / 2
