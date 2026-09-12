@@ -96,6 +96,7 @@ export class MenuScene extends Phaser.Scene {
     this.load.image('wasd_hint', 'resource/ui/w_a_s_d_move_controls.png')
     this.load.image('space_hint', 'resource/ui/space_attack.png')
     this.load.image('portal_hint', 'resource/ui/reach_the_portal_to_escape.png')
+    this.load.image('heart', 'resource/ui/heart.png')
   }
 
   create() {

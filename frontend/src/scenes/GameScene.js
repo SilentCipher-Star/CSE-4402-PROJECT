@@ -32,8 +32,11 @@ export class GameScene extends Phaser.Scene {
 
     this.playerHitCooldown = false
     this.frozenMonsters = new Set()
-    this.playerHP = 3
-    this.maxHP = 3
+    this.playerHP = 5
+    this.maxHP = 5
+    this.HEART_REVIVE_COST = 100
+    this.firstHitNotified = false
+    this.emergencyReviving = false
     this.terminalOpen = false
     this.stealthMode = false
     this.gameEnding = false
@@ -71,6 +74,9 @@ export class GameScene extends Phaser.Scene {
     this.animalList = []
     this.spawnAnimals()
     this.weaponList = []
+    this.spawnWeapons()
+    this.heartShrines = []
+    this.spawnHeartShrines()
 
     this.portalGfx = this.add.graphics()
     this.portalAngle = 0
@@ -105,6 +111,11 @@ export class GameScene extends Phaser.Scene {
     this.collectKey = this.input.keyboard.addKey(
       Phaser.Input.Keyboard.KeyCodes.E
     )
+    this.reviveKey = this.input.keyboard.addKey(
+      Phaser.Input.Keyboard.KeyCodes.H
+    )
+    this.reviveKey.on('down', () => this.reviveHeart())
+    this.input.keyboard.on('keydown-H', () => this.reviveHeart())
     this.activeWildlifeCard = null
     this.time.addEvent({
       delay: 1000,
@@ -903,8 +914,8 @@ export class GameScene extends Phaser.Scene {
   checkEvolution() {
     if (this.goldenEggs >= 3 && this.evolutionStage < 3) {
       this.evolutionStage = 3
-      this.maxHP = 4
-      this.playerHP = Math.min(this.playerHP + 1, 4)
+      this.maxHP = 6
+      this.playerHP = Math.min(this.playerHP + 1, 6)
 
       this.showFloatingText(
         this.player.x, this.player.y - 40,
@@ -917,6 +928,248 @@ export class GameScene extends Phaser.Scene {
         '✨ EVOLVED TO STAGE 2!', '#FFD700'
       )
     }
+  }
+
+  spawnHeartShrines() {
+    const shrineSpots = [
+      { col: 12, row: 12 },
+      { col: 28, row: 24 },
+      { col: 16, row: 44 }
+    ]
+
+    this.heartShrines = []
+
+    shrineSpots.forEach(s => {
+      if (this.isWall(s.col, s.row)) return
+      const x = s.col * this.TILE + this.TILE / 2
+      const y = s.row * this.TILE + this.TILE / 2
+
+      const baseGfx = this.add.graphics()
+      baseGfx.fillStyle(0xff2255, 0.22)
+      baseGfx.fillCircle(x, y + 8, 26)
+      baseGfx.lineStyle(2, 0xff5588, 0.6)
+      baseGfx.strokeCircle(x, y + 8, 26)
+
+      let heartImg = null
+      if (this.textures.exists('heart')) {
+        heartImg = this.add.image(x, y - 6, 'heart')
+        heartImg.setDisplaySize(28, 28)
+        heartImg.setDepth(5)
+
+        this.tweens.add({
+          targets: heartImg,
+          y: y - 14,
+          duration: 1200,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut'
+        })
+
+        this.tweens.add({
+          targets: heartImg,
+          scaleX: 1.15,
+          scaleY: 1.15,
+          duration: 800,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut'
+        })
+      }
+
+      const prompt = this.add.text(x, y - 28, '❤️ Press [H] Revive (-100)', {
+        fontSize: '10px',
+        fontFamily: 'Arial Black',
+        color: '#ffdddd',
+        stroke: '#000000',
+        strokeThickness: 3
+      }).setOrigin(0.5).setDepth(6)
+
+      this.heartShrines.push({ x, y, baseGfx, heartImg, prompt })
+    })
+  }
+
+  reviveHeart() {
+    if (this.gameEnding) return
+
+    if (this.playerHP >= this.maxHP) {
+      this.showFloatingText(this.player.x, this.player.y - 35, '❤️ Hearts Already Full!', '#ffdd44')
+      return
+    }
+
+    if (this.score < this.HEART_REVIVE_COST) {
+      this.showFloatingText(
+        this.player.x,
+        this.player.y - 35,
+        `⚠️ Need ${this.HEART_REVIVE_COST} Score to Revive Heart! (${this.score}/${this.HEART_REVIVE_COST})`,
+        '#ff4444'
+      )
+      return
+    }
+
+    // Deduct score & add 1 heart
+    this.score -= this.HEART_REVIVE_COST
+    this.playerHP = Math.min(this.playerHP + 1, this.maxHP)
+
+    // Clear emergency state if active
+    if (this.emergencyReviveTimer) {
+      this.emergencyReviveTimer.remove(false)
+      this.emergencyReviveTimer = null
+    }
+    if (this.emergencyCard) {
+      this.emergencyCard.destroy()
+      this.emergencyCard = null
+    }
+    this.emergencyReviving = false
+
+    // Flash camera & screen floating text
+    this.cameras.main.flash(280, 255, 60, 100)
+    this.showFloatingText(
+      this.player.x,
+      this.player.y - 45,
+      `+1 ❤️ Revived! (-${this.HEART_REVIVE_COST} Score)`,
+      '#00ff88'
+    )
+
+    // Temporary invulnerability shield for 1.5s
+    this.playerHitCooldown = true
+    this.tweens.add({
+      targets: this.player,
+      alpha: 0.35,
+      duration: 120,
+      yoyo: true,
+      repeat: 6,
+      onComplete: () => {
+        if (this.player && this.player.active) {
+          this.player.setAlpha(1)
+          this.playerHitCooldown = false
+        }
+      }
+    })
+
+    // Heart particle burst
+    if (this.textures.exists('heart')) {
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2
+        const pHeart = this.add.image(this.player.x, this.player.y, 'heart')
+        pHeart.setDisplaySize(22, 22)
+        pHeart.setDepth(30)
+        this.tweens.add({
+          targets: pHeart,
+          x: this.player.x + Math.cos(angle) * 55,
+          y: this.player.y + Math.sin(angle) * 55 - 15,
+          alpha: 0,
+          scale: 0.2,
+          duration: 750,
+          ease: 'Cubic.easeOut',
+          onComplete: () => pHeart.destroy()
+        })
+      }
+    }
+  }
+
+  triggerEmergencyRevive() {
+    if (this.emergencyReviving || this.gameEnding) return
+    this.emergencyReviving = true
+    this.playerHP = 0
+
+    // Push nearby hunters away
+    this.monsterList.forEach(m => {
+      if (m.active && m.body) {
+        const dx = m.body.x - this.player.x
+        const dy = m.body.y - this.player.y
+        const dist = Math.hypot(dx, dy) || 1
+        m.body.setVelocity((dx / dist) * 160, (dy / dist) * 160)
+        m.chasing = false
+      }
+    })
+
+    const { width, height } = this.scale
+    const cx = width / 2
+    const cy = height / 2
+
+    const container = this.add.container(0, 0).setScrollFactor(0).setDepth(9999)
+
+    const overlay = this.add.graphics()
+    overlay.fillStyle(0x000000, 0.68)
+    overlay.fillRect(0, 0, width, height)
+    container.add(overlay)
+
+    const card = this.add.graphics()
+    card.fillStyle(0x1a0505, 0.95)
+    card.fillRoundedRect(cx - 190, cy - 80, 380, 160, 12)
+    card.lineStyle(3, 0xff3344, 1)
+    card.strokeRoundedRect(cx - 190, cy - 80, 380, 160, 12)
+    container.add(card)
+
+    if (this.textures.exists('heart')) {
+      const heartIcon = this.add.image(cx, cy - 42, 'heart').setDisplaySize(38, 38)
+      this.tweens.add({
+        targets: heartIcon,
+        scaleX: 1.25,
+        scaleY: 1.25,
+        duration: 400,
+        yoyo: true,
+        repeat: -1
+      })
+      container.add(heartIcon)
+    }
+
+    const title = this.add.text(cx, cy - 8, '💔 FATAL HIT!', {
+      fontSize: '20px',
+      fontFamily: 'Arial Black',
+      color: '#ff4444',
+      stroke: '#000000',
+      strokeThickness: 4
+    }).setOrigin(0.5)
+    container.add(title)
+
+    let countdown = 3
+    const subtitle = this.add.text(
+      cx,
+      cy + 22,
+      `Press [H] or Click to Revive! (-${this.HEART_REVIVE_COST} Score)\n[ Auto Game-Over in ${countdown}s ]`,
+      {
+        fontSize: '13px',
+        fontFamily: 'Arial',
+        color: '#ffddaa',
+        align: 'center',
+        stroke: '#000000',
+        strokeThickness: 3
+      }
+    ).setOrigin(0.5)
+    container.add(subtitle)
+
+    overlay.setInteractive(
+      new Phaser.Geom.Rectangle(0, 0, width, height),
+      Phaser.Geom.Rectangle.Contains
+    )
+    overlay.on('pointerdown', () => {
+      this.reviveHeart()
+    })
+
+    this.emergencyCard = container
+
+    this.emergencyReviveTimer = this.time.addEvent({
+      delay: 1000,
+      repeat: 3,
+      callback: () => {
+        countdown--
+        if (countdown > 0) {
+          subtitle.setText(
+            `Press [H] or Click to Revive! (-${this.HEART_REVIVE_COST} Score)\n[ Auto Game-Over in ${countdown}s ]`
+          )
+        } else {
+          if (this.playerHP <= 0) {
+            if (this.emergencyCard) {
+              this.emergencyCard.destroy()
+              this.emergencyCard = null
+            }
+            this.emergencyReviving = false
+            this.endGame(false)
+          }
+        }
+      }
+    })
   }
   useWeapon() {
     if (this.isAttacking) return
@@ -1917,12 +2170,26 @@ export class GameScene extends Phaser.Scene {
           this.cameras.main.shake(200, 0.008)
           this.player.setTint(0xff0000)
           this.showFloatingText(this.player.x, this.player.y - 30, '💔 -1 Heart', '#ff0000')
+
+          if (!this.firstHitNotified) {
+            this.firstHitNotified = true
+            this.showFloatingText(this.player.x, this.player.y - 52, '💡 Press [H] to Revive Heart (-100 Score)', '#ffeb3b')
+          }
+
           this.time.delayedCall(400, () => {
             this.player.clearTint()
 
             this.playerHitCooldown = false
           })
-          if (this.playerHP <= 0) this.endGame(false)
+
+          if (this.playerHP <= 0) {
+            this.playerHP = 0
+            if (this.score >= this.HEART_REVIVE_COST && !this.emergencyReviving) {
+              this.triggerEmergencyRevive()
+            } else {
+              this.endGame(false)
+            }
+          }
         }
 
       } else {
@@ -2030,6 +2297,20 @@ export class GameScene extends Phaser.Scene {
         this.showFloatingText(this.player.x, this.player.y - 30, labels[w.type], '#ffffff')
       }
     })
+
+    // Heart Shrine glow when nearby
+    if (this.heartShrines) {
+      this.heartShrines.forEach(shrine => {
+        const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, shrine.x, shrine.y)
+        if (dist < 75) {
+          shrine.prompt.setAlpha(1)
+          shrine.prompt.setScale(1.15)
+        } else {
+          shrine.prompt.setAlpha(0.65)
+          shrine.prompt.setScale(1.0)
+        }
+      })
+    }
 
     // Portal check
     const px = this.portalCol * this.TILE + this.TILE / 2
