@@ -38,6 +38,10 @@ export class GameScene extends Phaser.Scene {
     this.firstHitNotified = false
     this.emergencyReviving = false
     this.animalNotificationFrozen = false
+    this.shieldActive = false
+    this.shieldTimeRemaining = 0
+    this.shieldTimerEvent = null
+    this.playerShieldGfx = null
     this.terminalOpen = false
     this.stealthMode = false
     this.gameEnding = false
@@ -74,8 +78,8 @@ export class GameScene extends Phaser.Scene {
     this.spawnMonsters()
     this.animalList = []
     this.spawnAnimals()
-    this.weaponList = []
-    this.spawnWeapons()
+    this.shieldList = []
+    this.spawnShields()
     this.heartShrines = []
     this.spawnHeartShrines()
 
@@ -893,34 +897,112 @@ export class GameScene extends Phaser.Scene {
       baseSize - bounce * 2
     )
   }
-  spawnWeapons() {
-    const weapons = [
-      { col: 7, row: 7, type: 'bomb', label: '💣', color: 0xFF6600, desc: 'Area explosion' },
-      { col: 15, row: 9, type: 'ice', label: '❄️', color: 0x00BFFF, desc: 'Freeze enemies' },
-      { col: 21, row: 15, type: 'lightning', label: '⚡', color: 0xFFD700, desc: 'Chain 3 enemies' },
-      { col: 37, row: 18, type: 'boomerang', label: '🪃', color: 0xC8A25A, desc: 'Double hit' },
+  spawnShields() {
+    const shieldSpots = [
+      { col: 7, row: 7 },
+      { col: 30, row: 18 },
+      { col: 12, row: 38 }
     ]
-    weapons.forEach(w => {
-      if (this.isWall(w.col, w.row)) return
-      const x = w.col * this.TILE + this.TILE / 2
-      const y = w.row * this.TILE + this.TILE / 2
-      const bg = this.add.circle(x, y, 20, w.color, 0.9)
-      const label = this.add.text(x, y, w.label, {
+
+    this.shieldList = []
+
+    shieldSpots.forEach(s => {
+      if (this.isWall(s.col, s.row)) return
+      const x = s.col * this.TILE + this.TILE / 2
+      const y = s.row * this.TILE + this.TILE / 2
+
+      const bg = this.add.circle(x, y, 18, 0x00e5ff, 0.25)
+      const ring = this.add.circle(x, y, 18).setStrokeStyle(2, 0x00ffff, 0.75)
+
+      const icon = this.add.text(x, y - 2, '🛡️', {
         fontSize: '20px'
       }).setOrigin(0.5)
-      const desc = this.add.text(x, y + 28, w.desc, {
-        fontSize: '9px', fontFamily: 'Arial',
-        color: '#ffffff', stroke: '#000000', strokeThickness: 2
+
+      const label = this.add.text(x, y + 22, 'SHIELD (10s)', {
+        fontSize: '9px',
+        fontFamily: 'Arial Black',
+        color: '#00ffff',
+        stroke: '#000000',
+        strokeThickness: 2
       }).setOrigin(0.5)
+
       this.tweens.add({
-        targets: bg, scaleX: 1.3, scaleY: 1.3, alpha: 0.5,
-        duration: 600, yoyo: true, repeat: -1
+        targets: [icon, bg, ring],
+        y: '-=4',
+        duration: 1200,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
       })
-      this.weaponList.push({
-        bg, label, desc, x, y,
-        type: w.type, collected: false
+
+      this.shieldList.push({
+        x,
+        y,
+        bg,
+        ring,
+        icon,
+        label,
+        collected: false
       })
     })
+  }
+
+  activateShield(duration = 10) {
+    this.shieldActive = true
+    this.stealthMode = true
+    this.shieldTimeRemaining = duration
+
+    // Make player translucent / invisible
+    this.player.setAlpha(0.45)
+
+    if (!this.playerShieldGfx) {
+      this.playerShieldGfx = this.add.graphics().setDepth(15)
+    }
+
+    if (this.shieldTimerEvent) {
+      this.shieldTimerEvent.remove(false)
+    }
+
+    this.shieldTimerEvent = this.time.addEvent({
+      delay: 1000,
+      repeat: duration - 1,
+      callback: () => {
+        if (this.animalNotificationFrozen) return
+        this.shieldTimeRemaining--
+        if (this.shieldTimeRemaining <= 0) {
+          this.deactivateShield()
+        }
+      }
+    })
+
+    this.showFloatingText(
+      this.player.x,
+      this.player.y - 35,
+      '🛡️ SHIELD ACTIVE! Invisible (10s)',
+      '#00ffff'
+    )
+  }
+
+  deactivateShield() {
+    this.shieldActive = false
+    this.stealthMode = false
+    this.shieldTimeRemaining = 0
+    if (this.shieldTimerEvent) {
+      this.shieldTimerEvent.remove(false)
+      this.shieldTimerEvent = null
+    }
+    if (this.player && this.player.active) {
+      this.player.setAlpha(1.0)
+    }
+    if (this.playerShieldGfx) {
+      this.playerShieldGfx.clear()
+    }
+    this.showFloatingText(
+      this.player.x,
+      this.player.y - 35,
+      '🛡️ Shield Expired',
+      '#88bbcc'
+    )
   }
 
   drawHPBar(g, x, y, hp, maxHp) {
@@ -1439,7 +1521,8 @@ export class GameScene extends Phaser.Scene {
           lastX = m.body.x
           lastY = m.body.y
 
-          m.hp -= 1
+          const dealt = this.shieldActive ? Math.max(3, m.hp) : 1
+          m.hp -= dealt
           m.stunnedUntil = this.time.now + 450
           m.body.setVelocity(0, 0)
 
@@ -1449,7 +1532,12 @@ export class GameScene extends Phaser.Scene {
           }
 
           this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
-          this.showFloatingText(m.body.x, m.body.y - 20, '⚡ ZAP!', '#FFD700')
+          this.showFloatingText(
+            m.body.x,
+            m.body.y - 20,
+            this.shieldActive ? '🗡️ Stealth Zap!' : '⚡ ZAP!',
+            this.shieldActive ? '#00ffff' : '#FFD700'
+          )
         })
 
         this.tweens.add({
@@ -1494,7 +1582,8 @@ export class GameScene extends Phaser.Scene {
               m.body.y
             )
 
-            m.hp -= 1
+            const dealt = this.shieldActive ? Math.max(3, m.hp) : 1
+            m.hp -= dealt
             m.stunnedUntil = this.time.now + 550
 
             m.body.setVelocity(
@@ -1508,7 +1597,12 @@ export class GameScene extends Phaser.Scene {
             }
 
             this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
-            this.showFloatingText(m.body.x, m.body.y - 20, '🌪 Pushed!', '#88ffee')
+            this.showFloatingText(
+              m.body.x,
+              m.body.y - 20,
+              this.shieldActive ? '🗡️ Stealth Gust!' : '🌪 Pushed!',
+              this.shieldActive ? '#00ffff' : '#88ffee'
+            )
           }
         })
 
@@ -1599,7 +1693,8 @@ export class GameScene extends Phaser.Scene {
 
         hit = true
 
-        m.hp -= damage
+        const dealt = this.shieldActive ? Math.max(damage * 3, m.hp) : damage
+        m.hp -= dealt
         m.stunnedUntil = this.time.now + 350
         m.body.setVelocity(0, 0)
 
@@ -1656,8 +1751,8 @@ export class GameScene extends Phaser.Scene {
           this.showFloatingText(
             m.body.x,
             m.body.y - 20,
-            '⚔️ Hit!',
-            '#ffaaaa'
+            this.shieldActive ? '🗡️ Stealth Kill!' : '⚔️ Hit!',
+            this.shieldActive ? '#00ffff' : '#ffaaaa'
           )
         }
       }
@@ -2231,12 +2326,12 @@ export class GameScene extends Phaser.Scene {
         this.player.x, this.player.y, m.body.x, m.body.y
       )
 
-      const chaseRange = m.alwaysChase ? 9999 :
-        this.stealthMode ? 0 :
-          this.evolutionStage >= 2 ? 190 : 240
+      const chaseRange = (this.shieldActive || this.stealthMode) ? 0 :
+        (m.alwaysChase ? 9999 :
+          (this.evolutionStage >= 2 ? 190 : 240))
       const attackRange = 30
 
-      if (distToPlayer < chaseRange) {
+      if (!this.shieldActive && !this.stealthMode && distToPlayer < chaseRange) {
         m.chasing = true
         m.alert.setVisible(true)
         m.alert.setPosition(m.body.x, m.body.y - 42)
@@ -2258,7 +2353,7 @@ export class GameScene extends Phaser.Scene {
         m.body.setVelocity(finalVx, finalVy)
         this.setHunterDirection(m, finalVx, finalVy)
 
-        if (distToPlayer < attackRange && !this.playerHitCooldown && !this.isAttacking) {
+        if (!this.shieldActive && distToPlayer < attackRange && !this.playerHitCooldown && !this.isAttacking) {
           this.playerHitCooldown = true
           this.playerHP--
           this.cameras.main.shake(200, 0.008)
@@ -2373,25 +2468,33 @@ export class GameScene extends Phaser.Scene {
       }
     })
 
-    // Weapon pickup
-    this.weaponList.forEach(w => {
-      if (w.collected) return
-      const dist = Phaser.Math.Distance.Between(
-        this.player.x, this.player.y, w.x, w.y
-      )
-      if (dist < 32) {
-        w.collected = true
-        w.bg.destroy()
-        w.label.destroy()
-        w.desc.destroy()
-        this.currentWeapon = w.type
-        const labels = {
-          bomb: '💣 BOMB equipped!', ice: '❄️ ICE equipped!',
-          lightning: '⚡ LIGHTNING equipped!', boomerang: '🪃 BOOMERANG equipped!'
+    // Shield pickup
+    if (this.shieldList) {
+      this.shieldList.forEach(s => {
+        if (s.collected) return
+        const dist = Phaser.Math.Distance.Between(
+          this.player.x, this.player.y, s.x, s.y
+        )
+        if (dist < 32) {
+          s.collected = true
+          if (s.bg) s.bg.destroy()
+          if (s.ring) s.ring.destroy()
+          if (s.icon) s.icon.destroy()
+          if (s.label) s.label.destroy()
+          this.activateShield(10)
         }
-        this.showFloatingText(this.player.x, this.player.y - 30, labels[w.type], '#ffffff')
-      }
-    })
+      })
+    }
+
+    // Shield protective aura update
+    if (this.shieldActive && this.playerShieldGfx && this.player && this.player.active) {
+      this.playerShieldGfx.clear()
+      const pulse = 0.5 + Math.sin(Date.now() / 250) * 0.25
+      this.playerShieldGfx.lineStyle(2, 0x00e5ff, pulse)
+      this.playerShieldGfx.strokeCircle(this.player.x, this.player.y, 24)
+      this.playerShieldGfx.fillStyle(0x00e5ff, 0.12 * pulse)
+      this.playerShieldGfx.fillCircle(this.player.x, this.player.y, 24)
+    }
 
     // Heart Shrine glow when nearby
     if (this.heartShrines) {

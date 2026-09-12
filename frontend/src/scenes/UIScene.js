@@ -32,35 +32,14 @@ export class UIScene extends Phaser.Scene {
       strokeThickness: 3
     })
 
-    // Heart Revive Indicator / Button
-    this.reviveContainer = this.add.container(104, 33)
-
-    const revBg = this.add.graphics()
-    revBg.fillStyle(0x330011, 0.82)
-    revBg.fillRoundedRect(0, -9, 84, 20, 5)
-    revBg.lineStyle(1.5, 0xff4466, 0.8)
-    revBg.strokeRoundedRect(0, -9, 84, 20, 5)
-    this.reviveContainer.add(revBg)
-
-    if (this.textures.exists('heart')) {
-      const revHeart = this.add.image(11, 1, 'heart')
-      revHeart.setDisplaySize(14, 14)
-      this.reviveContainer.add(revHeart)
-    }
-
-    this.reviveLabel = this.add.text(21, -7, '[H] Revive', {
-      fontSize: '10px',
+    // Shield status HUD (centered under timer)
+    this.shieldHudText = this.add.text(width / 2, 40, '', {
+      fontSize: '11px',
       fontFamily: 'Arial Black',
-      color: '#ffccd5'
-    })
-    this.reviveContainer.add(this.reviveLabel)
-
-    revBg.setInteractive(new Phaser.Geom.Rectangle(0, -9, 84, 20), Phaser.Geom.Rectangle.Contains)
-    revBg.on('pointerdown', () => {
-      if (this.gameScene && typeof this.gameScene.reviveHeart === 'function') {
-        this.gameScene.reviveHeart()
-      }
-    })
+      color: '#00ffff',
+      stroke: '#000000',
+      strokeThickness: 3
+    }).setOrigin(0.5, 0).setVisible(false)
 
     // Saplings
     this.eggText = this.add.text(220, 17, '🌱 0', {
@@ -121,7 +100,7 @@ export class UIScene extends Phaser.Scene {
     bot.fillStyle(0x000000, 0.5)
     bot.fillRect(0, height - 14, width, 14)
     this.add.text(width / 2, height - 12,
-      'Rescue animals (move to dismiss)   •   Hearts in monster dens: press H (-100)   •   Portal to escape', {
+      'Hearts in monster dens: press H (-100)   •   Collect 🛡️ Shield for 10s Invisibility   •   Rescue animals & escape', {
       fontSize: '9px', fontFamily: 'Arial', color: '#d8ffd0'
     }).setOrigin(0.5, 0)
 
@@ -324,32 +303,16 @@ export class UIScene extends Phaser.Scene {
       this.goldenBar.fillRect(395, 36, (ge / 3) * 80, 6)
     }
 
-    // Revive button status
-    if (this.reviveContainer && this.gameScene) {
-      if (typeof this.gameScene.reviveHeart === 'function') {
-        this.reviveContainer.setVisible(true)
-        const hp = this.gameScene.playerHP || 0
-        const maxHp = this.gameScene.maxHP || 5
-        const cost = this.gameScene.HEART_REVIVE_COST || 100
-        const nearHeart = this.gameScene.getNearestHeartShrine && this.gameScene.getNearestHeartShrine(65)
-
-        if (hp >= maxHp) {
-          this.reviveLabel.setText('[H] Full')
-          this.reviveContainer.setAlpha(0.35)
-        } else if (!nearHeart) {
-          this.reviveLabel.setText('[H] Find ❤️')
-          this.reviveContainer.setAlpha(0.5)
-        } else if (this.gameScene.score < cost) {
-          this.reviveLabel.setText(`[H] +❤️ ${cost}`)
-          this.reviveContainer.setAlpha(0.6)
-        } else {
-          this.reviveLabel.setText('[H] Revive!')
-          this.reviveContainer.setAlpha(1)
-        }
+    // Shield status HUD
+    if (this.shieldHudText && this.gameScene) {
+      if (this.gameScene.shieldActive && this.gameScene.shieldTimeRemaining > 0) {
+        this.shieldHudText.setVisible(true)
+        this.shieldHudText.setText(`🛡️ INVISIBLE SHIELD: ${this.gameScene.shieldTimeRemaining}s`)
       } else {
-        this.reviveContainer.setVisible(false)
+        this.shieldHudText.setVisible(false)
       }
     }
+
 
     // Hearts + minimap
     this.drawHearts()
