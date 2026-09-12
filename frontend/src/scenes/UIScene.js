@@ -7,7 +7,7 @@ export class UIScene extends Phaser.Scene {
 
   preload() {
     if (!this.textures.exists('heart')) {
-      this.load.image('heart', 'resource/ui/heart.png')
+      this.load.image('heart', 'resource/heart.png')
     }
   }
 

@@ -48,6 +48,13 @@ export class GameScene extends Phaser.Scene {
     this.gameEnding = false
     this.weaponList = []
   }
+
+  preload() {
+    if (!this.textures.exists('heart')) {
+      this.load.image('heart', 'resource/heart.png')
+    }
+  }
+
   create() {
     this.TILE = 48
     this.mapData = this.parseMap()
@@ -1077,30 +1084,28 @@ export class GameScene extends Phaser.Scene {
       const x = s.col * this.TILE + this.TILE / 2
       const y = s.row * this.TILE + this.TILE / 2
 
-      const baseGfx = this.add.graphics()
-      baseGfx.fillStyle(0xff2255, 0.22)
-      baseGfx.fillCircle(x, y + 8, 26)
-      baseGfx.lineStyle(2, 0xff5588, 0.6)
-      baseGfx.strokeCircle(x, y + 8, 26)
-
       let heartImg = null
       if (this.textures.exists('heart')) {
-        heartImg = this.add.image(x, y - 6, 'heart')
-        heartImg.setDisplaySize(28, 28)
+        heartImg = this.add.image(x, y, 'heart')
+        heartImg.setDisplaySize(32, 32)
         heartImg.setDepth(5)
 
-        // Minimal, calm float without scale pumping
+        const baseScaleX = heartImg.scaleX
+        const baseScaleY = heartImg.scaleY
+
+        // Gentle pulse tween (no red circle glow)
         this.tweens.add({
           targets: heartImg,
-          y: y - 4,
-          duration: 1800,
+          scaleX: baseScaleX * 1.15,
+          scaleY: baseScaleY * 1.15,
+          duration: 750,
           yoyo: true,
           repeat: -1,
           ease: 'Sine.easeInOut'
         })
       }
 
-      const prompt = this.add.text(x, y - 28, '❤️ Press [H] Revive (-100)', {
+      const prompt = this.add.text(x, y - 24, 'Press [H] Revive (-100)', {
         fontSize: '10px',
         fontFamily: 'Arial Black',
         color: '#ffdddd',
@@ -1108,7 +1113,7 @@ export class GameScene extends Phaser.Scene {
         strokeThickness: 3
       }).setOrigin(0.5).setDepth(6)
 
-      this.heartShrines.push({ id: idx, col: s.col, row: s.row, x, y, baseGfx, heartImg, prompt, used: false })
+      this.heartShrines.push({ id: idx, col: s.col, row: s.row, x, y, heartImg, prompt, used: false })
     })
   }
 
@@ -1164,7 +1169,7 @@ export class GameScene extends Phaser.Scene {
 
     // MAKE THE HEART DISAPPEAR
     targetShrine.used = true
-    const toDestroy = [targetShrine.heartImg, targetShrine.baseGfx, targetShrine.prompt].filter(Boolean)
+    const toDestroy = [targetShrine.heartImg, targetShrine.prompt].filter(Boolean)
     this.tweens.add({
       targets: toDestroy,
       alpha: 0,
