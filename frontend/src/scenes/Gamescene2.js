@@ -62,6 +62,7 @@ export class GameScene2 extends Phaser.Scene {
     this.load.image('bear_back', 'resource/wildlife/bear_back.png')
     this.load.image('bear_left', 'resource/wildlife/bear_left.png')
     this.load.image('bear_right', 'resource/wildlife/bear_right.png')
+    this.load.image('lightning_strike', 'resource/effects/lightning_strike.png')
   }
 
   init(data) {
@@ -187,10 +188,10 @@ export class GameScene2 extends Phaser.Scene {
       1 * this.TILE + this.TILE / 2,
       b + '_right'
     )
-    this.playerBaseSize = (this.chosenBird === 'Ember') ? 32 : 34
+    this.playerBaseSize = (this.chosenBird === 'Ember') ? 42 : 44
     this.player.setDisplaySize(this.playerBaseSize, this.playerBaseSize)
     this.player.setCollideWorldBounds(true)
-    this.player.body.setSize(20, 20)
+    this.player.body.setSize(24, 24)
     this.player.setDepth(20)
 
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
@@ -851,23 +852,23 @@ const positions = [
   createHunterAt(x, y) {
     // Sprite instead of drawn graphic
     const sprite = this.add.sprite(x, y, 'hunter_front')
-    sprite.setDisplaySize(52, 64)
+    sprite.setDisplaySize(58, 74)
     sprite.setOrigin(0.5, 0.6)
     sprite.setDepth(10)
 
     // Shadow beneath hunter
-    const shadow = this.add.ellipse(x, y + 26, 32, 11, 0x000000, 0.35)
+    const shadow = this.add.ellipse(x, y + 28, 36, 12, 0x000000, 0.35)
     shadow.setDepth(9)
 
     const body = this.physics.add.image(x, y, null).setVisible(false)
-    body.body.setSize(30, 30)
+    body.body.setSize(30, 32)
     body.setCollideWorldBounds(true)
     body.setVelocity(60, 0)
 
     const hpBar = this.add.graphics()
-    this.drawHPBar(hpBar, x, y - 34, 2, 2)
+    this.drawHPBar(hpBar, x, y - 48, 2, 2)
 
-    const alert = this.add.text(x, y - 46, '❗', { fontSize: '16px' })
+    const alert = this.add.text(x, y - 60, '❗', { fontSize: '16px' })
       .setOrigin(0.5).setVisible(false)
 
     const hunter = {
@@ -998,7 +999,7 @@ const positions = [
   drawMonster(m, x, y, frozen) {
     // m here is the whole monster object now, not just graphic
     m.graphic.setPosition(x, y)
-    if (m.shadow) m.shadow.setPosition(x, y + 26)
+    if (m.shadow) m.shadow.setPosition(x, y + 28)
     if (frozen) {
       m.graphic.setTint(0x88ccff)
     } else {
@@ -1839,27 +1840,50 @@ const positions = [
 
   useWeapon() {
     if (this.isAttacking) return
-    this.isAttacking = true
-    const range = this.evolutionStage >= 3 ? 220 :
-      this.evolutionStage >= 2 ? 170 : 120
 
-    // Same two-layer ring effect GameScene1 uses for every attack:
-    // a thin expanding stroke ring, optionally paired with a soft glow.
+    this.isAttacking = true
+
+    // Safe reset. Even if a power does nothing, attack will unlock.
+    this.time.delayedCall(500, () => {
+      this.isAttacking = false
+    })
+
+    const range = this.evolutionStage >= 3 ? 165 :
+      this.evolutionStage >= 2 ? 125 : 95
+
+    const attackColorMap = {
+      fire: 0xff2200,
+      lightning: 0xffdd00,
+      bomb: 0x111111,
+      ice: 0x00bfff,
+      wind: 0x88ffee,
+      boomerang: 0xc8a25a,
+      normal: this.birdColor || 0xffffff
+    }
+
+    const attackColor = attackColorMap[this.currentWeapon] || this.birdColor || 0xffffff
+
     const makeRing = (color, startRadius, finalScale, duration = 350) => {
       const ring = this.add.graphics()
       ring.setPosition(this.player.x, this.player.y)
       ring.lineStyle(3, color, 0.65)
       ring.strokeCircle(0, 0, startRadius)
+
       this.tweens.add({
-        targets: ring, scaleX: finalScale, scaleY: finalScale, alpha: 0,
-        duration, onComplete: () => ring.destroy()
+        targets: ring,
+        scaleX: finalScale,
+        scaleY: finalScale,
+        alpha: 0,
+        duration,
+        onComplete: () => ring.destroy()
       })
+
       return ring
     }
 
     switch (this.currentWeapon) {
       case 'fire': {
-        makeRing(0xff4500, 10, range / 16, 300)
+        makeRing(attackColor, 10, range / 16, 300)
 
         const flame = this.add.graphics()
         flame.setPosition(this.player.x, this.player.y)
@@ -1892,149 +1916,685 @@ const positions = [
 
         break
       }
-      case 'normal': {
-        makeRing(this.birdColor, 10, range / 10, 350)
-        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, this.birdColor)
-        break
-      }
+
       case 'bomb': {
-        makeRing(0xFF6600, 12, range / 9, 320)
+        makeRing(attackColor, 12, range / 18, 320)
+
         const boom = this.add.graphics()
-        boom.fillStyle(0xFF6600, 0.7)
-        boom.fillCircle(this.player.x, this.player.y, 20)
-        this.tweens.add({ targets: boom, scaleX: 8, scaleY: 8, alpha: 0, duration: 500, onComplete: () => boom.destroy() })
-        this.hitMonstersInRange(this.player.x, this.player.y, range * 2.2, 3, 0xFF6600)
-        this.cameras.main.shake(300, 0.01)
-        this.showFloatingText(this.player.x, this.player.y - 30, '💣 Bomb Blast!', '#ff9955')
+        boom.setPosition(this.player.x, this.player.y)
+        boom.fillStyle(0x111111, 0.35)
+        boom.fillCircle(0, 0, 24)
+
+        this.tweens.add({
+          targets: boom,
+          scaleX: 5,
+          scaleY: 5,
+          alpha: 0,
+          duration: 420,
+          onComplete: () => boom.destroy()
+        })
+
+        this.hitMonstersInRange(
+          this.player.x,
+          this.player.y,
+          range * 1.05,
+          2,
+          attackColor
+        )
+
+        this.cameras.main.shake(180, 0.006)
+
+        this.showFloatingText(
+          this.player.x,
+          this.player.y - 30,
+          '💣 Bomb Blast!',
+          '#ff9955'
+        )
+
         break
       }
+
       case 'ice': {
-        makeRing(0x00BFFF, 10, range / 10, 400)
+        makeRing(0x00bfff, 10, range / 10, 400)
+
         let frozeAnyone = false
+
         this.monsterList.forEach(m => {
           if (!m.alive || !m.body || !m.body.active) return
-          const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
+
+          const dist = Phaser.Math.Distance.Between(
+            this.player.x,
+            this.player.y,
+            m.body.x,
+            m.body.y
+          )
+
           if (dist < range) {
             frozeAnyone = true
-            if (this.shieldActive) {
-              m.hp = 0
-              this.killMonster(m)
-            } else {
-              m.frozen = true
-              m.body.setVelocity(0, 0)
-              this.drawMonster(m, m.body.x, m.body.y, true)
-              this.showFloatingText(m.body.x, m.body.y - 20, '❄️ FROZEN!', '#00BFFF')
-              this.time.delayedCall(3000, () => { if (m.alive) { m.frozen = false; this.drawMonster(m, m.body.x, m.body.y, false) } })
-            }
+            this.freezeKillMonster(m)
           }
         })
+
         if (!frozeAnyone) {
           this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#88ccff')
         }
+
         break
       }
+
       case 'lightning': {
-        const sorted = this.monsterList.filter(m => m.alive && m.body && m.body.active)
-          .sort((a, b) => Phaser.Math.Distance.Between(this.player.x, this.player.y, a.body.x, a.body.y) - Phaser.Math.Distance.Between(this.player.x, this.player.y, b.body.x, b.body.y))
+        makeRing(attackColor, 10, range / 16, 280)
+        const targets = this.monsterList
+          .filter(m => {
+            if (!m.alive || !m.body || !m.body.active) return false
+
+            const dist = Phaser.Math.Distance.Between(
+              this.player.x,
+              this.player.y,
+              m.body.x,
+              m.body.y
+            )
+
+            return dist <= range * 1.7
+          })
+          .sort((a, b) =>
+            Phaser.Math.Distance.Between(this.player.x, this.player.y, a.body.x, a.body.y) -
+            Phaser.Math.Distance.Between(this.player.x, this.player.y, b.body.x, b.body.y)
+          )
           .slice(0, 3)
 
-        if (sorted.length === 0) {
+        if (targets.length === 0) {
           this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#888888')
           break
         }
 
-        makeRing(0xFFD700, 10, range / 16, 280)
         const lightning = this.add.graphics()
-        lightning.lineStyle(3, 0xFFD700, 1)
-        let lx = this.player.x, ly = this.player.y
-        sorted.forEach(m => {
-          lightning.beginPath(); lightning.moveTo(lx, ly)
-          const mx = (lx + m.body.x) / 2 + Phaser.Math.Between(-20, 20)
-          const my = (ly + m.body.y) / 2 + Phaser.Math.Between(-20, 20)
-          lightning.lineTo(mx, my); lightning.lineTo(m.body.x, m.body.y); lightning.strokePath()
-          lx = m.body.x; ly = m.body.y
+        lightning.lineStyle(4, 0xffdd00, 1)
+
+        let lastX = this.player.x
+        let lastY = this.player.y
+
+        targets.forEach(m => {
+          if (!m.alive || !m.body || !m.body.active) return
+
+          lightning.beginPath()
+          lightning.moveTo(lastX, lastY)
+
+          const midX = (lastX + m.body.x) / 2 + Phaser.Math.Between(-18, 18)
+          const midY = (lastY + m.body.y) / 2 + Phaser.Math.Between(-18, 18)
+
+          lightning.lineTo(midX, midY)
+          lightning.lineTo(m.body.x, m.body.y)
+          lightning.strokePath()
+
+          lastX = m.body.x
+          lastY = m.body.y
+
           const dealt = this.shieldActive ? Math.max(3, m.hp) : 1
           m.hp -= dealt
-          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+          m.body.setVelocity(0, 0)
+
+          if (m.hp <= 0) {
+            this.killMonster(m, this.currentWeapon)
+            return
+          }
+
+          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 48, m.hp, m.maxHp)
           this.showFloatingText(
             m.body.x,
             m.body.y - 20,
             this.shieldActive ? '🗡️ Stealth Zap!' : '⚡ ZAP!',
             this.shieldActive ? '#00ffff' : '#FFD700'
           )
-          if (m.hp <= 0) this.killMonster(m)
         })
-        this.tweens.add({ targets: lightning, alpha: 0, duration: 300, onComplete: () => lightning.destroy() })
-        this.showFloatingText(this.player.x, this.player.y - 30, '⚡ Electric Chain!', '#FFD700')
+
+        this.tweens.add({
+          targets: lightning,
+          alpha: 0,
+          duration: 260,
+          onComplete: () => lightning.destroy()
+        })
+
+        this.showFloatingText(
+          this.player.x,
+          this.player.y - 30,
+          '⚡ Electric Chain!',
+          '#FFD700'
+        )
+
         break
       }
-      case 'boomerang': {
-        makeRing(0xC8A25A, 10, range / 10, 250)
-        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xC8A25A)
-        this.time.delayedCall(400, () => {
-          makeRing(0xC8A25A, 10, range / 10, 250)
-          this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xC8A25A)
+
+      case 'wind': {
+        makeRing(0x88ffee, 10, range / 9, 380)
+
+        let hitAnyone = false
+
+        this.monsterList.forEach(m => {
+          if (!m.alive || !m.body || !m.body.active) return
+
+          const dist = Phaser.Math.Distance.Between(
+            this.player.x,
+            this.player.y,
+            m.body.x,
+            m.body.y
+          )
+
+          if (dist < range * 1.2) {
+            hitAnyone = true
+
+            const angle = Phaser.Math.Angle.Between(
+              this.player.x,
+              this.player.y,
+              m.body.x,
+              m.body.y
+            )
+
+            const dealt = this.shieldActive ? Math.max(3, m.hp) : 1
+            m.hp -= dealt
+
+            m.body.setVelocity(
+              Math.cos(angle) * 180,
+              Math.sin(angle) * 180
+            )
+
+            if (m.hp <= 0) {
+              this.killMonster(m, this.currentWeapon)
+              return
+            }
+
+            this.drawHPBar(m.hpBar, m.body.x, m.body.y - 48, m.hp, m.maxHp)
+            this.showFloatingText(
+              m.body.x,
+              m.body.y - 20,
+              this.shieldActive ? '🗡️ Stealth Gust!' : '🌪 Pushed!',
+              this.shieldActive ? '#00ffff' : '#88ffee'
+            )
+          }
         })
+
+        if (!hitAnyone) {
+          this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#88ffee')
+        } else {
+          this.showFloatingText(this.player.x, this.player.y - 30, '🌪 Wind Force!', '#88ffee')
+        }
+
+        break
+      }
+
+      case 'boomerang': {
+        makeRing(0xc8a25a, 10, range / 10, 250)
+        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xc8a25a)
+
+        // Spawn spinning boomerang projectile arcing out
+        const b = this.add.text(this.player.x, this.player.y, '🪃', { fontSize: '24px' }).setOrigin(0.5).setDepth(20)
+        let targetAngle = 0
+        let closestDist = 9999
+        this.monsterList.forEach(m => {
+          if (m.alive && m.body) {
+            const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
+            if (d < range * 1.5 && d < closestDist) {
+              closestDist = d
+              targetAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, m.body.x, m.body.y)
+            }
+          }
+        })
+        const throwDist = Math.min(range, closestDist < 9999 ? closestDist : range)
+        const targetX = this.player.x + Math.cos(targetAngle) * throwDist
+        const targetY = this.player.y + Math.sin(targetAngle) * throwDist
+
+        this.tweens.add({
+          targets: b,
+          x: targetX,
+          y: targetY,
+          angle: 720,
+          duration: 260,
+          ease: 'Sine.easeOut',
+          onComplete: () => {
+            this.tweens.add({
+              targets: b,
+              x: this.player.x,
+              y: this.player.y,
+              angle: 1440,
+              duration: 260,
+              ease: 'Sine.easeIn',
+              onComplete: () => b.destroy()
+            })
+          }
+        })
+
+        this.time.delayedCall(300, () => {
+          makeRing(0xc8a25a, 10, range / 10, 250)
+          this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xc8a25a)
+        })
+
         this.showFloatingText(this.player.x, this.player.y - 30, '🪃 Boomerang!', '#C8A25A')
         break
       }
+
+      case 'normal':
+      default: {
+        makeRing(this.birdColor || 0xffffff, 10, range / 10, 350)
+        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, this.birdColor || 0xffffff)
+        break
+      }
     }
-    this.time.delayedCall(400, () => { this.isAttacking = false })
   }
 
   hitMonstersInRange(x, y, range, damage, color) {
     let hit = false
+
     this.monsterList.forEach(m => {
       if (!m.alive || !m.body || !m.body.active) return
+
       const dist = Phaser.Math.Distance.Between(x, y, m.body.x, m.body.y)
+
       if (dist < range) {
         hit = true
+
         const dealt = this.shieldActive ? Math.max(damage * 3, m.hp) : damage
         m.hp -= dealt
-        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
-        m.graphic.setAlpha(0.3)
-        this.time.delayedCall(150, () => { if (m.graphic) m.graphic.setAlpha(1) })
+        m.body.setVelocity(0, 0)
+
+        if (m.hpBar) {
+          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 48, m.hp, m.maxHp)
+        }
+
+        if (m.graphic) {
+          m.graphic.setAlpha(0.3)
+          this.time.delayedCall(150, () => {
+            if (m.graphic) m.graphic.setAlpha(1)
+          })
+        }
+
+        // Hit particles
         for (let i = 0; i < 8; i++) {
           const angle = (i / 8) * Math.PI * 2
           const burst = this.add.graphics()
           burst.fillStyle(color, 1)
           burst.fillCircle(m.body.x, m.body.y, 4)
+
           this.tweens.add({
             targets: burst,
             x: m.body.x + Math.cos(angle) * Phaser.Math.Between(15, 40),
             y: m.body.y + Math.sin(angle) * Phaser.Math.Between(15, 40),
-            alpha: 0, scaleX: 0.2, scaleY: 0.2,
+            alpha: 0,
+            scaleX: 0.2,
+            scaleY: 0.2,
             duration: Phaser.Math.Between(200, 500),
             onComplete: () => burst.destroy()
           })
         }
-        if (m.hp <= 0) this.killMonster(m)
-        else this.showFloatingText(m.body.x, m.body.y - 20, this.shieldActive ? '🗡️ Stealth Hit!' : '⚔️ Hit!', this.shieldActive ? '#00ffff' : '#ffaaaa')
+
+        // Safe kill
+        if (m.hp <= 0) {
+          this.killMonster(m, this.currentWeapon)
+          return
+        }
+
+        // Safe floating text
+        this.showFloatingText(
+          m.body.x,
+          m.body.y - 20,
+          this.shieldActive ? '🗡️ Stealth Hit!' : '⚔️ Hit!',
+          this.shieldActive ? '#00ffff' : '#ffaaaa'
+        )
       }
     })
-    if (!hit && this.currentWeapon === 'normal')
+
+    if (!hit && this.currentWeapon === 'normal') {
       this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#888888')
+    }
   }
 
-  killMonster(m) {
+  killMonster(m, deathType = this.currentWeapon) {
+    if (!m || !m.alive) return
+
     m.alive = false
-    for (let i = 0; i < 10; i++) {
-      const angle = (i / 10) * Math.PI * 2
-      const burst = this.add.graphics()
-      burst.fillStyle(0x0044ff, 1)
-      burst.fillCircle(m.body.x, m.body.y, 5)
-      this.tweens.add({
-        targets: burst,
-        x: m.body.x + Math.cos(angle) * Phaser.Math.Between(20, 50),
-        y: m.body.y + Math.sin(angle) * Phaser.Math.Between(20, 50),
-        alpha: 0, scaleX: 0.2, scaleY: 0.2,
-        duration: Phaser.Math.Between(300, 600),
-        onComplete: () => burst.destroy()
-      })
+
+    const x = m.body ? m.body.x : (m.graphic ? m.graphic.x : 0)
+    const y = m.body ? m.body.y : (m.graphic ? m.graphic.y : 0)
+
+    // Stop hunter immediately
+    if (m.walkTween) {
+      m.walkTween.stop()
+      m.walkTween = null
     }
-    m.graphic.destroy(); m.hpBar.destroy(); m.alert.destroy(); m.body.destroy()
-    this.score += 300
-    this.showFloatingText(m.body.x, m.body.y, '💥 +300', '#4488ff')
+
+    if (m.body) {
+      m.body.setVelocity(0, 0)
+      if (m.body.body) {
+        m.body.body.enable = false
+      }
+    }
+
+    // Remove active UI
+    if (m.hpBar) {
+      m.hpBar.destroy()
+      m.hpBar = null
+    }
+
+    if (m.alert) {
+      m.alert.destroy()
+      m.alert = null
+    }
+
+    // Different death effect depending on chosen bird power
+    this.playMonsterDeathEffect(x, y, deathType)
+
+    // Tint/behavior before disappearing
+    if (m.graphic) {
+      if (deathType === 'fire') {
+        m.graphic.setTint(0xff5500)
+      } else if (deathType === 'bomb') {
+        m.graphic.setTint(0x333333)
+      } else if (deathType === 'lightning') {
+        m.graphic.setTint(0xffff66)
+      } else if (deathType === 'wind' || deathType === 'boomerang') {
+        m.graphic.setTint(0x88ffee)
+      }
+    }
+
+    // Mini skull appears right before disappearance
+    this.time.delayedCall(350, () => {
+      this.showDeathSkull(x, y)
+    })
+
+    // Hunter disappears after effect
+    const fadeTargets = []
+    if (m.graphic) fadeTargets.push(m.graphic)
+    if (m.shadow) fadeTargets.push(m.shadow)
+
+    if (fadeTargets.length > 0) {
+      this.tweens.add({
+        targets: fadeTargets,
+        alpha: 0,
+        duration: 650,
+        delay: deathType === 'lightning' ? 120 : 0,
+        onComplete: () => {
+          if (m.graphic) { m.graphic.destroy(); m.graphic = null }
+          if (m.shadow) { m.shadow.destroy(); m.shadow = null }
+          if (m.body) { m.body.destroy(); m.body = null }
+        }
+      })
+    } else {
+      if (m.body) { m.body.destroy(); m.body = null }
+    }
+
+    this.score += 200
+
+    this.showFloatingText(x, y - 24, '+200', '#ffffff')
+  }
+
+  showDeathSkull(x, y) {
+    const skull = this.add.text(x, y - 28, '☠️', {
+      fontSize: '22px',
+      stroke: '#000000',
+      strokeThickness: 4
+    }).setOrigin(0.5).setDepth(50)
+
+    this.tweens.add({
+      targets: skull,
+      y: y - 55,
+      alpha: 0,
+      scaleX: 1.4,
+      scaleY: 1.4,
+      duration: 650,
+      onComplete: () => skull.destroy()
+    })
+  }
+
+  playMonsterDeathEffect(x, y, deathType) {
+    if (deathType === 'fire') {
+      // Ember: burning effect
+      for (let i = 0; i < 14; i++) {
+        const flame = this.add.graphics()
+        flame.setPosition(
+          x + Phaser.Math.Between(-16, 16),
+          y + Phaser.Math.Between(-10, 18)
+        )
+
+        const color = Phaser.Math.Between(0, 1) === 0 ? 0xff4500 : 0xffaa00
+        flame.fillStyle(color, 0.9)
+        flame.fillCircle(0, 0, Phaser.Math.Between(4, 8))
+
+        this.tweens.add({
+          targets: flame,
+          y: flame.y - Phaser.Math.Between(25, 45),
+          alpha: 0,
+          scaleX: 0.2,
+          scaleY: 0.2,
+          duration: Phaser.Math.Between(350, 650),
+          onComplete: () => flame.destroy()
+        })
+      }
+
+      return
+    }
+
+    if (deathType === 'bomb') {
+      // Shade: bomb blast + smoke
+      const blast = this.add.graphics()
+      blast.setPosition(x, y)
+      blast.fillStyle(0xff6600, 0.55)
+      blast.fillCircle(0, 0, 18)
+
+      this.tweens.add({
+        targets: blast,
+        scaleX: 4,
+        scaleY: 4,
+        alpha: 0,
+        duration: 380,
+        onComplete: () => blast.destroy()
+      })
+
+      for (let i = 0; i < 18; i++) {
+        const smoke = this.add.graphics()
+        smoke.setPosition(x, y)
+
+        smoke.fillStyle(0x555555, 0.75)
+        smoke.fillCircle(0, 0, Phaser.Math.Between(7, 13))
+
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2)
+        const dist = Phaser.Math.Between(25, 65)
+
+        this.tweens.add({
+          targets: smoke,
+          x: x + Math.cos(angle) * dist,
+          y: y + Math.sin(angle) * dist,
+          alpha: 0,
+          scaleX: 1.8,
+          scaleY: 1.8,
+          duration: Phaser.Math.Between(500, 850),
+          onComplete: () => smoke.destroy()
+        })
+      }
+
+      this.cameras.main.shake(180, 0.008)
+      return
+    }
+
+    if (deathType === 'lightning') {
+      // Volt: lightning strike appears over hunter before death
+      const flash = this.add.graphics()
+      flash.setPosition(x, y)
+      flash.fillStyle(0xffffaa, 0.45)
+      flash.fillCircle(0, 0, 34)
+
+      this.tweens.add({
+        targets: flash,
+        scaleX: 2.2,
+        scaleY: 2.2,
+        alpha: 0,
+        duration: 250,
+        onComplete: () => flash.destroy()
+      })
+
+      if (this.textures.exists('lightning_strike')) {
+        const strike = this.add.image(x, y - 35, 'lightning_strike')
+          .setDepth(60)
+          .setOrigin(0.5, 0.5)
+          .setDisplaySize(70, 110)
+          .setAlpha(0.95)
+
+        this.tweens.add({
+          targets: strike,
+          alpha: 0,
+          scaleX: 1.15,
+          scaleY: 1.15,
+          duration: 400,
+          delay: 120,
+          onComplete: () => strike.destroy()
+        })
+      }
+
+      for (let i = 0; i < 8; i++) {
+        const spark = this.add.graphics()
+        spark.setPosition(x, y)
+        spark.lineStyle(3, 0xffdd00, 1)
+
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2)
+        const len = Phaser.Math.Between(18, 34)
+
+        spark.beginPath()
+        spark.moveTo(0, 0)
+        spark.lineTo(Math.cos(angle) * len, Math.sin(angle) * len)
+        spark.strokePath()
+
+        this.tweens.add({
+          targets: spark,
+          alpha: 0,
+          scaleX: 1.4,
+          scaleY: 1.4,
+          duration: 260,
+          onComplete: () => spark.destroy()
+        })
+      }
+
+      this.cameras.main.shake(180, 0.006)
+      return
+    }
+
+    if (deathType === 'wind' || deathType === 'boomerang') {
+      // Gale: wind swirl
+      const swirl = this.add.graphics()
+      swirl.setPosition(x, y)
+      swirl.lineStyle(4, 0x88ffee, 0.9)
+
+      swirl.strokeCircle(0, 0, 12)
+      swirl.strokeCircle(0, 0, 22)
+      swirl.strokeCircle(0, 0, 32)
+
+      this.tweens.add({
+        targets: swirl,
+        angle: 240,
+        scaleX: 1.8,
+        scaleY: 1.8,
+        alpha: 0,
+        duration: 500,
+        onComplete: () => swirl.destroy()
+      })
+
+      return
+    }
+
+    // Default small smoke
+    const smoke = this.add.graphics()
+    smoke.setPosition(x, y)
+    smoke.fillStyle(0x777777, 0.7)
+    smoke.fillCircle(0, 0, 18)
+
+    this.tweens.add({
+      targets: smoke,
+      scaleX: 2.5,
+      scaleY: 2.5,
+      alpha: 0,
+      duration: 450,
+      onComplete: () => smoke.destroy()
+    })
+  }
+
+  freezeKillMonster(m) {
+    if (!m || !m.alive || !m.body) return
+
+    m.alive = false
+    m.frozen = true
+
+    const x = m.body.x
+    const y = m.body.y
+
+    if (m.walkTween) {
+      m.walkTween.stop()
+      m.walkTween = null
+    }
+
+    if (m.body) {
+      m.body.setVelocity(0, 0)
+      if (m.body.body) {
+        m.body.body.enable = false
+      }
+    }
+
+    if (m.graphic) {
+      m.graphic.setTint(0x88ccff)
+      m.graphic.setAlpha(0.85)
+    }
+
+    if (m.hpBar) {
+      m.hpBar.destroy()
+      m.hpBar = null
+    }
+
+    if (m.alert) {
+      m.alert.destroy()
+      m.alert = null
+    }
+
+    const ice = this.add.graphics()
+    ice.setDepth(20)
+
+    ice.setPosition(x, y)
+    ice.fillStyle(0x99ddff, 0.25)
+    ice.fillCircle(0, 0, 30)
+
+    ice.lineStyle(4, 0x99eeff, 0.95)
+    ice.strokeCircle(0, 0, 28)
+
+    ice.lineStyle(2, 0xffffff, 0.8)
+    ice.strokeCircle(0, 0, 20)
+
+    ice.fillStyle(0xdffaff, 0.9)
+
+    const spikes = [
+      [0, -36], [26, -24], [36, 0], [24, 26],
+      [0, 36], [-24, 26], [-36, 0], [-26, -24]
+    ]
+
+    spikes.forEach(([sx, sy]) => {
+      ice.fillCircle(sx, sy, 4)
+    })
+
+    this.tweens.add({
+      targets: ice,
+      alpha: 0.65,
+      duration: 700,
+      yoyo: true,
+      repeat: -1
+    })
+
+    m.iceGraphic = ice
+
+    this.time.delayedCall(350, () => {
+      this.showDeathSkull(x, y)
+    })
+
+    this.score += 200
+    this.showFloatingText(
+      x,
+      y - 24,
+      '❄️ Frozen Captured! +200',
+      '#99eeff'
+    )
   }
 
   async saveScore() {
@@ -2061,6 +2621,7 @@ const positions = [
     this.monsterList.forEach(m => {
       if (m.alive && m.body && m.body.active) { m.body.setVelocity(0, 0); m.body.enable = false }
       if (m.alert) m.alert.setVisible(false)
+      if (m.iceGraphic) { m.iceGraphic.destroy(); m.iceGraphic = null }
     })
     this.tweens.killAll()
     this.time.removeAllEvents()
@@ -2395,7 +2956,7 @@ const positions = [
 
     const nextX = this.player.x + (vx * 0.05)
     const nextY = this.player.y + (vy * 0.05)
-    const hw = 12
+    const hw = 14
     const leftTile = Math.floor((nextX - hw) / this.TILE)
     const rightTile = Math.floor((nextX + hw) / this.TILE)
     const topTile = Math.floor((nextY - hw) / this.TILE)
@@ -2465,7 +3026,7 @@ const positions = [
 
       if (m.frozen) {
         this.drawMonster(m, m.body.x, m.body.y, true)
-        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 34, m.hp, m.maxHp)
+        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 48, m.hp, m.maxHp)
         return
       }
 
@@ -2475,7 +3036,7 @@ const positions = [
         m.body.setPosition(m.spawnX, m.spawnY)
         m.body.setVelocity(0, 0); m.patrolTimer = 0
         this.drawMonster(m, m.body.x, m.body.y, false)
-        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 34, m.hp, m.maxHp)
+        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 48, m.hp, m.maxHp)
         return
       }
 
@@ -2492,7 +3053,7 @@ const positions = [
           m.investigateTarget = null
         } else {
           m.alert.setVisible(true)
-          m.alert.setPosition(m.body.x, m.body.y - 42)
+          m.alert.setPosition(m.body.x, m.body.y - 60)
           const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, target.x, target.y)
           const ms = 65
           const mvx = Math.cos(angle) * ms, mvy = Math.sin(angle) * ms
@@ -2508,7 +3069,7 @@ const positions = [
           } else if (finalVy !== 0) {
             m.graphic.setTexture(finalVy > 0 ? 'hunter_front' : 'hunter_back')
           }
-          m.graphic.setDisplaySize(52, 64)
+          m.graphic.setDisplaySize(58, 74)
 
           if (Phaser.Math.Distance.Between(m.body.x, m.body.y, target.x, target.y) < 34) {
             this.loseTrappedAnimal(target, 'hunter')
@@ -2518,7 +3079,7 @@ const positions = [
 
           this.maybeLayHunterFootprint(m)
           this.drawMonster(m, m.body.x, m.body.y, false)
-          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 34, m.hp, m.maxHp)
+          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 48, m.hp, m.maxHp)
           return
         }
       }
@@ -2528,7 +3089,7 @@ const positions = [
         m.investigateTarget = null
         m.chasing = true
         m.alert.setVisible(true)
-        m.alert.setPosition(m.body.x, m.body.y - 42)
+        m.alert.setPosition(m.body.x, m.body.y - 60)
         const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, this.player.x, this.player.y)
         const ms = 55
         const mvx = Math.cos(angle) * ms, mvy = Math.sin(angle) * ms
@@ -2544,7 +3105,7 @@ const positions = [
         } else if (finalVy !== 0) {
           m.graphic.setTexture(finalVy > 0 ? 'hunter_front' : 'hunter_back')
         }
-        m.graphic.setDisplaySize(52, 64)
+        m.graphic.setDisplaySize(58, 74)
 
         if (!this.shieldActive && distToPlayer < 36 && !this.playerHitCooldown) {
           this.playerHitCooldown = true
@@ -2579,7 +3140,7 @@ const positions = [
         } else if (d.vy !== 0) {
           m.graphic.setTexture(d.vy > 0 ? 'hunter_front' : 'hunter_back')
         }
-        m.graphic.setDisplaySize(52, 64)
+        m.graphic.setDisplaySize(58, 74)
       }
 
       for (let i = 0; i < this.eggList.length; i++) {
@@ -2624,7 +3185,7 @@ const positions = [
 
     this.maybeLayHunterFootprint(m)
     this.drawMonster(m, m.body.x, m.body.y, false)
-    this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+    this.drawHPBar(m.hpBar, m.body.x, m.body.y - 48, m.hp, m.maxHp)
   })
 
   // ── Sapling collection ────────────────────────────────────────
@@ -2841,7 +3402,7 @@ w.fleeing = nearestHunterDist < 90
   this.drawPortal()
 
   this.bobTimer += 1
-  const baseSize = this.playerBaseSize || 34
+  const baseSize = this.playerBaseSize || 44
   if (this.isMoving) {
     this.player.setDisplaySize(
       this.bobTimer > 8 ? baseSize + 3 : baseSize - 2,
