@@ -115,7 +115,9 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard.enabled = true
     this.input.keyboard.enableGlobalCapture()
     this.input.on('pointerdown', () => {
-      this.input.keyboard.focus()
+      if (this.game.canvas && this.game.canvas.focus) {
+        this.game.canvas.focus()
+      }
     })
     this.wasd = this.input.keyboard.addKeys({
       up: Phaser.Input.Keyboard.KeyCodes.W,
