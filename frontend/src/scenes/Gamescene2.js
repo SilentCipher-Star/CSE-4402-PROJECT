@@ -188,10 +188,10 @@ export class GameScene2 extends Phaser.Scene {
       1 * this.TILE + this.TILE / 2,
       b + '_right'
     )
-    this.playerBaseSize = (this.chosenBird === 'Ember') ? 42 : 44
+    this.playerBaseSize = (this.chosenBird === 'Ember') ? 50 : 52
     this.player.setDisplaySize(this.playerBaseSize, this.playerBaseSize)
     this.player.setCollideWorldBounds(true)
-    this.player.body.setSize(24, 24)
+    this.player.body.setSize(26, 26)
     this.player.setDepth(20)
 
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
@@ -360,6 +360,7 @@ export class GameScene2 extends Phaser.Scene {
 
     // Fallen frozen log barriers (4)
     const logFormations = [
+      // Original logs
       [14, 12], [15, 12], [16, 12],
       [28, 28], [29, 28], [30, 28],
       [10, 36], [11, 36],
@@ -373,12 +374,21 @@ export class GameScene2 extends Phaser.Scene {
       [4, 17], [4, 18],
       [42, 34], [43, 34],
       [21, 14], [22, 14],
-      [13, 31], [14, 31]
+      [13, 31], [14, 31],
+
+      // Additional stealth barriers & chicanes
+      [7, 3], [8, 3], [14, 3], [15, 3], [22, 2], [23, 2], [33, 2], [34, 2], [41, 4], [42, 4],
+      [5, 12], [6, 12], [26, 8], [27, 8], [39, 10], [40, 10],
+      [17, 21], [18, 21], [23, 21], [24, 21], [29, 21], [30, 21], [35, 23], [36, 23],
+      [9, 28], [10, 28], [17, 27], [18, 27], [22, 26], [23, 26], [36, 27], [37, 27],
+      [7, 37], [8, 37], [13, 38], [14, 38], [24, 37], [25, 37], [34, 34], [35, 34], [40, 36], [41, 36],
+      [18, 45], [19, 45], [26, 45], [27, 45], [38, 43], [39, 43]
     ]
     logFormations.forEach(([c, r]) => placeObstacle(c, r, 4))
 
     // Sharp icicle clusters (7)
     const icicleFormations = [
+      // Original icicles
       [22, 12], [23, 12],
       [38, 8], [39, 8],
       [18, 26], [19, 26],
@@ -392,12 +402,20 @@ export class GameScene2 extends Phaser.Scene {
       [29, 12], [30, 12],
       [11, 44], [12, 44],
       [34, 4], [35, 4],
-      [3, 30], [4, 30]
+      [3, 30], [4, 30],
+
+      // Additional crystalline barriers & vision blockers
+      [17, 4], [18, 4], [27, 4], [28, 4], [36, 6], [37, 6],
+      [12, 14], [12, 15], [20, 12], [21, 12], [31, 14], [32, 14], [41, 16], [42, 16],
+      [11, 24], [11, 25], [16, 24], [17, 24], [25, 24], [26, 24], [32, 24], [33, 24], [41, 24], [42, 24],
+      [8, 33], [8, 34], [14, 33], [15, 33], [23, 31], [24, 31], [30, 31], [31, 31], [42, 30], [43, 30],
+      [9, 41], [10, 41], [17, 42], [18, 42], [22, 40], [23, 40], [28, 43], [29, 43], [36, 42], [37, 42]
     ]
     icicleFormations.forEach(([c, r]) => placeObstacle(c, r, 7))
 
     // Dead tree clusters (8)
     const deadTreeFormations = [
+      // Original dead trees
       [8, 20], [9, 20],
       [26, 18], [27, 18],
       [14, 42], [15, 42],
@@ -409,9 +427,35 @@ export class GameScene2 extends Phaser.Scene {
       [43, 18], [44, 18],
       [5, 31], [5, 32],
       [17, 14], [17, 15],
-      [28, 41], [29, 41]
+      [28, 41], [29, 41],
+
+      // Additional withered tree hideouts
+      [3, 7], [3, 8], [13, 6], [14, 6], [22, 6], [23, 6], [32, 7], [33, 7], [40, 7], [41, 7],
+      [6, 16], [7, 16], [15, 18], [16, 18], [24, 17], [25, 17], [34, 18], [35, 18], [43, 16], [44, 16],
+      [4, 27], [5, 27], [12, 29], [13, 29], [21, 28], [22, 28], [29, 27], [30, 27], [38, 26], [39, 26],
+      [3, 39], [4, 39], [11, 39], [12, 39], [21, 37], [22, 37], [33, 37], [34, 37], [43, 38], [44, 38],
+      [7, 46], [8, 46], [15, 46], [16, 46], [24, 46], [25, 46], [34, 46], [35, 46], [42, 45], [43, 45]
     ]
     deadTreeFormations.forEach(([c, r]) => placeObstacle(c, r, 8))
+
+    // Clustered snow pile & snow bank mounds (6)
+    const snowPileFormations = [
+      [10, 18], [11, 18], [28, 11], [28, 12], [39, 14], [40, 14],
+      [7, 24], [8, 24], [19, 23], [20, 23], [37, 21], [38, 21],
+      [14, 36], [14, 37], [26, 33], [27, 33], [35, 30], [36, 30],
+      [12, 42], [13, 42], [25, 44], [26, 44], [39, 41], [40, 41]
+    ]
+    snowPileFormations.forEach(([c, r]) => placeObstacle(c, r, 6))
+
+    // Pine tree dividers (1)
+    const pineDividers = [
+      [6, 9], [18, 8], [25, 4], [31, 8], [37, 10],
+      [8, 14], [23, 15], [30, 16], [39, 18],
+      [5, 23], [15, 25], [22, 22], [28, 23], [36, 25],
+      [7, 32], [16, 32], [24, 33], [32, 33], [41, 32],
+      [5, 42], [16, 43], [23, 44], [31, 44], [37, 44]
+    ]
+    pineDividers.forEach(([c, r]) => placeObstacle(c, r, 1))
 
     // frozen boundary wall around the whole map
     for (let c = 0; c < cols; c++) { map[0][c] = 2; map[rows - 1][c] = 2 }
@@ -616,6 +660,19 @@ export class GameScene2 extends Phaser.Scene {
     if (!this.mapData || !this.mapData[row]) return true
     const t = this.mapData[row][col]
     return t === 1 || t === 2 || t === 4 || t === 6 || t === 7 || t === 8
+  }
+
+  hasLineOfSight(x1, y1, x2, y2) {
+    const dist = Phaser.Math.Distance.Between(x1, y1, x2, y2)
+    const steps = Math.max(2, Math.ceil(dist / 20))
+    for (let i = 1; i < steps; i++) {
+      const tx = Phaser.Math.Linear(x1, x2, i / steps)
+      const ty = Phaser.Math.Linear(y1, y2, i / steps)
+      const col = Math.floor(tx / this.TILE)
+      const row = Math.floor(ty / this.TILE)
+      if (this.isWall(col, row)) return false
+    }
+    return true
   }
 
   spawnEggs() {
@@ -3045,9 +3102,13 @@ const positions = [
       const alerted = m.alertedUntil && this.time.now < m.alertedUntil
       const chaseRange = (m.alwaysChase || alerted) ? 9999 : (this.stealthMode || this.shieldActive) ? 0 : (this.evolutionStage >= 2 ? 110 : 140) * (this.blizzardActive ? 0.7 : 1)
 
+      // Solid obstacles block enemy vision for tactical sneak evasion
+      const hasLOS = this.hasLineOfSight(m.body.x, m.body.y, this.player.x, this.player.y)
+      const canDetectPlayer = alerted || m.alwaysChase || (distToPlayer < chaseRange && hasLOS)
+
       // 🪤 Investigating a trapped animal takes priority over patrolling,
       // unless the player wanders close enough to draw the hunter's attention.
-      if (m.state === 'investigate' && distToPlayer >= chaseRange) {
+      if (m.state === 'investigate' && !canDetectPlayer) {
         const target = m.investigateTarget
         if (!target || target.rescued || target.lost) {
           m.state = null
@@ -3085,7 +3146,7 @@ const positions = [
         }
       }
 
-      if (distToPlayer < chaseRange) {
+      if (canDetectPlayer) {
         m.state = null
         m.investigateTarget = null
         m.chasing = true
@@ -3403,7 +3464,7 @@ w.fleeing = nearestHunterDist < 90
   this.drawPortal()
 
   this.bobTimer += 1
-  const baseSize = this.playerBaseSize || 44
+  const baseSize = this.playerBaseSize || 52
   if (this.isMoving) {
     this.player.setDisplaySize(
       this.bobTimer > 8 ? baseSize + 3 : baseSize - 2,
