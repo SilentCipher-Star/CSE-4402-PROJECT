@@ -7,19 +7,14 @@ export class FlashcardScene2 extends Phaser.Scene {
 
   preload() {
     const cards = [
-      'wollemi',
-      'pennantia',
-      'bois',
-      'baobab',
-      'torreya',
-      'monkey',
-      'chestnut',
-      'dragon'
+      'card_arctic_willow',
+      'card_himalayan_yew',
+      'card_ice_grass',
+      'card_polar_bellflower',
+      'card_snow_lotus'
     ]
 
-    cards.forEach(name => {
-      const key = `card_${name}`
-
+    cards.forEach(key => {
       if (!this.textures.exists(key)) {
         this.load.image(
           key,
@@ -44,6 +39,9 @@ export class FlashcardScene2 extends Phaser.Scene {
     this.closing = false
 
     this.input.keyboard.enabled = true
+    if (this.game.canvas && this.game.canvas.focus) {
+      this.game.canvas.focus()
+    }
 
     const { width, height } = this.scale
 
@@ -52,7 +50,9 @@ export class FlashcardScene2 extends Phaser.Scene {
     // ---------------------------------------------------------
 
     if (this.flashCards.length === 0) {
-      this.goToReport()
+      this.time.delayedCall(1, () => {
+        this.goToReport()
+      })
       return
     }
 
@@ -226,12 +226,25 @@ export class FlashcardScene2 extends Phaser.Scene {
     this.input.keyboard.on(
       'keydown-ENTER',
       () => {
-        if (
-          !this.closing &&
-          this.currentIndex ===
-            this.flashCards.length - 1
-        ) {
-          this.goToReport()
+        if (!this.closing) {
+          if (this.currentIndex === this.flashCards.length - 1) {
+            this.goToReport()
+          } else {
+            this.showCard(this.currentIndex + 1)
+          }
+        }
+      }
+    )
+
+    this.input.keyboard.on(
+      'keydown-SPACE',
+      () => {
+        if (!this.closing) {
+          if (this.currentIndex === this.flashCards.length - 1) {
+            this.goToReport()
+          } else {
+            this.showCard(this.currentIndex + 1)
+          }
         }
       }
     )

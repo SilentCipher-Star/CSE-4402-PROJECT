@@ -2714,14 +2714,16 @@ const positions = [
       escaped: escaped
     }
 
-    // OPEN FLASHCARD SCENE (report is shown afterwards, from goToReport())
-    this.scene.launch('FlashcardScene2', {
-      flashCards: reportData.flashCards,
-      reportData: reportData
-    })
-
-    // Pause GameScene2 AFTER launching flashcards
-    this.scene.pause('GameScene2')
+    if (reportData.flashCards && reportData.flashCards.length > 0) {
+      // OPEN FLASHCARD SCENE (report is shown afterwards, from goToReport())
+      this.scene.launch('FlashcardScene2', {
+        flashCards: reportData.flashCards,
+        reportData: reportData
+      })
+      this.scene.pause('GameScene2')
+    } else {
+      this.showConservationReport(escaped)
+    }
   }
   animateHunterWalk(m) {
     if (m.walkTween) return // already animating
@@ -2735,14 +2737,23 @@ const positions = [
     })
   }
   showConservationReport(escaped) {
+    if (this.game.canvas && this.game.canvas.focus) {
+      this.game.canvas.focus()
+    }
+    this.input.enabled = true
+    this.input.keyboard.enabled = true
+    this.input.setDefaultCursor('default')
+    if (this.escKey) this.escKey.removeAllListeners()
+    this.input.keyboard.off('keydown-ESC')
+
     const { width, height } = this.scale
 
-    const saplings = this.eggsCollected
+    const saplings = this.eggsCollected || 0
     const total = this.totalSaplings || 14
     const co2 = saplings * 22
-    const machines = this.monsterList.filter(m => !m.alive).length
+    const machines = (this.monsterList || []).filter(m => !m.alive).length
     const health = Math.max(0, Math.round(this.forestHealth || 100))
-    const timeTaken = 200 - (this.timeLeft || 0)
+    const timeTaken = Math.max(0, 200 - (this.timeLeft || 0))
 
     const grade =
       saplings >= 12 ? 'S' :
@@ -2771,7 +2782,7 @@ const positions = [
     }
 
     // ── Dark overlay ────────────────────────────────────────────
-    const overlay = this.add.graphics().setScrollFactor(0).setDepth(300)
+    const overlay = this.add.graphics().setScrollFactor(0).setDepth(500)
     overlay.fillStyle(0x000000, 0.93)
     overlay.fillRect(0, 0, width, height)
 
@@ -2781,7 +2792,7 @@ const positions = [
     const cardW = 640
     const cardH = height - 40
 
-    const card = this.add.graphics().setScrollFactor(0).setDepth(301)
+    const card = this.add.graphics().setScrollFactor(0).setDepth(501)
     card.fillStyle(0x0a1420, 1)
     card.fillRoundedRect(cardX, cardY, cardW, cardH, 20)
     card.lineStyle(2, escaped ? 0x1e4e6e : 0x5e1e1e, 1)
@@ -2789,7 +2800,7 @@ const positions = [
 
     // ── Header banner ────────────────────────────────────────────
     const headerH = 88
-    const headerBg = this.add.graphics().setScrollFactor(0).setDepth(301)
+    const headerBg = this.add.graphics().setScrollFactor(0).setDepth(502)
     headerBg.fillGradientStyle(
       escaped ? 0x0d2a40 : 0x330d0d,
       escaped ? 0x0d2a40 : 0x330d0d,
@@ -2803,19 +2814,19 @@ const positions = [
     this.add.text(cardX + 28, cardY + 18, escaped ? '❄️ ARCTIC CONSERVATION REPORT' : '💀 EXPEDITION FAILED', {
       fontSize: '20px', fontFamily: 'Arial Black',
       color: escaped ? '#00d4ff' : '#ff3355'
-    }).setScrollFactor(0).setDepth(302)
+    }).setScrollFactor(0).setDepth(503)
 
     this.add.text(cardX + 28, cardY + 50, escaped
       ? 'Saplings delivered to the tundra replanting zone'
       : 'The tundra machines won this expedition', {
       fontSize: '11px', fontFamily: 'Arial',
       color: '#7a94aa'
-    }).setScrollFactor(0).setDepth(302)
+    }).setScrollFactor(0).setDepth(503)
 
     // ── Grade badge ───────────────────────────────────────────────
     const gradeX = cardX + cardW - 66
     const gradeY = cardY + 44
-    const gradeGlow = this.add.graphics().setScrollFactor(0).setDepth(301)
+    const gradeGlow = this.add.graphics().setScrollFactor(0).setDepth(502)
     gradeGlow.fillStyle(gradeColorInt, 0.15)
     gradeGlow.fillCircle(gradeX, gradeY, 38)
     gradeGlow.fillStyle(0x0a1420, 1)
@@ -2825,11 +2836,11 @@ const positions = [
 
     this.add.text(gradeX, gradeY, grade, {
       fontSize: '26px', fontFamily: 'Arial Black', color: gradeColor
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(303)
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(503)
 
     this.add.text(gradeX, gradeY + 44, 'GRADE', {
       fontSize: '9px', fontFamily: 'Arial Black', color: '#4a6a80'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(302)
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(503)
 
     // ── Stat rows ────────────────────────────────────────────────
     const stats = [
@@ -2847,36 +2858,36 @@ const positions = [
     stats.forEach((st, i) => {
       const ry = startY + i * (rowH + rowGap)
 
-      const rowBg = this.add.graphics().setScrollFactor(0).setDepth(301)
+      const rowBg = this.add.graphics().setScrollFactor(0).setDepth(502)
       rowBg.fillStyle(0x0f1c28, 1)
       rowBg.fillRoundedRect(cardX + 16, ry, cardW - 32, rowH, 10)
 
-      const chipBg = this.add.graphics().setScrollFactor(0).setDepth(302)
+      const chipBg = this.add.graphics().setScrollFactor(0).setDepth(503)
       chipBg.fillStyle(st.chip, 1)
       chipBg.fillRoundedRect(cardX + 26, ry + 9, 38, 38, 9)
       this.add.text(cardX + 45, ry + 28, st.icon, {
         fontSize: '17px'
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(303)
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(504)
 
       this.add.text(cardX + 76, ry + 10, st.label, {
         fontSize: '10px', fontFamily: 'Arial Black', color: '#e8f2f8'
-      }).setScrollFactor(0).setDepth(302)
+      }).setScrollFactor(0).setDepth(503)
 
       this.add.text(cardX + cardW - 30, ry + 8, st.value, {
         fontSize: '15px', fontFamily: 'Arial Black', color: '#ffffff'
-      }).setOrigin(1, 0).setScrollFactor(0).setDepth(302)
+      }).setOrigin(1, 0).setScrollFactor(0).setDepth(503)
 
       const barX = cardX + 76
       const barY = ry + 32
       const barW = cardW - 122
       const barH = 6
 
-      const barTrack = this.add.graphics().setScrollFactor(0).setDepth(302)
+      const barTrack = this.add.graphics().setScrollFactor(0).setDepth(503)
       barTrack.fillStyle(0x081018, 1)
       barTrack.fillRoundedRect(barX, barY, barW, barH, 3)
 
       const fillW = Math.max(6, barW * Math.min(st.bar, 1))
-      const barFill = this.add.graphics().setScrollFactor(0).setDepth(303)
+      const barFill = this.add.graphics().setScrollFactor(0).setDepth(504)
       barFill.fillStyle(st.barColor, 1)
       barFill.fillRoundedRect(barX, barY, fillW, barH, 3)
       barFill.fillStyle(st.barColor, 0.5)
@@ -2885,7 +2896,7 @@ const positions = [
 
     // ── CO2 equivalence banner ───────────────────────────────────
     const eqY = startY + stats.length * (rowH + rowGap) + 4
-    const eqBg = this.add.graphics().setScrollFactor(0).setDepth(301)
+    const eqBg = this.add.graphics().setScrollFactor(0).setDepth(502)
     eqBg.fillStyle(0x0d1f2f, 1)
     eqBg.fillRoundedRect(cardX + 16, eqY, cardW - 32, 34, 10)
     eqBg.lineStyle(1, 0x1e4e6e, 0.6)
@@ -2893,11 +2904,11 @@ const positions = [
     this.add.text(width / 2, eqY + 17,
       `🚗  Equal to removing ${Math.max(1, Math.round(co2 / 140))} car${co2 >= 140 ? 's' : ''} from the road for a year`, {
       fontSize: '11px', fontFamily: 'Arial', color: '#8fc9d9'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(302)
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(503)
 
     // ── Species spotlight ─────────────────────────────────────────
     const spotY = eqY + 44
-    const spotBg = this.add.graphics().setScrollFactor(0).setDepth(301)
+    const spotBg = this.add.graphics().setScrollFactor(0).setDepth(502)
     spotBg.fillStyle(0x1f1a0a, 1)
     spotBg.fillRoundedRect(cardX + 16, spotY, cardW - 32, 58, 10)
     spotBg.lineStyle(1, 0xFFD700, 0.35)
@@ -2905,57 +2916,87 @@ const positions = [
 
     this.add.text(cardX + 32, spotY + 10, '🐦  SPECIES SPOTLIGHT', {
       fontSize: '10px', fontFamily: 'Arial Black', color: '#FFD700'
-    }).setScrollFactor(0).setDepth(302)
+    }).setScrollFactor(0).setDepth(503)
 
     this.add.text(width / 2, spotY + 34, birdFacts[this.chosenBird] || '', {
       fontSize: '11px', fontFamily: 'Arial', color: '#d8c9a3',
       wordWrap: { width: cardW - 64 }, align: 'center'
-    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(302)
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(503)
 
     // ── Button ───────────────────────────────────────────────────
     const btnY = cardY + cardH - 58
+    const btnH = 46
+
+    let hasExited = false
+    const returnToMenu = () => {
+      if (hasExited) return
+      hasExited = true
+      this.input.setDefaultCursor('default')
+      this.scene.stop('GameScene2')
+      this.scene.start('MenuScene')
+    }
 
     if (escaped) {
-      const nextBtn = this.add.text(width / 2, btnY, '  EXPEDITION COMPLETE  ', {
+      const btnW = 270
+      const btnBox = this.add.rectangle(width / 2, btnY + btnH / 2, btnW, btnH, 0x00d4ff)
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(504)
+        .setInteractive({ useHandCursor: true })
+
+      const btnText = this.add.text(width / 2, btnY + btnH / 2, 'EXPEDITION COMPLETE (ESC)', {
         fontSize: '15px', fontFamily: 'Arial Black',
-        color: '#04141c', backgroundColor: '#00d4ff',
-        padding: { x: 26, y: 13 }
-      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(303).setInteractive()
+        color: '#04141c'
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(505).setInteractive({ useHandCursor: true })
 
-      this.tweens.add({
-        targets: nextBtn, scaleX: 1.04, scaleY: 1.04,
-        duration: 700, yoyo: true, repeat: -1
-      })
-      nextBtn.on('pointerover', () => {
-        nextBtn.setStyle({ backgroundColor: '#33e0ff' })
-        this.input.setDefaultCursor('pointer')
-      })
-      nextBtn.on('pointerout', () => {
-        nextBtn.setStyle({ backgroundColor: '#00d4ff' })
-        this.input.setDefaultCursor('default')
-      })
-      nextBtn.on('pointerdown', () => this.scene.start('MenuScene'))
+      const onHover = () => {
+        btnBox.setFillStyle(0x33e0ff)
+        btnText.setScale(1.04)
+      }
+      const onOut = () => {
+        btnBox.setFillStyle(0x00d4ff)
+        btnText.setScale(1.0)
+      }
+      btnBox.on('pointerover', onHover)
+      btnText.on('pointerover', onHover)
+      btnBox.on('pointerout', onOut)
+      btnText.on('pointerout', onOut)
+
+      btnBox.on('pointerdown', returnToMenu)
+      btnText.on('pointerdown', returnToMenu)
     } else {
-      const retryBtn = this.add.text(width / 2, btnY, '  PLAY AGAIN  ', {
-        fontSize: '16px', fontFamily: 'Arial Black',
-        color: '#ffffff', backgroundColor: '#ff3355',
-        padding: { x: 26, y: 13 }
-      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(303).setInteractive()
+      const btnW = 230
+      const btnBox = this.add.rectangle(width / 2, btnY + btnH / 2, btnW, btnH, 0xff3355)
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(504)
+        .setInteractive({ useHandCursor: true })
 
-      this.tweens.add({
-        targets: retryBtn, scaleX: 1.04, scaleY: 1.04,
-        duration: 700, yoyo: true, repeat: -1
-      })
-      retryBtn.on('pointerover', () => {
-        retryBtn.setStyle({ backgroundColor: '#ff5577' })
-        this.input.setDefaultCursor('pointer')
-      })
-      retryBtn.on('pointerout', () => {
-        retryBtn.setStyle({ backgroundColor: '#ff3355' })
-        this.input.setDefaultCursor('default')
-      })
-      retryBtn.on('pointerdown', () => this.scene.start('MenuScene'))
+      const btnText = this.add.text(width / 2, btnY + btnH / 2, 'PLAY AGAIN (ESC)', {
+        fontSize: '15px', fontFamily: 'Arial Black',
+        color: '#ffffff'
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(505).setInteractive({ useHandCursor: true })
+
+      const onHover = () => {
+        btnBox.setFillStyle(0xff5577)
+        btnText.setScale(1.04)
+      }
+      const onOut = () => {
+        btnBox.setFillStyle(0xff3355)
+        btnText.setScale(1.0)
+      }
+      btnBox.on('pointerover', onHover)
+      btnText.on('pointerover', onHover)
+      btnBox.on('pointerout', onOut)
+      btnText.on('pointerout', onOut)
+
+      btnBox.on('pointerdown', returnToMenu)
+      btnText.on('pointerdown', returnToMenu)
     }
+
+    this.input.keyboard.once('keydown-ESC', returnToMenu)
+    this.input.keyboard.once('keydown-ENTER', returnToMenu)
+    this.input.keyboard.once('keydown-SPACE', returnToMenu)
   }
 
   togglePauseMenu() {
