@@ -143,6 +143,14 @@ export class GameScene2 extends Phaser.Scene {
     this.createSnowEffect()
     this.input.keyboard.enabled = true
     this.input.keyboard.enableGlobalCapture()
+    if (this.game.canvas && this.game.canvas.focus) {
+      this.game.canvas.focus()
+    }
+    this.input.on('pointerdown', () => {
+      if (this.game.canvas && this.game.canvas.focus) {
+        this.game.canvas.focus()
+      }
+    })
     document.querySelectorAll('input').forEach(el => el.remove())
 
     this.TILE = 48
@@ -2676,27 +2684,45 @@ const positions = [
     this.cameras.main.shake(1, 0)
     this.cameras.main.stopFollow()
     this.cameras.main.resetFX()
-    if (this.player) { this.player.setVelocity(0, 0); this.player.body.enable = false }
-    this.monsterList.forEach(m => {
-      if (m.alive && m.body && m.body.active) { m.body.setVelocity(0, 0); m.body.enable = false }
-      if (m.alert) m.alert.setVisible(false)
-      if (m.iceGraphic) { m.iceGraphic.destroy(); m.iceGraphic = null }
-    })
+    if (this.player) {
+      if (this.player.setVelocity) this.player.setVelocity(0, 0)
+      if (this.player.body) this.player.body.enable = false
+    }
+    if (this.monsterList) {
+      this.monsterList.forEach(m => {
+        if (m.alive && m.body && m.body.active) {
+          if (m.body.setVelocity) m.body.setVelocity(0, 0)
+          m.body.enable = false
+        }
+        if (m.alert) m.alert.setVisible(false)
+        if (m.iceGraphic && m.iceGraphic.destroy) {
+          try { m.iceGraphic.destroy() } catch (e) {}
+          m.iceGraphic = null
+        }
+      })
+    }
     this.tweens.killAll()
     this.time.removeAllEvents()
     this.clearBlizzardVisuals()
-    this.footprints.forEach(fp => fp.destroy())
-    this.footprints = []
+    if (this.footprints && this.footprints.length > 0) {
+      this.footprints.forEach(fp => {
+        if (fp && fp.destroy) {
+          try { fp.destroy() } catch (e) {}
+        }
+      })
+      this.footprints = []
+    }
     this.physics.pause()
-    this.input.keyboard.enabled = false
     this.dismissWildlifeCard()
     if (this.shieldActive) this.deactivateShield()
-    if (this.playerShieldGfx) {
-      this.playerShieldGfx.destroy()
+    if (this.playerShieldGfx && this.playerShieldGfx.destroy) {
+      try { this.playerShieldGfx.destroy() } catch (e) {}
       this.playerShieldGfx = null
     }
     this.cleanupPauseAndListeners()
-    if (this.terminal) this.terminal.destroy()
+    if (this.terminal && this.terminal.destroy) {
+      try { this.terminal.destroy() } catch (e) {}
+    }
     this.saveScore()
     this.scene.stop('UIScene')
 
@@ -2707,9 +2733,9 @@ const positions = [
       totalScore: this.score,
       saplingsCollected: this.eggsCollected,
       animalsRescued: (this.wildlifeJournal || []).length,
-      monstersKilled: this.monsterList.filter(m => !m.alive).length,
-      co2Absorbed: this.eggsCollected * 22,
-      timeTaken: 200 - (this.timeLeft || 0),
+      monstersKilled: (this.monsterList || []).filter(m => !m.alive).length,
+      co2Absorbed: (this.eggsCollected || 0) * 22,
+      timeTaken: Math.max(0, 200 - (this.timeLeft || 0)),
       flashCards: [...(this.collectedFlashCards || [])],
       escaped: escaped
     }
@@ -2720,7 +2746,6 @@ const positions = [
         flashCards: reportData.flashCards,
         reportData: reportData
       })
-      this.scene.pause('GameScene2')
     } else {
       this.showConservationReport(escaped)
     }
@@ -2743,13 +2768,17 @@ const positions = [
     this.input.enabled = true
     this.input.keyboard.enabled = true
     this.input.setDefaultCursor('default')
-    if (this.escKey) this.escKey.removeAllListeners()
-    this.input.keyboard.off('keydown-ESC')
+    if (this.escKey && typeof this.escKey.removeAllListeners === 'function') {
+      this.escKey.removeAllListeners()
+    }
+    if (this.input && this.input.keyboard) {
+      this.input.keyboard.off('keydown-ESC')
+    }
 
     const { width, height } = this.scale
 
     const saplings = this.eggsCollected || 0
-    const total = this.totalSaplings || 14
+    const total = (this.totalSaplings && this.totalSaplings > 0) ? this.totalSaplings : 14
     const co2 = saplings * 22
     const machines = (this.monsterList || []).filter(m => !m.alive).length
     const health = Math.max(0, Math.round(this.forestHealth || 100))
@@ -2780,6 +2809,10 @@ const positions = [
       Shade: 'The Forest Owlet was thought extinct for 113 years until 1997.',
       Gale: 'Fewer than 15 Bristlefronts may exist on Earth right now.'
     }
+    const chosenBirdKey = this.chosenBird
+      ? (this.chosenBird.charAt(0).toUpperCase() + this.chosenBird.slice(1).toLowerCase())
+      : 'Ember'
+    const factText = birdFacts[chosenBirdKey] || birdFacts[this.chosenBird] || 'Conserving wildlife preserves the balance of all habitats.'
 
     // ── Dark overlay ────────────────────────────────────────────
     const overlay = this.add.graphics().setScrollFactor(0).setDepth(500)
@@ -2801,11 +2834,7 @@ const positions = [
     // ── Header banner ────────────────────────────────────────────
     const headerH = 88
     const headerBg = this.add.graphics().setScrollFactor(0).setDepth(502)
-    headerBg.fillGradientStyle(
-      escaped ? 0x0d2a40 : 0x330d0d,
-      escaped ? 0x0d2a40 : 0x330d0d,
-      0x0a1420, 0x0a1420, 1
-    )
+    headerBg.fillStyle(escaped ? 0x0d2a40 : 0x330d0d, 1)
     headerBg.fillRoundedRect(cardX, cardY, cardW, headerH, { tl: 20, tr: 20, bl: 0, br: 0 })
 
     headerBg.fillStyle(escaped ? 0x00d4ff : 0xff3355, 1)
@@ -2886,7 +2915,8 @@ const positions = [
       barTrack.fillStyle(0x081018, 1)
       barTrack.fillRoundedRect(barX, barY, barW, barH, 3)
 
-      const fillW = Math.max(6, barW * Math.min(st.bar, 1))
+      const barRatio = (typeof st.bar === 'number' && !isNaN(st.bar)) ? Math.max(0, Math.min(1, st.bar)) : 0
+      const fillW = Math.max(6, Math.round(barW * barRatio))
       const barFill = this.add.graphics().setScrollFactor(0).setDepth(504)
       barFill.fillStyle(st.barColor, 1)
       barFill.fillRoundedRect(barX, barY, fillW, barH, 3)
@@ -2918,7 +2948,7 @@ const positions = [
       fontSize: '10px', fontFamily: 'Arial Black', color: '#FFD700'
     }).setScrollFactor(0).setDepth(503)
 
-    this.add.text(width / 2, spotY + 34, birdFacts[this.chosenBird] || '', {
+    this.add.text(width / 2, spotY + 34, factText, {
       fontSize: '11px', fontFamily: 'Arial', color: '#d8c9a3',
       wordWrap: { width: cardW - 64 }, align: 'center'
     }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(503)
@@ -3693,8 +3723,14 @@ w.fleeing = nearestHunterDist < 90
   // ── Portal check ────────────────────────────────────────────
   const px = this.portalCol * this.TILE + this.TILE / 2
   const py = this.portalRow * this.TILE + this.TILE / 2
-  if (Phaser.Math.Distance.Between(this.player.x, this.player.y, px, py) < 38) this.endGame(true)
-  if (this.timeLeft < 0) this.endGame(false)
+  if (Phaser.Math.Distance.Between(this.player.x, this.player.y, px, py) < 38) {
+    this.endGame(true)
+    return
+  }
+  if (this.timeLeft < 0) {
+    this.endGame(false)
+    return
+  }
 
   this.portalAngle += 0.035
   this.drawPortal()

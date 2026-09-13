@@ -50,9 +50,7 @@ export class FlashcardScene2 extends Phaser.Scene {
     // ---------------------------------------------------------
 
     if (this.flashCards.length === 0) {
-      this.time.delayedCall(1, () => {
-        this.goToReport()
-      })
+      this.goToReport()
       return
     }
 
