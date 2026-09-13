@@ -63,9 +63,6 @@ export class GameScene2 extends Phaser.Scene {
     this.load.image('bear_left', 'resource/wildlife/bear_left.png')
     this.load.image('bear_right', 'resource/wildlife/bear_right.png')
     this.load.image('lightning_strike', 'resource/effects/lightning_strike.png')
-    if (!this.textures.exists('heart')) {
-      this.load.image('heart', 'resource/heart.png')
-    }
   }
 
   init(data) {
@@ -94,10 +91,10 @@ export class GameScene2 extends Phaser.Scene {
     this.playerHitCooldown = false
     this.playerHP = data.playerHP || 5
     this.maxHP = data.maxHP || 5
-    this.HEART_REVIVE_COST = 100
-    this.heartShrines = []
     this.isPaused = false
-    this.pauseMenuContainer = null
+    this.pauseMenuElements = null
+    this.lastPauseToggle = 0
+    this.onEscKeyDown = null
     this.terminalOpen = false
     this.stealthMode = false
     this.gameEnding = false
@@ -175,8 +172,6 @@ export class GameScene2 extends Phaser.Scene {
     this.weaponList = []
     this.shieldList = []
     this.spawnShields()
-    this.heartShrines = []
-    this.spawnHeartShrines()
     this.spawnWildlife()
 
     this.campfireList = []
@@ -216,39 +211,19 @@ export class GameScene2 extends Phaser.Scene {
     this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
     this.collectKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E)
 
-    this.reviveKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H)
-    this.reviveKey.on('down', () => this.reviveHeart())
-    this.input.keyboard.on('keydown-H', () => this.reviveHeart())
-
+    // Bulletproof ESC Pause key bindings
+    this.input.keyboard.addCapture(Phaser.Input.Keyboard.KeyCodes.ESC)
     this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
     this.escKey.on('down', () => this.togglePauseMenu())
+    this.input.keyboard.on('keydown-ESC', () => this.togglePauseMenu())
 
-    // 💖 Eye-catching top notification banner for Heart Shrine
-    const notifW = 540
-    const notifH = 38
-    const notifX = this.scale.width / 2
-    const notifY = 72
-
-    this.heartNotificationContainer = this.add.container(0, 0).setScrollFactor(0).setDepth(600).setVisible(false)
-    const notifBg = this.add.graphics()
-    notifBg.fillStyle(0x061e12, 0.92)
-    notifBg.fillRoundedRect(notifX - notifW / 2, notifY - notifH / 2, notifW, notifH, 10)
-    notifBg.lineStyle(2, 0x00ff88, 0.9)
-    notifBg.strokeRoundedRect(notifX - notifW / 2, notifY - notifH / 2, notifW, notifH, 10)
-
-    const notifText = this.add.text(
-      notifX, notifY,
-      '💖 HEART SHRINE REACHED! Press [H] to Revive (+1 Heart / -100 Score)',
-      {
-        fontSize: '13px',
-        fontFamily: 'Arial Black',
-        color: '#aaffaa',
-        stroke: '#000000',
-        strokeThickness: 3
+    this.onEscKeyDown = (e) => {
+      if (e.key === 'Escape' || e.code === 'Escape' || e.keyCode === 27) {
+        e.preventDefault()
+        this.togglePauseMenu()
       }
-    ).setOrigin(0.5)
-
-    this.heartNotificationContainer.add([notifBg, notifText])
+    }
+    window.addEventListener('keydown', this.onEscKeyDown)
 
     this.time.addEvent({
       delay: 1000,
@@ -266,14 +241,7 @@ export class GameScene2 extends Phaser.Scene {
         this.terminal.destroy()
         this.terminal = null
       }
-      if (this.pauseMenuContainer) {
-        this.pauseMenuContainer.destroy()
-        this.pauseMenuContainer = null
-      }
-      if (this.heartNotificationContainer) {
-        this.heartNotificationContainer.destroy()
-        this.heartNotificationContainer = null
-      }
+      this.cleanupPauseAndListeners()
     })
   }
 
@@ -1064,162 +1032,6 @@ const positions = [
         collected: false
       })
     })
-  }
-
-  spawnHeartShrines() {
-    const candidateHeartSpots = [
-      { col: 4, row: 8, name: 'Tundra West Heart' },
-      { col: 13, row: 8, name: 'North Glade Heart' },
-      { col: 34, row: 8, name: 'East Ridge Heart' },
-      { col: 45, row: 35, name: 'Far East Grotto Heart' },
-      { col: 16, row: 10, name: 'Pine Shelter Heart' },
-      { col: 20, row: 5, name: 'Frost Pass Heart' },
-      { col: 11, row: 3, name: 'Frozen Peaks Heart' },
-      { col: 24, row: 8, name: 'Snow Valley Heart' },
-      { col: 3, row: 24, name: 'West Hollow Heart' }
-    ]
-
-    const chosenShieldKeys = new Set(this.chosenShieldLocations || [])
-    const validSpots = candidateHeartSpots.filter(s => !this.isWall(s.col, s.row) && !chosenShieldKeys.has(`${s.col},${s.row}`))
-    Phaser.Utils.Array.Shuffle(validSpots)
-    const selectedSpots = validSpots.slice(0, 3)
-
-    this.heartShrines = []
-
-    selectedSpots.forEach((s, idx) => {
-      const x = s.col * this.TILE + this.TILE / 2
-      const y = s.row * this.TILE + this.TILE / 2
-
-      // Green glow pulse under the heart
-      const glow = this.add.circle(x, y, 26, 0x00ff88, 0.35)
-      glow.setStrokeStyle(2, 0x55ffaa, 0.85)
-      glow.setDepth(4)
-
-      this.tweens.add({
-        targets: glow,
-        scaleX: 1.35,
-        scaleY: 1.35,
-        alpha: 0.18,
-        duration: 850,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      })
-
-      const shrineObj = { id: idx, col: s.col, row: s.row, x, y, glow, heartImg: null, used: false }
-
-      const createHeartImage = () => {
-        if (shrineObj.used) return
-        const heartImg = this.add.image(x, y, 'heart')
-        heartImg.setDisplaySize(36, 36)
-        heartImg.setDepth(6)
-
-        const baseScaleX = heartImg.scaleX || (36 / 2048)
-        const baseScaleY = heartImg.scaleY || (36 / 2048)
-
-        this.tweens.add({
-          targets: heartImg,
-          scaleX: baseScaleX * 1.15,
-          scaleY: baseScaleY * 1.15,
-          duration: 850,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut'
-        })
-        shrineObj.heartImg = heartImg
-      }
-
-      if (this.textures.exists('heart')) {
-        createHeartImage()
-      } else {
-        this.load.image('heart', 'resource/heart.png')
-        this.load.once('filecomplete-image-heart', createHeartImage)
-        if (!this.load.isLoading()) this.load.start()
-      }
-
-      this.heartShrines.push(shrineObj)
-    })
-  }
-
-  getNearestHeartShrine(maxDist = 65) {
-    if (!this.heartShrines || this.heartShrines.length === 0) return null
-    let nearest = null
-    let minDist = maxDist
-
-    this.heartShrines.forEach(s => {
-      if (s.used) return
-      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, s.x, s.y)
-      if (d < minDist) {
-        minDist = d
-        nearest = s
-      }
-    })
-    return nearest
-  }
-
-  reviveHeart() {
-    if (this.gameEnding || this.animalNotificationFrozen || this.isPaused) return
-
-    const targetShrine = this.getNearestHeartShrine(65)
-
-    if (!targetShrine) {
-      this.showFloatingText(
-        this.player.x,
-        this.player.y - 35,
-        '⚠️ Reach a Heart in the tundra to revive!',
-        '#ffaa44'
-      )
-      return
-    }
-
-    if (this.playerHP >= this.maxHP) {
-      this.showFloatingText(this.player.x, this.player.y - 35, '❤️ Hearts Already Full!', '#ffdd44')
-      return
-    }
-
-    const cost = this.HEART_REVIVE_COST || 100
-    if (this.score < cost) {
-      this.showFloatingText(
-        this.player.x,
-        this.player.y - 35,
-        `⚠️ Need ${cost} Score to Revive Heart! (${this.score}/${cost})`,
-        '#ff4444'
-      )
-      return
-    }
-
-    // Deduct score & add 1 heart
-    this.score -= cost
-    this.playerHP = Math.min(this.playerHP + 1, this.maxHP)
-
-    targetShrine.used = true
-    const toDestroy = [targetShrine.heartImg, targetShrine.glow].filter(Boolean)
-    this.tweens.add({
-      targets: toDestroy,
-      alpha: 0,
-      scaleX: 0.1,
-      scaleY: 0.1,
-      duration: 350,
-      ease: 'Back.easeIn',
-      onComplete: () => {
-        toDestroy.forEach(el => {
-          if (el && el.destroy) el.destroy()
-        })
-      }
-    })
-    this.heartShrines = this.heartShrines.filter(s => s !== targetShrine)
-
-    if (this.heartNotificationContainer) {
-      this.heartNotificationContainer.setVisible(false)
-    }
-
-    this.cameras.main.flash(280, 255, 60, 100)
-    this.showFloatingText(
-      this.player.x,
-      this.player.y - 45,
-      `💖 HEART RESTORED! (-${cost})`,
-      '#ff4488'
-    )
   }
 
   activateShield(duration = 10) {
@@ -2883,14 +2695,7 @@ const positions = [
       this.playerShieldGfx.destroy()
       this.playerShieldGfx = null
     }
-    if (this.heartNotificationContainer) {
-      this.heartNotificationContainer.destroy()
-      this.heartNotificationContainer = null
-    }
-    if (this.pauseMenuContainer) {
-      this.pauseMenuContainer.destroy()
-      this.pauseMenuContainer = null
-    }
+    this.cleanupPauseAndListeners()
     if (this.terminal) this.terminal.destroy()
     this.saveScore()
     this.scene.stop('UIScene')
@@ -3158,6 +2963,10 @@ const positions = [
     if (this.scene.isActive('FlashCardScene') || this.scene.isActive('FlashcardScene2')) return
     if (this.terminalOpen) return
 
+    const now = Date.now()
+    if (this.lastPauseToggle && now - this.lastPauseToggle < 250) return
+    this.lastPauseToggle = now
+
     if (this.isPaused) {
       this.resumeGame()
     } else {
@@ -3182,27 +2991,24 @@ const positions = [
     const cx = width / 2
     const cy = height / 2
 
-    const container = this.add.container(0, 0).setScrollFactor(0).setDepth(99999)
+    this.pauseMenuElements = []
 
     // Full-screen dark overlay
-    const backdrop = this.add.graphics()
-    backdrop.fillStyle(0x000000, 0.75)
-    backdrop.fillRect(0, 0, width, height)
-    backdrop.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, width, height),
-      Phaser.Geom.Rectangle.Contains
-    )
-    container.add(backdrop)
+    const backdrop = this.add.rectangle(cx, cy, width, height, 0x000000, 0.78)
+      .setScrollFactor(0)
+      .setDepth(100000)
+      .setInteractive()
 
     // Modal card
-    const modalW = 380
+    const modalW = 400
     const modalH = 320
     const modalBox = this.add.graphics()
-    modalBox.fillStyle(0x081622, 0.95)
+      .setScrollFactor(0)
+      .setDepth(100001)
+    modalBox.fillStyle(0x081622, 0.96)
     modalBox.fillRoundedRect(cx - modalW / 2, cy - modalH / 2, modalW, modalH, 16)
     modalBox.lineStyle(3, 0x00bfff, 0.9)
     modalBox.strokeRoundedRect(cx - modalW / 2, cy - modalH / 2, modalW, modalH, 16)
-    container.add(modalBox)
 
     // Title
     const title = this.add.text(cx, cy - 110, '⏸️ GAME PAUSED', {
@@ -3211,86 +3017,83 @@ const positions = [
       color: '#ffffff',
       stroke: '#000000',
       strokeThickness: 4
-    }).setOrigin(0.5)
-    container.add(title)
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(100002)
 
     const sub = this.add.text(cx, cy - 75, `Level 2: Frozen Tundra • ${this.playerName} (${this.chosenBird})`, {
       fontSize: '12px',
       fontFamily: 'Arial',
       color: '#99ddff'
-    }).setOrigin(0.5)
-    container.add(sub)
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(100002)
 
-    // Helper to make stylish pause menu buttons
-    const makePauseBtn = (x, y, text, colorHex, borderHex, callback) => {
-      const btnW = 260
+    this.pauseMenuElements.push(backdrop, modalBox, title, sub)
+
+    // Helper to make direct interactive pause menu buttons
+    const makePauseBtn = (x, y, text, colorHex, borderHex, hoverHex, callback) => {
+      const btnW = 270
       const btnH = 46
-      const btnBg = this.add.graphics()
-      btnBg.fillStyle(colorHex, 0.9)
-      btnBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10)
-      btnBg.lineStyle(2, borderHex, 1)
-      btnBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10)
 
-      const btnLabel = this.add.text(0, 0, text, {
+      const btnBg = this.add.rectangle(x, y, btnW, btnH, colorHex, 0.92)
+        .setStrokeStyle(2, borderHex, 1)
+        .setScrollFactor(0)
+        .setDepth(100002)
+        .setInteractive({ useHandCursor: true })
+
+      const btnLabel = this.add.text(x, y, text, {
         fontSize: '15px',
         fontFamily: 'Arial Black',
         color: '#ffffff',
         stroke: '#000000',
         strokeThickness: 3
-      }).setOrigin(0.5)
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(100003).setInteractive({ useHandCursor: true })
 
-      const btn = this.add.container(x, y, [btnBg, btnLabel])
-      btn.setSize(btnW, btnH)
-      btn.setInteractive({ useHandCursor: true })
+      const onOver = () => {
+        btnBg.setFillStyle(hoverHex || borderHex, 1)
+        btnBg.setStrokeStyle(2, 0xffffff, 1)
+        btnLabel.setScale(1.05)
+      }
+      const onOut = () => {
+        btnBg.setFillStyle(colorHex, 0.92)
+        btnBg.setStrokeStyle(2, borderHex, 1)
+        btnLabel.setScale(1)
+      }
 
-      btn.on('pointerover', () => {
-        btn.setScale(1.04)
-        btnBg.clear()
-        btnBg.fillStyle(colorHex, 1)
-        btnBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10)
-        btnBg.lineStyle(2, 0xffffff, 1)
-        btnBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10)
-      })
+      btnBg.on('pointerover', onOver)
+      btnBg.on('pointerout', onOut)
+      btnBg.on('pointerdown', callback)
 
-      btn.on('pointerout', () => {
-        btn.setScale(1)
-        btnBg.clear()
-        btnBg.fillStyle(colorHex, 0.9)
-        btnBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10)
-        btnBg.lineStyle(2, borderHex, 1)
-        btnBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10)
-      })
+      btnLabel.on('pointerover', onOver)
+      btnLabel.on('pointerout', onOut)
+      btnLabel.on('pointerdown', callback)
 
-      btn.on('pointerdown', callback)
-      container.add(btn)
-      return btn
+      this.pauseMenuElements.push(btnBg, btnLabel)
     }
 
     // 1. Resume button
-    makePauseBtn(cx, cy - 25, '▶  RESUME', 0x155a8a, 0x00ccff, () => {
+    makePauseBtn(cx, cy - 25, '▶  RESUME', 0x155a8a, 0x00ccff, 0x1d7bbd, () => {
       this.resumeGame()
     })
 
     // 2. Play Again button
-    makePauseBtn(cx, cy + 35, '🔄  PLAY AGAIN', 0xb86214, 0xffaa44, () => {
+    makePauseBtn(cx, cy + 35, '🔄  PLAY AGAIN', 0xb86214, 0xffaa44, 0xd97718, () => {
       this.playAgain()
     })
 
     // 3. Go to Main button
-    makePauseBtn(cx, cy + 95, '🏠  GO TO MAIN', 0x8a2020, 0xff5555, () => {
+    makePauseBtn(cx, cy + 95, '🏠  GO TO MAIN', 0x8a2020, 0xff5555, 0xb32b2b, () => {
       this.goToMain()
     })
 
-    this.pauseMenuContainer = container
     this.scene.bringToTop()
   }
 
   resumeGame() {
     if (!this.isPaused) return
     this.isPaused = false
-    if (this.pauseMenuContainer) {
-      this.pauseMenuContainer.destroy()
-      this.pauseMenuContainer = null
+    if (this.pauseMenuElements && this.pauseMenuElements.length > 0) {
+      this.pauseMenuElements.forEach(el => {
+        if (el && el.destroy) el.destroy()
+      })
+      this.pauseMenuElements = null
     }
     this.physics.resume()
     if (this.scene.isActive('UIScene')) {
@@ -3300,14 +3103,7 @@ const positions = [
 
   playAgain() {
     this.isPaused = false
-    if (this.pauseMenuContainer) {
-      this.pauseMenuContainer.destroy()
-      this.pauseMenuContainer = null
-    }
-    if (this.heartNotificationContainer) {
-      this.heartNotificationContainer.destroy()
-      this.heartNotificationContainer = null
-    }
+    this.cleanupPauseAndListeners()
     this.scene.stop('UIScene')
     this.scene.start('GameScene2', this.initData || {
       playerName: this.playerName,
@@ -3322,16 +3118,22 @@ const positions = [
 
   goToMain() {
     this.isPaused = false
-    if (this.pauseMenuContainer) {
-      this.pauseMenuContainer.destroy()
-      this.pauseMenuContainer = null
-    }
-    if (this.heartNotificationContainer) {
-      this.heartNotificationContainer.destroy()
-      this.heartNotificationContainer = null
-    }
+    this.cleanupPauseAndListeners()
     this.scene.stop('UIScene')
     this.scene.start('MenuScene')
+  }
+
+  cleanupPauseAndListeners() {
+    if (this.onEscKeyDown) {
+      window.removeEventListener('keydown', this.onEscKeyDown)
+      this.onEscKeyDown = null
+    }
+    if (this.pauseMenuElements && this.pauseMenuElements.length > 0) {
+      this.pauseMenuElements.forEach(el => {
+        if (el && el.destroy) el.destroy()
+      })
+      this.pauseMenuElements = null
+    }
   }
 
   update(time, delta) {
@@ -3846,17 +3648,6 @@ w.fleeing = nearestHunterDist < 90
     this.playerShieldGfx.fillCircle(this.player.x, this.player.y, 24)
   }
 
-  // ── Heart Shrine top notification when nearby ────────────────
-  const nearbyShrine = this.getNearestHeartShrine(75)
-  if (nearbyShrine && !nearbyShrine.used && !this.gameEnding && !this.isPaused) {
-    if (this.heartNotificationContainer && !this.heartNotificationContainer.visible) {
-      this.heartNotificationContainer.setVisible(true)
-    }
-  } else {
-    if (this.heartNotificationContainer && this.heartNotificationContainer.visible) {
-      this.heartNotificationContainer.setVisible(false)
-    }
-  }
 
   // ── Portal check ────────────────────────────────────────────
   const px = this.portalCol * this.TILE + this.TILE / 2

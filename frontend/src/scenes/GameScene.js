@@ -48,7 +48,9 @@ export class GameScene extends Phaser.Scene {
     this.gameEnding = false
     this.weaponList = []
     this.isPaused = false
-    this.pauseMenuContainer = null
+    this.pauseMenuElements = null
+    this.lastPauseToggle = 0
+    this.onEscKeyDown = null
   }
 
   preload() {
@@ -134,10 +136,19 @@ export class GameScene extends Phaser.Scene {
     this.reviveKey.on('down', () => this.reviveHeart())
     this.input.keyboard.on('keydown-H', () => this.reviveHeart())
 
-    this.escKey = this.input.keyboard.addKey(
-      Phaser.Input.Keyboard.KeyCodes.ESC
-    )
+    // Bulletproof ESC Pause key bindings
+    this.input.keyboard.addCapture(Phaser.Input.Keyboard.KeyCodes.ESC)
+    this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
     this.escKey.on('down', () => this.togglePauseMenu())
+    this.input.keyboard.on('keydown-ESC', () => this.togglePauseMenu())
+
+    this.onEscKeyDown = (e) => {
+      if (e.key === 'Escape' || e.code === 'Escape' || e.keyCode === 27) {
+        e.preventDefault()
+        this.togglePauseMenu()
+      }
+    }
+    window.addEventListener('keydown', this.onEscKeyDown)
 
     // 💖 Eye-catching top notification banner for Heart Shrine
     const notifW = 540
@@ -186,10 +197,7 @@ export class GameScene extends Phaser.Scene {
         this.terminal.destroy()
         this.terminal = null
       }
-      if (this.pauseMenuContainer) {
-        this.pauseMenuContainer.destroy()
-        this.pauseMenuContainer = null
-      }
+      this.cleanupPauseAndListeners()
       if (this.heartNotificationContainer) {
         this.heartNotificationContainer.destroy()
         this.heartNotificationContainer = null
@@ -2266,10 +2274,7 @@ export class GameScene extends Phaser.Scene {
       this.heartNotificationContainer.destroy()
       this.heartNotificationContainer = null
     }
-    if (this.pauseMenuContainer) {
-      this.pauseMenuContainer.destroy()
-      this.pauseMenuContainer = null
-    }
+    this.cleanupPauseAndListeners()
 
     this.saveScore()
     this.scene.stop('UIScene')
@@ -2309,6 +2314,10 @@ export class GameScene extends Phaser.Scene {
     if (this.scene.isActive('FlashCardScene')) return
     if (this.terminalOpen) return
 
+    const now = Date.now()
+    if (this.lastPauseToggle && now - this.lastPauseToggle < 250) return
+    this.lastPauseToggle = now
+
     if (this.isPaused) {
       this.resumeGame()
     } else {
@@ -2333,27 +2342,24 @@ export class GameScene extends Phaser.Scene {
     const cx = width / 2
     const cy = height / 2
 
-    const container = this.add.container(0, 0).setScrollFactor(0).setDepth(99999)
+    this.pauseMenuElements = []
 
     // Full-screen dark overlay
-    const backdrop = this.add.graphics()
-    backdrop.fillStyle(0x000000, 0.75)
-    backdrop.fillRect(0, 0, width, height)
-    backdrop.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, width, height),
-      Phaser.Geom.Rectangle.Contains
-    )
-    container.add(backdrop)
+    const backdrop = this.add.rectangle(cx, cy, width, height, 0x000000, 0.78)
+      .setScrollFactor(0)
+      .setDepth(100000)
+      .setInteractive()
 
     // Modal card
-    const modalW = 380
+    const modalW = 400
     const modalH = 320
     const modalBox = this.add.graphics()
-    modalBox.fillStyle(0x0a1610, 0.95)
+      .setScrollFactor(0)
+      .setDepth(100001)
+    modalBox.fillStyle(0x0a1610, 0.96)
     modalBox.fillRoundedRect(cx - modalW / 2, cy - modalH / 2, modalW, modalH, 16)
-    modalBox.lineStyle(3, 0x44aa66, 0.9)
+    modalBox.lineStyle(3, 0x44dd88, 0.9)
     modalBox.strokeRoundedRect(cx - modalW / 2, cy - modalH / 2, modalW, modalH, 16)
-    container.add(modalBox)
 
     // Title
     const title = this.add.text(cx, cy - 110, '⏸️ GAME PAUSED', {
@@ -2362,86 +2368,83 @@ export class GameScene extends Phaser.Scene {
       color: '#ffffff',
       stroke: '#000000',
       strokeThickness: 4
-    }).setOrigin(0.5)
-    container.add(title)
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(100002)
 
     const sub = this.add.text(cx, cy - 75, `Level 1: Forest of Lumina • ${this.playerName} (${this.chosenBird})`, {
       fontSize: '12px',
       fontFamily: 'Arial',
       color: '#88ddaa'
-    }).setOrigin(0.5)
-    container.add(sub)
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(100002)
 
-    // Helper to make stylish pause menu buttons
-    const makePauseBtn = (x, y, text, colorHex, borderHex, callback) => {
-      const btnW = 260
+    this.pauseMenuElements.push(backdrop, modalBox, title, sub)
+
+    // Helper to make direct interactive pause menu buttons
+    const makePauseBtn = (x, y, text, colorHex, borderHex, hoverHex, callback) => {
+      const btnW = 270
       const btnH = 46
-      const btnBg = this.add.graphics()
-      btnBg.fillStyle(colorHex, 0.9)
-      btnBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10)
-      btnBg.lineStyle(2, borderHex, 1)
-      btnBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10)
 
-      const btnLabel = this.add.text(0, 0, text, {
+      const btnBg = this.add.rectangle(x, y, btnW, btnH, colorHex, 0.92)
+        .setStrokeStyle(2, borderHex, 1)
+        .setScrollFactor(0)
+        .setDepth(100002)
+        .setInteractive({ useHandCursor: true })
+
+      const btnLabel = this.add.text(x, y, text, {
         fontSize: '15px',
         fontFamily: 'Arial Black',
         color: '#ffffff',
         stroke: '#000000',
         strokeThickness: 3
-      }).setOrigin(0.5)
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(100003).setInteractive({ useHandCursor: true })
 
-      const btn = this.add.container(x, y, [btnBg, btnLabel])
-      btn.setSize(btnW, btnH)
-      btn.setInteractive({ useHandCursor: true })
+      const onOver = () => {
+        btnBg.setFillStyle(hoverHex || borderHex, 1)
+        btnBg.setStrokeStyle(2, 0xffffff, 1)
+        btnLabel.setScale(1.05)
+      }
+      const onOut = () => {
+        btnBg.setFillStyle(colorHex, 0.92)
+        btnBg.setStrokeStyle(2, borderHex, 1)
+        btnLabel.setScale(1)
+      }
 
-      btn.on('pointerover', () => {
-        btn.setScale(1.04)
-        btnBg.clear()
-        btnBg.fillStyle(colorHex, 1)
-        btnBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10)
-        btnBg.lineStyle(2, 0xffffff, 1)
-        btnBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10)
-      })
+      btnBg.on('pointerover', onOver)
+      btnBg.on('pointerout', onOut)
+      btnBg.on('pointerdown', callback)
 
-      btn.on('pointerout', () => {
-        btn.setScale(1)
-        btnBg.clear()
-        btnBg.fillStyle(colorHex, 0.9)
-        btnBg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10)
-        btnBg.lineStyle(2, borderHex, 1)
-        btnBg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10)
-      })
+      btnLabel.on('pointerover', onOver)
+      btnLabel.on('pointerout', onOut)
+      btnLabel.on('pointerdown', callback)
 
-      btn.on('pointerdown', callback)
-      container.add(btn)
-      return btn
+      this.pauseMenuElements.push(btnBg, btnLabel)
     }
 
     // 1. Resume button
-    makePauseBtn(cx, cy - 25, '▶  RESUME', 0x1e6f43, 0x44dd88, () => {
+    makePauseBtn(cx, cy - 25, '▶  RESUME', 0x1e6f43, 0x44dd88, 0x2bb368, () => {
       this.resumeGame()
     })
 
     // 2. Play Again button
-    makePauseBtn(cx, cy + 35, '🔄  PLAY AGAIN', 0xb86214, 0xffaa44, () => {
+    makePauseBtn(cx, cy + 35, '🔄  PLAY AGAIN', 0xb86214, 0xffaa44, 0xd97718, () => {
       this.playAgain()
     })
 
     // 3. Go to Main button
-    makePauseBtn(cx, cy + 95, '🏠  GO TO MAIN', 0x8a2020, 0xff5555, () => {
+    makePauseBtn(cx, cy + 95, '🏠  GO TO MAIN', 0x8a2020, 0xff5555, 0xb32b2b, () => {
       this.goToMain()
     })
 
-    this.pauseMenuContainer = container
     this.scene.bringToTop()
   }
 
   resumeGame() {
     if (!this.isPaused) return
     this.isPaused = false
-    if (this.pauseMenuContainer) {
-      this.pauseMenuContainer.destroy()
-      this.pauseMenuContainer = null
+    if (this.pauseMenuElements && this.pauseMenuElements.length > 0) {
+      this.pauseMenuElements.forEach(el => {
+        if (el && el.destroy) el.destroy()
+      })
+      this.pauseMenuElements = null
     }
     this.physics.resume()
     if (this.scene.isActive('UIScene')) {
@@ -2451,10 +2454,7 @@ export class GameScene extends Phaser.Scene {
 
   playAgain() {
     this.isPaused = false
-    if (this.pauseMenuContainer) {
-      this.pauseMenuContainer.destroy()
-      this.pauseMenuContainer = null
-    }
+    this.cleanupPauseAndListeners()
     if (this.heartNotificationContainer) {
       this.heartNotificationContainer.destroy()
       this.heartNotificationContainer = null
@@ -2468,16 +2468,26 @@ export class GameScene extends Phaser.Scene {
 
   goToMain() {
     this.isPaused = false
-    if (this.pauseMenuContainer) {
-      this.pauseMenuContainer.destroy()
-      this.pauseMenuContainer = null
-    }
+    this.cleanupPauseAndListeners()
     if (this.heartNotificationContainer) {
       this.heartNotificationContainer.destroy()
       this.heartNotificationContainer = null
     }
     this.scene.stop('UIScene')
     this.scene.start('MenuScene')
+  }
+
+  cleanupPauseAndListeners() {
+    if (this.onEscKeyDown) {
+      window.removeEventListener('keydown', this.onEscKeyDown)
+      this.onEscKeyDown = null
+    }
+    if (this.pauseMenuElements && this.pauseMenuElements.length > 0) {
+      this.pauseMenuElements.forEach(el => {
+        if (el && el.destroy) el.destroy()
+      })
+      this.pauseMenuElements = null
+    }
   }
 
   update(time, delta) {
