@@ -17,7 +17,7 @@ export class GameScene2 extends Phaser.Scene {
     this.load.image('pine_large', 'resource/tiles/10_pine_tree_large.png')
     this.load.image('pine_small', 'resource/tiles/11_pine_tree_small.png')
     this.load.image('dead_tree', 'resource/tiles/12_dead_tree.png')
-    this.load.image('snow_stump', 'resource/tiles/13_stump.png')
+    this.load.image('stump', 'resource/tiles/13_stump.png')
     this.load.image('icicle', 'resource/tiles/14_icicle.png')
     this.load.image('snow_pile', 'resource/tiles/15_snow_pile.png')
     this.load.image('card_arctic_willow', 'resource/flashcards/card_arctic_willow.png')
@@ -62,11 +62,9 @@ export class GameScene2 extends Phaser.Scene {
     this.load.image('bear_back', 'resource/wildlife/bear_back.png')
     this.load.image('bear_left', 'resource/wildlife/bear_left.png')
     this.load.image('bear_right', 'resource/wildlife/bear_right.png')
-    this.load.image('lightning_strike', 'resource/effects/lightning_strike.png')
   }
 
   init(data) {
-    this.initData = data
     this.playerName = data.playerName || 'Adventurer'
     this.chosenBird = data.chosenBird || 'Ember'
     this.score = data.score || 0
@@ -79,41 +77,16 @@ export class GameScene2 extends Phaser.Scene {
     this.timeLeft = 200
     this.bobTimer = 0
     this.isMoving = false
-    const birdPowerMap = {
-      Ember: 'fire',
-      Frost: 'ice',
-      Volt: 'lightning',
-      Shade: 'bomb',
-      Gale: 'boomerang'
-    }
-    this.currentWeapon = birdPowerMap[this.chosenBird] || 'fire'
-    this.basePower = this.currentWeapon
+    this.currentWeapon = 'normal'
     this.playerHitCooldown = false
     this.playerHP = data.playerHP || 5
     this.maxHP = data.maxHP || 5
-    this.isPaused = false
-    this.pauseMenuElements = null
-    this.lastPauseToggle = 0
-    this.onEscKeyDown = null
     this.terminalOpen = false
     this.stealthMode = false
     this.gameEnding = false
     this.forestHealth = 100
     this.totalSaplings = 14
     this.wildlifeJournal = data.wildlifeJournal || []
-
-    // 🛡️ Shield system
-    this.shieldActive = false
-    this.shieldTimeRemaining = 0
-    this.shieldTimerEvent = null
-    this.playerShieldGfx = null
-    this.shieldList = []
-    this.weaponList = []
-
-    // 🐾 Animal notification freeze
-    this.animalNotificationFrozen = false
-    this.cardFreezeTimestamp = 0
-    this.activeWildlifeCard = null
 
     // ❄️ Warmth system
     this.warmth = 100
@@ -143,14 +116,6 @@ export class GameScene2 extends Phaser.Scene {
     this.createSnowEffect()
     this.input.keyboard.enabled = true
     this.input.keyboard.enableGlobalCapture()
-    if (this.game.canvas && this.game.canvas.focus) {
-      this.game.canvas.focus()
-    }
-    this.input.on('pointerdown', () => {
-      if (this.game.canvas && this.game.canvas.focus) {
-        this.game.canvas.focus()
-      }
-    })
     document.querySelectorAll('input').forEach(el => el.remove())
 
     this.TILE = 48
@@ -178,8 +143,7 @@ export class GameScene2 extends Phaser.Scene {
     this.monsterList = []
     this.spawnMonsters()
     this.weaponList = []
-    this.shieldList = []
-    this.spawnShields()
+    this.spawnWeapons()
     this.spawnWildlife()
 
     this.campfireList = []
@@ -201,10 +165,9 @@ export class GameScene2 extends Phaser.Scene {
       1 * this.TILE + this.TILE / 2,
       b + '_right'
     )
-    this.playerBaseSize = (this.chosenBird === 'Ember') ? 50 : 52
-    this.player.setDisplaySize(this.playerBaseSize, this.playerBaseSize)
+    this.player.setDisplaySize(this.TILE + 8, this.TILE + 8)
     this.player.setCollideWorldBounds(true)
-    this.player.body.setSize(26, 26)
+    this.player.body.setSize(28, 28)
     this.player.setDepth(20)
 
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
@@ -219,23 +182,9 @@ export class GameScene2 extends Phaser.Scene {
     this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
     this.collectKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E)
 
-    // Bulletproof ESC Pause key bindings
-    this.input.keyboard.addCapture(Phaser.Input.Keyboard.KeyCodes.ESC)
-    this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
-    this.escKey.on('down', () => this.togglePauseMenu())
-    this.input.keyboard.on('keydown-ESC', () => this.togglePauseMenu())
-
-    this.onEscKeyDown = (e) => {
-      if (e.key === 'Escape' || e.code === 'Escape' || e.keyCode === 27) {
-        e.preventDefault()
-        this.togglePauseMenu()
-      }
-    }
-    window.addEventListener('keydown', this.onEscKeyDown)
-
     this.time.addEvent({
       delay: 1000,
-      callback: () => { if (!this.animalNotificationFrozen && !this.isPaused && this.timeLeft > 0) this.timeLeft-- },
+      callback: () => { if (this.timeLeft > 0) this.timeLeft-- },
       repeat: 199
     })
 
@@ -244,13 +193,6 @@ export class GameScene2 extends Phaser.Scene {
     this.terminal = new Terminal(this)
     this.input.keyboard.on('keydown-TILDE', () => this.terminal.toggle())
     this.input.keyboard.on('keydown-BACKTICK', () => this.terminal.toggle())
-    this.events.once('shutdown', () => {
-      if (this.terminal) {
-        this.terminal.destroy()
-        this.terminal = null
-      }
-      this.cleanupPauseAndListeners()
-    })
   }
 
   parseMap() {
@@ -353,9 +295,6 @@ export class GameScene2 extends Phaser.Scene {
       [11, 3], [24, 8], [32, 18], [13, 27],
       [45, 43],
 
-      // shield pickups
-      [12, 8], [30, 15], [22, 32], [38, 28],
-
       // extra hunter spawns (more all over the map)
       [30, 3], [44, 6], [9, 17], [27, 17], [38, 20],
       [44, 24], [6, 35], [27, 35], [38, 38], [20, 43],
@@ -373,117 +312,7 @@ export class GameScene2 extends Phaser.Scene {
       // hunter camps
       [19, 6], [44, 14], [6, 44], [33, 44]
     ]
-
     importantSpots.forEach(([c, r]) => clearCircle(c, r, 2))
-
-    // ── Obstacle formations: frozen logs (4), icicles (7), dead trees (8) ──
-    const isImportant = (c, r) => {
-      return importantSpots.some(([ic, ir]) => Math.abs(ic - c) <= 1 && Math.abs(ir - r) <= 1)
-    }
-    const placeObstacle = (c, r, tileType) => {
-      if (c >= 1 && c < cols - 1 && r >= 1 && r < rows - 1 && !isImportant(c, r)) {
-        map[r][c] = tileType
-      }
-    }
-
-    // Fallen frozen log barriers (4)
-    const logFormations = [
-      // Original logs
-      [14, 12], [15, 12], [16, 12],
-      [28, 28], [29, 28], [30, 28],
-      [10, 36], [11, 36],
-      [35, 12], [36, 12],
-      [18, 16], [19, 16],
-      [8, 26], [8, 27],
-      [23, 10], [24, 10],
-      [39, 22], [40, 22],
-      [15, 34], [16, 34],
-      [31, 40], [32, 40],
-      [4, 17], [4, 18],
-      [42, 34], [43, 34],
-      [21, 14], [22, 14],
-      [13, 31], [14, 31],
-
-      // Additional stealth barriers & chicanes
-      [7, 3], [8, 3], [14, 3], [15, 3], [22, 2], [23, 2], [33, 2], [34, 2], [41, 4], [42, 4],
-      [5, 12], [6, 12], [26, 8], [27, 8], [39, 10], [40, 10],
-      [17, 21], [18, 21], [23, 21], [24, 21], [29, 21], [30, 21], [35, 23], [36, 23],
-      [9, 28], [10, 28], [17, 27], [18, 27], [22, 26], [23, 26], [36, 27], [37, 27],
-      [7, 37], [8, 37], [13, 38], [14, 38], [24, 37], [25, 37], [34, 34], [35, 34], [40, 36], [41, 36],
-      [18, 45], [19, 45], [26, 45], [27, 45], [38, 43], [39, 43]
-    ]
-    logFormations.forEach(([c, r]) => placeObstacle(c, r, 4))
-
-    // Sharp icicle clusters (7)
-    const icicleFormations = [
-      // Original icicles
-      [22, 12], [23, 12],
-      [38, 8], [39, 8],
-      [18, 26], [19, 26],
-      [32, 38], [33, 38],
-      [12, 22], [13, 22],
-      [36, 16], [37, 16],
-      [25, 30], [25, 31],
-      [17, 38], [18, 38],
-      [41, 26], [42, 26],
-      [7, 10], [7, 11],
-      [29, 12], [30, 12],
-      [11, 44], [12, 44],
-      [34, 4], [35, 4],
-      [3, 30], [4, 30],
-
-      // Additional crystalline barriers & vision blockers
-      [17, 4], [18, 4], [27, 4], [28, 4], [36, 6], [37, 6],
-      [12, 14], [12, 15], [20, 12], [21, 12], [31, 14], [32, 14], [41, 16], [42, 16],
-      [11, 24], [11, 25], [16, 24], [17, 24], [25, 24], [26, 24], [32, 24], [33, 24], [41, 24], [42, 24],
-      [8, 33], [8, 34], [14, 33], [15, 33], [23, 31], [24, 31], [30, 31], [31, 31], [42, 30], [43, 30],
-      [9, 41], [10, 41], [17, 42], [18, 42], [22, 40], [23, 40], [28, 43], [29, 43], [36, 42], [37, 42]
-    ]
-    icicleFormations.forEach(([c, r]) => placeObstacle(c, r, 7))
-
-    // Dead tree clusters (8)
-    const deadTreeFormations = [
-      // Original dead trees
-      [8, 20], [9, 20],
-      [26, 18], [27, 18],
-      [14, 42], [15, 42],
-      [36, 32], [37, 32],
-      [21, 35], [22, 35],
-      [10, 8], [10, 9],
-      [33, 24], [34, 24],
-      [19, 30], [20, 30],
-      [43, 18], [44, 18],
-      [5, 31], [5, 32],
-      [17, 14], [17, 15],
-      [28, 41], [29, 41],
-
-      // Additional withered tree hideouts
-      [3, 7], [3, 8], [13, 6], [14, 6], [22, 6], [23, 6], [32, 7], [33, 7], [40, 7], [41, 7],
-      [6, 16], [7, 16], [15, 18], [16, 18], [24, 17], [25, 17], [34, 18], [35, 18], [43, 16], [44, 16],
-      [4, 27], [5, 27], [12, 29], [13, 29], [21, 28], [22, 28], [29, 27], [30, 27], [38, 26], [39, 26],
-      [3, 39], [4, 39], [11, 39], [12, 39], [21, 37], [22, 37], [33, 37], [34, 37], [43, 38], [44, 38],
-      [7, 46], [8, 46], [15, 46], [16, 46], [24, 46], [25, 46], [34, 46], [35, 46], [42, 45], [43, 45]
-    ]
-    deadTreeFormations.forEach(([c, r]) => placeObstacle(c, r, 8))
-
-    // Clustered snow pile & snow bank mounds (6)
-    const snowPileFormations = [
-      [10, 18], [11, 18], [28, 11], [28, 12], [39, 14], [40, 14],
-      [7, 24], [8, 24], [19, 23], [20, 23], [37, 21], [38, 21],
-      [14, 36], [14, 37], [26, 33], [27, 33], [35, 30], [36, 30],
-      [12, 42], [13, 42], [25, 44], [26, 44], [39, 41], [40, 41]
-    ]
-    snowPileFormations.forEach(([c, r]) => placeObstacle(c, r, 6))
-
-    // Pine tree dividers (1)
-    const pineDividers = [
-      [6, 9], [18, 8], [25, 4], [31, 8], [37, 10],
-      [8, 14], [23, 15], [30, 16], [39, 18],
-      [5, 23], [15, 25], [22, 22], [28, 23], [36, 25],
-      [7, 32], [16, 32], [24, 33], [32, 33], [41, 32],
-      [5, 42], [16, 43], [23, 44], [31, 44], [37, 44]
-    ]
-    pineDividers.forEach(([c, r]) => placeObstacle(c, r, 1))
 
     // frozen boundary wall around the whole map
     for (let c = 0; c < cols; c++) { map[0][c] = 2; map[rows - 1][c] = 2 }
@@ -493,67 +322,44 @@ export class GameScene2 extends Phaser.Scene {
   }
 
   showWildlifeCard(species, fact) {
-    if (this.activeWildlifeCard) {
-      this.activeWildlifeCard.forEach(el => {
-        if (el && el.destroy) el.destroy()
-      })
-      this.activeWildlifeCard = null
-    }
-
-    // Freeze the screen
-    this.animalNotificationFrozen = true
-    this.cardFreezeTimestamp = (this.time && this.time.now) ? this.time.now : Date.now()
-    this.player.setVelocity(0, 0)
-    this.monsterList.forEach(m => {
-      if (m.body && m.body.active) m.body.setVelocity(0, 0)
-      m.chasing = false
-    })
-
     const { width, height } = this.scale
 
     const card = this.add.graphics().setScrollFactor(0).setDepth(400)
     card.fillStyle(0x0a1420, 0.97)
-    card.fillRoundedRect(width / 2 - 180, height / 2 - 95, 360, 190, 16)
+    card.fillRoundedRect(width/2 - 180, height/2 - 90, 360, 180, 16)
     card.lineStyle(3, 0xFFD700, 1)
-    card.strokeRoundedRect(width / 2 - 180, height / 2 - 95, 360, 190, 16)
+    card.strokeRoundedRect(width/2 - 180, height/2 - 90, 360, 180, 16)
 
-    const title = this.add.text(width / 2, height / 2 - 68, '🐾 SPECIES RESCUED!', {
+    const title = this.add.text(width/2, height/2 - 60, '🐧 SPECIES COLLECTED!', {
       fontSize: '15px', fontFamily: 'Arial Black', color: '#FFD700'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const name = this.add.text(width / 2, height / 2 - 38, species, {
+    const name = this.add.text(width/2, height/2 - 30, species, {
       fontSize: '20px', fontFamily: 'Arial Black', color: '#ffffff'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const factText = this.add.text(width / 2, height / 2 + 2, fact, {
+    const factText = this.add.text(width/2, height/2 + 10, fact, {
       fontSize: '11px', fontFamily: 'Arial', color: '#aaccdd',
       wordWrap: { width: 320 }, align: 'center'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const count = this.wildlifeJournal ? this.wildlifeJournal.length : 1
-    const total = this.wildlifeList ? this.wildlifeList.length : 8
-    const counter = this.add.text(width / 2, height / 2 + 45, `Journal: ${count} / ${total} species`, {
+    const count = this.wildlifeJournal.length
+    const counter = this.add.text(width/2, height/2 + 60, `Journal: ${count} / 8 species`, {
       fontSize: '11px', fontFamily: 'Arial Black', color: '#00d4ff'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const resumeHint = this.add.text(width / 2, height / 2 + 72, '👉 Move in any direction (W,A,S,D / Arrows) to resume', {
-      fontSize: '10px', fontFamily: 'Arial Black', color: '#ffdd77'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
+    const elements = [card, title, name, factText, counter]
+    elements.forEach(el => { el.setAlpha(0) })
+    this.tweens.add({
+      targets: elements, alpha: 1, duration: 250
+    })
 
-    const elements = [card, title, name, factText, counter, resumeHint]
-    this.activeWildlifeCard = elements
-    elements.forEach(el => { el.setAlpha(1) })
-  }
-
-  dismissWildlifeCard() {
-    if (!this.animalNotificationFrozen && !this.activeWildlifeCard) return
-    this.animalNotificationFrozen = false
-    if (this.activeWildlifeCard) {
-      this.activeWildlifeCard.forEach(el => {
-        if (el && el.destroy) el.destroy()
+    this.time.delayedCall(2600, () => {
+      this.tweens.add({
+        targets: elements, alpha: 0, duration: 300,
+        onComplete: () => elements.forEach(el => el.destroy())
       })
-      this.activeWildlifeCard = null
-    }
+    })
   }
 
   drawWorld() {
@@ -568,7 +374,7 @@ export class GameScene2 extends Phaser.Scene {
     const tileKeys = [
       'snow_ground', 'dark_snow', 'ice', 'frozen_water', 'snow_cliff',
       'snow_rock', 'ice_wall', 'snow_bank', 'frozen_log',
-      'pine_large', 'pine_small', 'dead_tree', 'snow_stump', 'icicle', 'snow_pile'
+      'pine_large', 'pine_small', 'dead_tree', 'stump', 'icicle', 'snow_pile'
     ]
     tileKeys.forEach(key => {
       const tex = this.textures.get(key)
@@ -595,7 +401,7 @@ export class GameScene2 extends Phaser.Scene {
     // look, anchored at the bottom of their OWN cell only — never
     // shifted sideways — so they never bleed into a neighbouring
     // column.
-    const risesAbove = new Set(['pine_large', 'pine_small', 'ice_wall'])
+    const risesAbove = new Set(['pine_large', 'pine_small', 'dead_tree', 'ice_wall'])
 
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
@@ -611,29 +417,24 @@ export class GameScene2 extends Phaser.Scene {
         } else if (t === 1) {
           // forest region
           const roll = rand()
-          key = roll < 0.45 ? 'pine_large' : roll < 0.75 ? 'pine_small' : 'dead_tree'
+          key = roll < 0.55 ? 'pine_large' : roll < 0.9 ? 'pine_small' : 'dead_tree'
         } else if (t === 2) {
           // cliff/rock region
           key = 'ice_wall'
         } else if (t === 3) {
           // the one confined frozen-water lake
           key = 'frozen_water'
-        } else if (t === 4) {
-          // frozen log obstacle
-          key = 'frozen_log'
         } else if (t === 6) {
           // the clustered snow-pile patch
           key = rand() < 0.8 ? 'snow_pile' : 'snow_bank'
-        } else if (t === 7) {
-          // icicle obstacle
-          key = 'icicle'
-        } else if (t === 8) {
-          // dead tree obstacle
-          key = 'dead_tree'
         } else {
-          // plain open ground — walkable snow floor variation only
+          // plain open ground — just quiet floor variation, no
+          // scattered props (those live in their own zones above)
           const roll = rand()
-          key = roll < 0.80 ? 'snow_ground' : 'dark_snow'
+          if (roll < 0.82) key = 'snow_ground'
+          else if (roll < 0.96) key = 'dark_snow'
+          else if (roll < 0.985) key = 'stump'
+          else key = 'frozen_log'
         }
 
         const cellCenterX = col * this.TILE + this.TILE / 2
@@ -684,23 +485,10 @@ export class GameScene2 extends Phaser.Scene {
   }
 
   isWall(col, row) {
-    if (row < 0 || row >= this.mapRows || col < 0 || col >= this.mapCols) return true
-    if (!this.mapData || !this.mapData[row]) return true
+    if (row < 0 || row >= this.mapRows) return true
+    if (col < 0 || col >= this.mapCols) return true
     const t = this.mapData[row][col]
-    return t === 1 || t === 2 || t === 4 || t === 6 || t === 7 || t === 8
-  }
-
-  hasLineOfSight(x1, y1, x2, y2) {
-    const dist = Phaser.Math.Distance.Between(x1, y1, x2, y2)
-    const steps = Math.max(2, Math.ceil(dist / 20))
-    for (let i = 1; i < steps; i++) {
-      const tx = Phaser.Math.Linear(x1, x2, i / steps)
-      const ty = Phaser.Math.Linear(y1, y2, i / steps)
-      const col = Math.floor(tx / this.TILE)
-      const row = Math.floor(ty / this.TILE)
-      if (this.isWall(col, row)) return false
-    }
-    return true
+    return t === 1 || t === 2 || t === 3
   }
 
   spawnEggs() {
@@ -937,23 +725,23 @@ const positions = [
   createHunterAt(x, y) {
     // Sprite instead of drawn graphic
     const sprite = this.add.sprite(x, y, 'hunter_front')
-    sprite.setDisplaySize(58, 74)
+    sprite.setDisplaySize(48, 58)
     sprite.setOrigin(0.5, 0.6)
     sprite.setDepth(10)
 
     // Shadow beneath hunter
-    const shadow = this.add.ellipse(x, y + 28, 36, 12, 0x000000, 0.35)
+    const shadow = this.add.ellipse(x, y + 22, 30, 10, 0x000000, 0.35)
     shadow.setDepth(9)
 
     const body = this.physics.add.image(x, y, null).setVisible(false)
-    body.body.setSize(30, 32)
+    body.body.setSize(28, 28)
     body.setCollideWorldBounds(true)
     body.setVelocity(60, 0)
 
     const hpBar = this.add.graphics()
-    this.drawHPBar(hpBar, x, y - 48, 2, 2)
+    this.drawHPBar(hpBar, x, y - 28, 2, 2)
 
-    const alert = this.add.text(x, y - 60, '❗', { fontSize: '16px' })
+    const alert = this.add.text(x, y - 40, '❗', { fontSize: '16px' })
       .setOrigin(0.5).setVisible(false)
 
     const hunter = {
@@ -970,131 +758,35 @@ const positions = [
     return hunter
   }
 
-  spawnShields() {
-    const candidateShieldSpots = [
-      { col: 12, row: 8 },
-      { col: 30, row: 15 },
-      { col: 22, row: 32 },
-      { col: 38, row: 28 },
-      { col: 17, row: 10 },
-      { col: 32, row: 10 },
-      { col: 3, row: 13 },
-      { col: 24, row: 15 },
-      { col: 20, row: 20 },
-      { col: 6, row: 22 },
-      { col: 45, row: 25 },
-      { col: 34, row: 8 },
-      { col: 16, row: 5 },
-      { col: 24, row: 7 },
-      { col: 14, row: 17 },
-      { col: 7, row: 21 },
-      { col: 40, row: 30 },
-      { col: 32, row: 18 },
-      { col: 13, row: 27 }
+  spawnWeapons() {
+    const weapons = [
+      { col: 11, row: 3, type: 'bomb', label: '💣', color: 0xFF6600, desc: 'Area explosion' },
+      { col: 24, row: 8, type: 'ice', label: '❄️', color: 0x00BFFF, desc: 'Freeze enemies' },
+      { col: 32, row: 18, type: 'lightning', label: '⚡', color: 0xFFD700, desc: 'Chain 3 enemies' },
+      { col: 13, row: 27, type: 'boomerang', label: '🪃', color: 0xC8A25A, desc: 'Double hit' },
     ]
-
-    const validSpots = candidateShieldSpots.filter(s => !this.isWall(s.col, s.row))
-    Phaser.Utils.Array.Shuffle(validSpots)
-    const selectedSpots = validSpots.slice(0, 4)
-
-    this.chosenShieldLocations = selectedSpots.map(s => `${s.col},${s.row}`)
-    this.shieldList = []
-
-    selectedSpots.forEach(s => {
-      const x = s.col * this.TILE + this.TILE / 2
-      const y = s.row * this.TILE + this.TILE / 2
-
-      const bg = this.add.circle(x, y, 18, 0x00e5ff, 0.25)
-      const ring = this.add.circle(x, y, 18).setStrokeStyle(2, 0x00ffff, 0.75)
-
-      const icon = this.add.text(x, y - 2, '🛡️', {
-        fontSize: '20px'
+    weapons.forEach(w => {
+      if (this.isWall(w.col, w.row)) return
+      const x = w.col * this.TILE + this.TILE / 2
+      const y = w.row * this.TILE + this.TILE / 2
+      const bg = this.add.circle(x, y, 20, w.color, 0.9)
+      const label = this.add.text(x, y, w.label, { fontSize: '20px' }).setOrigin(0.5)
+      const desc = this.add.text(x, y + 28, w.desc, {
+        fontSize: '9px', fontFamily: 'Arial',
+        color: '#ffffff', stroke: '#000000', strokeThickness: 2
       }).setOrigin(0.5)
-
-      const label = this.add.text(x, y + 22, 'SHIELD (10s)', {
-        fontSize: '9px',
-        fontFamily: 'Arial Black',
-        color: '#00ffff',
-        stroke: '#000000',
-        strokeThickness: 2
-      }).setOrigin(0.5)
-
       this.tweens.add({
-        targets: [icon, bg, ring],
-        y: '-=4',
-        duration: 1200,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
+        targets: bg, scaleX: 1.3, scaleY: 1.3, alpha: 0.5,
+        duration: 600, yoyo: true, repeat: -1
       })
-
-      this.shieldList.push({
-        x,
-        y,
-        col: s.col,
-        row: s.row,
-        bg,
-        ring,
-        icon,
-        label,
-        collected: false
-      })
+      this.weaponList.push({ bg, label, desc, x, y, type: w.type, collected: false })
     })
-  }
-
-  activateShield(duration = 10) {
-    this.shieldActive = true
-    this.stealthMode = true
-    this.shieldTimeRemaining = duration
-
-    // Make player translucent / invisible
-    if (this.player && this.player.active) {
-      this.player.setAlpha(0.45)
-    }
-
-    if (!this.playerShieldGfx) {
-      this.playerShieldGfx = this.add.graphics().setDepth(25)
-    }
-
-    if (this.shieldTimerEvent) {
-      this.shieldTimerEvent.remove(false)
-      this.shieldTimerEvent = null
-    }
-
-    this.showFloatingText(
-      this.player.x,
-      this.player.y - 35,
-      `🛡️ SHIELD ACTIVE! Invisible (${duration}s)`,
-      '#00ffff'
-    )
-  }
-
-  deactivateShield() {
-    this.shieldActive = false
-    this.stealthMode = false
-    this.shieldTimeRemaining = 0
-    if (this.shieldTimerEvent) {
-      this.shieldTimerEvent.remove(false)
-      this.shieldTimerEvent = null
-    }
-    if (this.player && this.player.active) {
-      this.player.setAlpha(1.0)
-    }
-    if (this.playerShieldGfx) {
-      this.playerShieldGfx.clear()
-    }
-    this.showFloatingText(
-      this.player.x,
-      this.player.y - 35,
-      '🛡️ Shield expired',
-      '#aaaaaa'
-    )
   }
 
   drawMonster(m, x, y, frozen) {
     // m here is the whole monster object now, not just graphic
     m.graphic.setPosition(x, y)
-    if (m.shadow) m.shadow.setPosition(x, y + 28)
+    if (m.shadow) m.shadow.setPosition(x, y + 22)
     if (frozen) {
       m.graphic.setTint(0x88ccff)
     } else {
@@ -1935,733 +1627,155 @@ const positions = [
 
   useWeapon() {
     if (this.isAttacking) return
-
     this.isAttacking = true
+    const range = this.evolutionStage >= 3 ? 220 :
+      this.evolutionStage >= 2 ? 170 : 120
 
-    // Safe reset. Even if a power does nothing, attack will unlock.
-    this.time.delayedCall(500, () => {
-      this.isAttacking = false
-    })
-
-    const range = this.evolutionStage >= 3 ? 165 :
-      this.evolutionStage >= 2 ? 125 : 95
-
-    const attackColorMap = {
-      fire: 0xff2200,
-      lightning: 0xffdd00,
-      bomb: 0x111111,
-      ice: 0x00bfff,
-      wind: 0x88ffee,
-      boomerang: 0xc8a25a,
-      normal: this.birdColor || 0xffffff
-    }
-
-    const attackColor = attackColorMap[this.currentWeapon] || this.birdColor || 0xffffff
-
+    // Same two-layer ring effect GameScene1 uses for every attack:
+    // a thin expanding stroke ring, optionally paired with a soft glow.
     const makeRing = (color, startRadius, finalScale, duration = 350) => {
       const ring = this.add.graphics()
       ring.setPosition(this.player.x, this.player.y)
       ring.lineStyle(3, color, 0.65)
       ring.strokeCircle(0, 0, startRadius)
-
       this.tweens.add({
-        targets: ring,
-        scaleX: finalScale,
-        scaleY: finalScale,
-        alpha: 0,
-        duration,
-        onComplete: () => ring.destroy()
+        targets: ring, scaleX: finalScale, scaleY: finalScale, alpha: 0,
+        duration, onComplete: () => ring.destroy()
       })
-
       return ring
     }
 
     switch (this.currentWeapon) {
-      case 'fire': {
-        makeRing(attackColor, 10, range / 16, 300)
-
-        const flame = this.add.graphics()
-        flame.setPosition(this.player.x, this.player.y)
-        flame.fillStyle(0xff6600, 0.35)
-        flame.fillCircle(0, 0, 22)
-
-        this.tweens.add({
-          targets: flame,
-          scaleX: 4,
-          scaleY: 4,
-          alpha: 0,
-          duration: 350,
-          onComplete: () => flame.destroy()
-        })
-
-        this.hitMonstersInRange(
-          this.player.x,
-          this.player.y,
-          range,
-          1,
-          0xff4500
-        )
-
-        this.showFloatingText(
-          this.player.x,
-          this.player.y - 30,
-          '🔥 Fire Burst!',
-          '#ff8844'
-        )
-
+      case 'normal': {
+        makeRing(this.birdColor, 10, range / 10, 350)
+        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, this.birdColor)
         break
       }
-
       case 'bomb': {
-        makeRing(attackColor, 12, range / 18, 320)
-
+        makeRing(0xFF6600, 12, range / 9, 320)
         const boom = this.add.graphics()
-        boom.setPosition(this.player.x, this.player.y)
-        boom.fillStyle(0x111111, 0.35)
-        boom.fillCircle(0, 0, 24)
-
-        this.tweens.add({
-          targets: boom,
-          scaleX: 5,
-          scaleY: 5,
-          alpha: 0,
-          duration: 420,
-          onComplete: () => boom.destroy()
-        })
-
-        this.hitMonstersInRange(
-          this.player.x,
-          this.player.y,
-          range * 1.05,
-          2,
-          attackColor
-        )
-
-        this.cameras.main.shake(180, 0.006)
-
-        this.showFloatingText(
-          this.player.x,
-          this.player.y - 30,
-          '💣 Bomb Blast!',
-          '#ff9955'
-        )
-
+        boom.fillStyle(0xFF6600, 0.7)
+        boom.fillCircle(this.player.x, this.player.y, 20)
+        this.tweens.add({ targets: boom, scaleX: 8, scaleY: 8, alpha: 0, duration: 500, onComplete: () => boom.destroy() })
+        this.hitMonstersInRange(this.player.x, this.player.y, range * 2.2, 3, 0xFF6600)
+        this.cameras.main.shake(300, 0.01)
+        this.showFloatingText(this.player.x, this.player.y - 30, '💣 Bomb Blast!', '#ff9955')
         break
       }
-
       case 'ice': {
-        makeRing(0x00bfff, 10, range / 10, 400)
-
+        makeRing(0x00BFFF, 10, range / 10, 400)
         let frozeAnyone = false
-
         this.monsterList.forEach(m => {
           if (!m.alive || !m.body || !m.body.active) return
-
-          const dist = Phaser.Math.Distance.Between(
-            this.player.x,
-            this.player.y,
-            m.body.x,
-            m.body.y
-          )
-
+          const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
           if (dist < range) {
             frozeAnyone = true
-            this.killMonster(m, 'ice')
+            m.frozen = true
+            m.body.setVelocity(0, 0)
+            this.drawMonster(m, m.body.x, m.body.y, true)
+            this.showFloatingText(m.body.x, m.body.y - 20, '❄️ FROZEN!', '#00BFFF')
+            this.time.delayedCall(3000, () => { if (m.alive) { m.frozen = false; this.drawMonster(m, m.body.x, m.body.y, false) } })
           }
         })
-
         if (!frozeAnyone) {
           this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#88ccff')
         }
-
         break
       }
-
       case 'lightning': {
-        makeRing(attackColor, 10, range / 16, 280)
-        const targets = this.monsterList
-          .filter(m => {
-            if (!m.alive || !m.body || !m.body.active) return false
-
-            const dist = Phaser.Math.Distance.Between(
-              this.player.x,
-              this.player.y,
-              m.body.x,
-              m.body.y
-            )
-
-            return dist <= range * 1.7
-          })
-          .sort((a, b) =>
-            Phaser.Math.Distance.Between(this.player.x, this.player.y, a.body.x, a.body.y) -
-            Phaser.Math.Distance.Between(this.player.x, this.player.y, b.body.x, b.body.y)
-          )
+        const sorted = this.monsterList.filter(m => m.alive && m.body && m.body.active)
+          .sort((a, b) => Phaser.Math.Distance.Between(this.player.x, this.player.y, a.body.x, a.body.y) - Phaser.Math.Distance.Between(this.player.x, this.player.y, b.body.x, b.body.y))
           .slice(0, 3)
 
-        if (targets.length === 0) {
+        if (sorted.length === 0) {
           this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#888888')
           break
         }
 
+        makeRing(0xFFD700, 10, range / 16, 280)
         const lightning = this.add.graphics()
-        lightning.lineStyle(4, 0xffdd00, 1)
-
-        let lastX = this.player.x
-        let lastY = this.player.y
-
-        targets.forEach(m => {
-          if (!m.alive || !m.body || !m.body.active) return
-
-          lightning.beginPath()
-          lightning.moveTo(lastX, lastY)
-
-          const midX = (lastX + m.body.x) / 2 + Phaser.Math.Between(-18, 18)
-          const midY = (lastY + m.body.y) / 2 + Phaser.Math.Between(-18, 18)
-
-          lightning.lineTo(midX, midY)
-          lightning.lineTo(m.body.x, m.body.y)
-          lightning.strokePath()
-
-          lastX = m.body.x
-          lastY = m.body.y
-
-          const dealt = this.shieldActive ? Math.max(3, m.hp) : 1
-          m.hp -= dealt
-          m.body.setVelocity(0, 0)
-
-          if (m.hp <= 0) {
-            this.killMonster(m, this.currentWeapon)
-            return
-          }
-
-          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 48, m.hp, m.maxHp)
-          this.showFloatingText(
-            m.body.x,
-            m.body.y - 20,
-            this.shieldActive ? '🗡️ Stealth Zap!' : '⚡ ZAP!',
-            this.shieldActive ? '#00ffff' : '#FFD700'
-          )
+        lightning.lineStyle(3, 0xFFD700, 1)
+        let lx = this.player.x, ly = this.player.y
+        sorted.forEach(m => {
+          lightning.beginPath(); lightning.moveTo(lx, ly)
+          const mx = (lx + m.body.x) / 2 + Phaser.Math.Between(-20, 20)
+          const my = (ly + m.body.y) / 2 + Phaser.Math.Between(-20, 20)
+          lightning.lineTo(mx, my); lightning.lineTo(m.body.x, m.body.y); lightning.strokePath()
+          lx = m.body.x; ly = m.body.y
+          m.hp--; this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+          this.showFloatingText(m.body.x, m.body.y - 20, '⚡ ZAP!', '#FFD700')
+          if (m.hp <= 0) this.killMonster(m)
         })
-
-        this.tweens.add({
-          targets: lightning,
-          alpha: 0,
-          duration: 260,
-          onComplete: () => lightning.destroy()
-        })
-
-        this.showFloatingText(
-          this.player.x,
-          this.player.y - 30,
-          '⚡ Electric Chain!',
-          '#FFD700'
-        )
-
+        this.tweens.add({ targets: lightning, alpha: 0, duration: 300, onComplete: () => lightning.destroy() })
+        this.showFloatingText(this.player.x, this.player.y - 30, '⚡ Electric Chain!', '#FFD700')
         break
       }
-
-      case 'wind': {
-        makeRing(0x88ffee, 10, range / 9, 380)
-
-        let hitAnyone = false
-
-        this.monsterList.forEach(m => {
-          if (!m.alive || !m.body || !m.body.active) return
-
-          const dist = Phaser.Math.Distance.Between(
-            this.player.x,
-            this.player.y,
-            m.body.x,
-            m.body.y
-          )
-
-          if (dist < range * 1.2) {
-            hitAnyone = true
-
-            const angle = Phaser.Math.Angle.Between(
-              this.player.x,
-              this.player.y,
-              m.body.x,
-              m.body.y
-            )
-
-            const dealt = this.shieldActive ? Math.max(3, m.hp) : 1
-            m.hp -= dealt
-
-            m.body.setVelocity(
-              Math.cos(angle) * 180,
-              Math.sin(angle) * 180
-            )
-
-            if (m.hp <= 0) {
-              this.killMonster(m, this.currentWeapon)
-              return
-            }
-
-            this.drawHPBar(m.hpBar, m.body.x, m.body.y - 48, m.hp, m.maxHp)
-            this.showFloatingText(
-              m.body.x,
-              m.body.y - 20,
-              this.shieldActive ? '🗡️ Stealth Gust!' : '🌪 Pushed!',
-              this.shieldActive ? '#00ffff' : '#88ffee'
-            )
-          }
-        })
-
-        if (!hitAnyone) {
-          this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#88ffee')
-        } else {
-          this.showFloatingText(this.player.x, this.player.y - 30, '🌪 Wind Force!', '#88ffee')
-        }
-
-        break
-      }
-
       case 'boomerang': {
-        makeRing(0xc8a25a, 10, range / 10, 250)
-        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xc8a25a)
-
-        // Spawn spinning boomerang projectile arcing out
-        const b = this.add.text(this.player.x, this.player.y, '🪃', { fontSize: '24px' }).setOrigin(0.5).setDepth(20)
-        let targetAngle = 0
-        let closestDist = 9999
-        this.monsterList.forEach(m => {
-          if (m.alive && m.body) {
-            const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
-            if (d < range * 1.5 && d < closestDist) {
-              closestDist = d
-              targetAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, m.body.x, m.body.y)
-            }
-          }
+        makeRing(0xC8A25A, 10, range / 10, 250)
+        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xC8A25A)
+        this.time.delayedCall(400, () => {
+          makeRing(0xC8A25A, 10, range / 10, 250)
+          this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xC8A25A)
         })
-        const throwDist = Math.min(range, closestDist < 9999 ? closestDist : range)
-        const targetX = this.player.x + Math.cos(targetAngle) * throwDist
-        const targetY = this.player.y + Math.sin(targetAngle) * throwDist
-
-        this.tweens.add({
-          targets: b,
-          x: targetX,
-          y: targetY,
-          angle: 720,
-          duration: 260,
-          ease: 'Sine.easeOut',
-          onComplete: () => {
-            this.tweens.add({
-              targets: b,
-              x: this.player.x,
-              y: this.player.y,
-              angle: 1440,
-              duration: 260,
-              ease: 'Sine.easeIn',
-              onComplete: () => b.destroy()
-            })
-          }
-        })
-
-        this.time.delayedCall(300, () => {
-          makeRing(0xc8a25a, 10, range / 10, 250)
-          this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xc8a25a)
-        })
-
         this.showFloatingText(this.player.x, this.player.y - 30, '🪃 Boomerang!', '#C8A25A')
         break
       }
-
-      case 'normal':
-      default: {
-        makeRing(this.birdColor || 0xffffff, 10, range / 10, 350)
-        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, this.birdColor || 0xffffff)
-        break
-      }
     }
+    this.time.delayedCall(400, () => { this.isAttacking = false })
   }
 
   hitMonstersInRange(x, y, range, damage, color) {
     let hit = false
-
     this.monsterList.forEach(m => {
       if (!m.alive || !m.body || !m.body.active) return
-
       const dist = Phaser.Math.Distance.Between(x, y, m.body.x, m.body.y)
-
       if (dist < range) {
         hit = true
-
-        const dealt = this.shieldActive ? Math.max(damage * 3, m.hp) : damage
-        m.hp -= dealt
-        m.body.setVelocity(0, 0)
-
-        if (m.hpBar) {
-          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 48, m.hp, m.maxHp)
-        }
-
-        if (m.graphic) {
-          m.graphic.setAlpha(0.3)
-          this.time.delayedCall(150, () => {
-            if (m.graphic) m.graphic.setAlpha(1)
-          })
-        }
-
-        // Hit particles
+        m.hp -= damage
+        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+        m.graphic.setAlpha(0.3)
+        this.time.delayedCall(150, () => { if (m.graphic) m.graphic.setAlpha(1) })
         for (let i = 0; i < 8; i++) {
           const angle = (i / 8) * Math.PI * 2
           const burst = this.add.graphics()
           burst.fillStyle(color, 1)
           burst.fillCircle(m.body.x, m.body.y, 4)
-
           this.tweens.add({
             targets: burst,
             x: m.body.x + Math.cos(angle) * Phaser.Math.Between(15, 40),
             y: m.body.y + Math.sin(angle) * Phaser.Math.Between(15, 40),
-            alpha: 0,
-            scaleX: 0.2,
-            scaleY: 0.2,
+            alpha: 0, scaleX: 0.2, scaleY: 0.2,
             duration: Phaser.Math.Between(200, 500),
             onComplete: () => burst.destroy()
           })
         }
-
-        // Safe kill
-        if (m.hp <= 0) {
-          this.killMonster(m, this.currentWeapon)
-          return
-        }
-
-        // Safe floating text
-        this.showFloatingText(
-          m.body.x,
-          m.body.y - 20,
-          this.shieldActive ? '🗡️ Stealth Hit!' : '⚔️ Hit!',
-          this.shieldActive ? '#00ffff' : '#ffaaaa'
-        )
+        if (m.hp <= 0) this.killMonster(m)
+        else this.showFloatingText(m.body.x, m.body.y - 20, '⚔️ Hit!', '#ffaaaa')
       }
     })
-
-    if (!hit && this.currentWeapon === 'normal') {
+    if (!hit && this.currentWeapon === 'normal')
       this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#888888')
-    }
   }
 
-  killMonster(m, deathType = this.currentWeapon) {
-    if (!m || !m.alive) return
-
+  killMonster(m) {
     m.alive = false
-
-    const x = m.body ? m.body.x : (m.graphic ? m.graphic.x : 0)
-    const y = m.body ? m.body.y : (m.graphic ? m.graphic.y : 0)
-
-    // Stop hunter immediately
-    if (m.walkTween) {
-      m.walkTween.stop()
-      m.walkTween = null
-    }
-
-    if (m.body) {
-      m.body.setVelocity(0, 0)
-      if (m.body.body) {
-        m.body.body.enable = false
-      }
-    }
-
-    // Remove active UI
-    if (m.hpBar) {
-      m.hpBar.destroy()
-      m.hpBar = null
-    }
-
-    if (m.alert) {
-      m.alert.destroy()
-      m.alert = null
-    }
-
-    // Different death effect depending on chosen bird power
-    this.playMonsterDeathEffect(x, y, deathType)
-
-    // Tint/behavior before disappearing
-    if (m.graphic) {
-      if (deathType === 'fire') {
-        m.graphic.setTint(0xff5500)
-      } else if (deathType === 'bomb') {
-        m.graphic.setTint(0x333333)
-      } else if (deathType === 'lightning') {
-        m.graphic.setTint(0xffff66)
-      } else if (deathType === 'wind' || deathType === 'boomerang') {
-        m.graphic.setTint(0x88ffee)
-      } else if (deathType === 'ice') {
-        m.graphic.setTint(0x88ccff)
-      }
-    }
-
-    // Mini skull appears right before disappearance
-    this.time.delayedCall(350, () => {
-      this.showDeathSkull(x, y)
-    })
-
-    // Hunter disappears after effect
-    const fadeTargets = []
-    if (m.graphic) fadeTargets.push(m.graphic)
-    if (m.shadow) fadeTargets.push(m.shadow)
-
-    if (fadeTargets.length > 0) {
+    for (let i = 0; i < 10; i++) {
+      const angle = (i / 10) * Math.PI * 2
+      const burst = this.add.graphics()
+      burst.fillStyle(0x0044ff, 1)
+      burst.fillCircle(m.body.x, m.body.y, 5)
       this.tweens.add({
-        targets: fadeTargets,
-        alpha: 0,
-        duration: 650,
-        delay: deathType === 'lightning' ? 120 : 0,
-        onComplete: () => {
-          if (m.graphic) { m.graphic.destroy(); m.graphic = null }
-          if (m.shadow) { m.shadow.destroy(); m.shadow = null }
-          if (m.body) { m.body.destroy(); m.body = null }
-        }
+        targets: burst,
+        x: m.body.x + Math.cos(angle) * Phaser.Math.Between(20, 50),
+        y: m.body.y + Math.sin(angle) * Phaser.Math.Between(20, 50),
+        alpha: 0, scaleX: 0.2, scaleY: 0.2,
+        duration: Phaser.Math.Between(300, 600),
+        onComplete: () => burst.destroy()
       })
-    } else {
-      if (m.body) { m.body.destroy(); m.body = null }
     }
-
-    this.score += 200
-
-    this.showFloatingText(x, y - 24, deathType === 'ice' ? '❄️ Frozen Captured! +200' : '+200', deathType === 'ice' ? '#99eeff' : '#ffffff')
-  }
-
-  showDeathSkull(x, y) {
-    const skull = this.add.text(x, y - 28, '☠️', {
-      fontSize: '22px',
-      stroke: '#000000',
-      strokeThickness: 4
-    }).setOrigin(0.5).setDepth(50)
-
-    this.tweens.add({
-      targets: skull,
-      y: y - 55,
-      alpha: 0,
-      scaleX: 1.4,
-      scaleY: 1.4,
-      duration: 650,
-      onComplete: () => skull.destroy()
-    })
-  }
-
-  playMonsterDeathEffect(x, y, deathType) {
-    if (deathType === 'fire') {
-      // Ember: burning effect
-      for (let i = 0; i < 14; i++) {
-        const flame = this.add.graphics()
-        flame.setPosition(
-          x + Phaser.Math.Between(-16, 16),
-          y + Phaser.Math.Between(-10, 18)
-        )
-
-        const color = Phaser.Math.Between(0, 1) === 0 ? 0xff4500 : 0xffaa00
-        flame.fillStyle(color, 0.9)
-        flame.fillCircle(0, 0, Phaser.Math.Between(4, 8))
-
-        this.tweens.add({
-          targets: flame,
-          y: flame.y - Phaser.Math.Between(25, 45),
-          alpha: 0,
-          scaleX: 0.2,
-          scaleY: 0.2,
-          duration: Phaser.Math.Between(350, 650),
-          onComplete: () => flame.destroy()
-        })
-      }
-
-      return
-    }
-
-    if (deathType === 'bomb') {
-      // Shade: bomb blast + smoke
-      const blast = this.add.graphics()
-      blast.setPosition(x, y)
-      blast.fillStyle(0xff6600, 0.55)
-      blast.fillCircle(0, 0, 18)
-
-      this.tweens.add({
-        targets: blast,
-        scaleX: 4,
-        scaleY: 4,
-        alpha: 0,
-        duration: 380,
-        onComplete: () => blast.destroy()
-      })
-
-      for (let i = 0; i < 18; i++) {
-        const smoke = this.add.graphics()
-        smoke.setPosition(x, y)
-
-        smoke.fillStyle(0x555555, 0.75)
-        smoke.fillCircle(0, 0, Phaser.Math.Between(7, 13))
-
-        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2)
-        const dist = Phaser.Math.Between(25, 65)
-
-        this.tweens.add({
-          targets: smoke,
-          x: x + Math.cos(angle) * dist,
-          y: y + Math.sin(angle) * dist,
-          alpha: 0,
-          scaleX: 1.8,
-          scaleY: 1.8,
-          duration: Phaser.Math.Between(500, 850),
-          onComplete: () => smoke.destroy()
-        })
-      }
-
-      this.cameras.main.shake(180, 0.008)
-      return
-    }
-
-    if (deathType === 'lightning') {
-      // Volt: lightning strike appears over hunter before death
-      const flash = this.add.graphics()
-      flash.setPosition(x, y)
-      flash.fillStyle(0xffffaa, 0.45)
-      flash.fillCircle(0, 0, 34)
-
-      this.tweens.add({
-        targets: flash,
-        scaleX: 2.2,
-        scaleY: 2.2,
-        alpha: 0,
-        duration: 250,
-        onComplete: () => flash.destroy()
-      })
-
-      if (this.textures.exists('lightning_strike')) {
-        const strike = this.add.image(x, y - 35, 'lightning_strike')
-          .setDepth(60)
-          .setOrigin(0.5, 0.5)
-          .setDisplaySize(70, 110)
-          .setAlpha(0.95)
-
-        this.tweens.add({
-          targets: strike,
-          alpha: 0,
-          scaleX: 1.15,
-          scaleY: 1.15,
-          duration: 400,
-          delay: 120,
-          onComplete: () => strike.destroy()
-        })
-      }
-
-      for (let i = 0; i < 8; i++) {
-        const spark = this.add.graphics()
-        spark.setPosition(x, y)
-        spark.lineStyle(3, 0xffdd00, 1)
-
-        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2)
-        const len = Phaser.Math.Between(18, 34)
-
-        spark.beginPath()
-        spark.moveTo(0, 0)
-        spark.lineTo(Math.cos(angle) * len, Math.sin(angle) * len)
-        spark.strokePath()
-
-        this.tweens.add({
-          targets: spark,
-          alpha: 0,
-          scaleX: 1.4,
-          scaleY: 1.4,
-          duration: 260,
-          onComplete: () => spark.destroy()
-        })
-      }
-
-      this.cameras.main.shake(180, 0.006)
-      return
-    }
-
-    if (deathType === 'wind' || deathType === 'boomerang') {
-      // Gale: wind swirl
-      const swirl = this.add.graphics()
-      swirl.setPosition(x, y)
-      swirl.lineStyle(4, 0x88ffee, 0.9)
-
-      swirl.strokeCircle(0, 0, 12)
-      swirl.strokeCircle(0, 0, 22)
-      swirl.strokeCircle(0, 0, 32)
-
-      this.tweens.add({
-        targets: swirl,
-        angle: 240,
-        scaleX: 1.8,
-        scaleY: 1.8,
-        alpha: 0,
-        duration: 500,
-        onComplete: () => swirl.destroy()
-      })
-
-      return
-    }
-
-    if (deathType === 'ice') {
-      const ice = this.add.graphics().setDepth(25)
-      ice.setPosition(x, y)
-      ice.fillStyle(0x99ddff, 0.35)
-      ice.fillCircle(0, 0, 32)
-      ice.lineStyle(3, 0x99eeff, 1)
-      ice.strokeCircle(0, 0, 30)
-      ice.lineStyle(2, 0xffffff, 0.9)
-      ice.strokeCircle(0, 0, 22)
-
-      const spikes = [
-        [0, -38], [26, -26], [38, 0], [26, 26],
-        [0, 38], [-26, 26], [-38, 0], [-26, -26]
-      ]
-      ice.fillStyle(0xdffaff, 0.9)
-      spikes.forEach(([sx, sy]) => ice.fillCircle(sx, sy, 4))
-
-      this.tweens.add({
-        targets: ice,
-        scaleX: 1.3,
-        scaleY: 1.3,
-        alpha: 0,
-        duration: 650,
-        ease: 'Cubic.easeOut',
-        onComplete: () => ice.destroy()
-      })
-
-      for (let i = 0; i < 10; i++) {
-        const shard = this.add.graphics().setDepth(26)
-        shard.setPosition(x, y)
-        shard.fillStyle(0xdffaff, 0.85)
-        shard.fillTriangle(-4, 0, 0, -10, 4, 0)
-        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2)
-        const dist = Phaser.Math.Between(20, 50)
-        this.tweens.add({
-          targets: shard,
-          x: x + Math.cos(angle) * dist,
-          y: y + Math.sin(angle) * dist,
-          angle: Phaser.Math.Between(0, 360),
-          alpha: 0,
-          scaleX: 0.3,
-          scaleY: 0.3,
-          duration: Phaser.Math.Between(400, 700),
-          onComplete: () => shard.destroy()
-        })
-      }
-      return
-    }
-
-    // Default small smoke
-    const smoke = this.add.graphics()
-    smoke.setPosition(x, y)
-    smoke.fillStyle(0x777777, 0.7)
-    smoke.fillCircle(0, 0, 18)
-
-    this.tweens.add({
-      targets: smoke,
-      scaleX: 2.5,
-      scaleY: 2.5,
-      alpha: 0,
-      duration: 450,
-      onComplete: () => smoke.destroy()
-    })
-  }
-
-  freezeKillMonster(m) {
-    this.killMonster(m, 'ice')
+    m.graphic.destroy(); m.hpBar.destroy(); m.alert.destroy(); m.body.destroy()
+    this.score += 300
+    this.showFloatingText(m.body.x, m.body.y, '💥 +300', '#4488ff')
   }
 
   async saveScore() {
@@ -2684,45 +1798,19 @@ const positions = [
     this.cameras.main.shake(1, 0)
     this.cameras.main.stopFollow()
     this.cameras.main.resetFX()
-    if (this.player) {
-      if (this.player.setVelocity) this.player.setVelocity(0, 0)
-      if (this.player.body) this.player.body.enable = false
-    }
-    if (this.monsterList) {
-      this.monsterList.forEach(m => {
-        if (m.alive && m.body && m.body.active) {
-          if (m.body.setVelocity) m.body.setVelocity(0, 0)
-          m.body.enable = false
-        }
-        if (m.alert) m.alert.setVisible(false)
-        if (m.iceGraphic && m.iceGraphic.destroy) {
-          try { m.iceGraphic.destroy() } catch (e) {}
-          m.iceGraphic = null
-        }
-      })
-    }
+    if (this.player) { this.player.setVelocity(0, 0); this.player.body.enable = false }
+    this.monsterList.forEach(m => {
+      if (m.alive && m.body && m.body.active) { m.body.setVelocity(0, 0); m.body.enable = false }
+      if (m.alert) m.alert.setVisible(false)
+    })
     this.tweens.killAll()
     this.time.removeAllEvents()
     this.clearBlizzardVisuals()
-    if (this.footprints && this.footprints.length > 0) {
-      this.footprints.forEach(fp => {
-        if (fp && fp.destroy) {
-          try { fp.destroy() } catch (e) {}
-        }
-      })
-      this.footprints = []
-    }
+    this.footprints.forEach(fp => fp.destroy())
+    this.footprints = []
     this.physics.pause()
-    this.dismissWildlifeCard()
-    if (this.shieldActive) this.deactivateShield()
-    if (this.playerShieldGfx && this.playerShieldGfx.destroy) {
-      try { this.playerShieldGfx.destroy() } catch (e) {}
-      this.playerShieldGfx = null
-    }
-    this.cleanupPauseAndListeners()
-    if (this.terminal && this.terminal.destroy) {
-      try { this.terminal.destroy() } catch (e) {}
-    }
+    this.input.keyboard.enabled = false
+    if (this.terminal) this.terminal.destroy()
     this.saveScore()
     this.scene.stop('UIScene')
 
@@ -2733,22 +1821,21 @@ const positions = [
       totalScore: this.score,
       saplingsCollected: this.eggsCollected,
       animalsRescued: (this.wildlifeJournal || []).length,
-      monstersKilled: (this.monsterList || []).filter(m => !m.alive).length,
-      co2Absorbed: (this.eggsCollected || 0) * 22,
-      timeTaken: Math.max(0, 200 - (this.timeLeft || 0)),
+      monstersKilled: this.monsterList.filter(m => !m.alive).length,
+      co2Absorbed: this.eggsCollected * 22,
+      timeTaken: 200 - (this.timeLeft || 0),
       flashCards: [...(this.collectedFlashCards || [])],
       escaped: escaped
     }
 
-    if (reportData.flashCards && reportData.flashCards.length > 0) {
-      // OPEN FLASHCARD SCENE (report is shown afterwards, from goToReport())
-      this.scene.launch('FlashcardScene2', {
-        flashCards: reportData.flashCards,
-        reportData: reportData
-      })
-    } else {
-      this.showConservationReport(escaped)
-    }
+    // OPEN FLASHCARD SCENE (report is shown afterwards, from goToReport())
+    this.scene.launch('FlashcardScene2', {
+      flashCards: reportData.flashCards,
+      reportData: reportData
+    })
+
+    // Pause GameScene2 AFTER launching flashcards
+    this.scene.pause('GameScene2')
   }
   animateHunterWalk(m) {
     if (m.walkTween) return // already animating
@@ -2762,27 +1849,14 @@ const positions = [
     })
   }
   showConservationReport(escaped) {
-    if (this.game.canvas && this.game.canvas.focus) {
-      this.game.canvas.focus()
-    }
-    this.input.enabled = true
-    this.input.keyboard.enabled = true
-    this.input.setDefaultCursor('default')
-    if (this.escKey && typeof this.escKey.removeAllListeners === 'function') {
-      this.escKey.removeAllListeners()
-    }
-    if (this.input && this.input.keyboard) {
-      this.input.keyboard.off('keydown-ESC')
-    }
-
     const { width, height } = this.scale
 
-    const saplings = this.eggsCollected || 0
-    const total = (this.totalSaplings && this.totalSaplings > 0) ? this.totalSaplings : 14
+    const saplings = this.eggsCollected
+    const total = this.totalSaplings || 14
     const co2 = saplings * 22
-    const machines = (this.monsterList || []).filter(m => !m.alive).length
+    const machines = this.monsterList.filter(m => !m.alive).length
     const health = Math.max(0, Math.round(this.forestHealth || 100))
-    const timeTaken = Math.max(0, 200 - (this.timeLeft || 0))
+    const timeTaken = 200 - (this.timeLeft || 0)
 
     const grade =
       saplings >= 12 ? 'S' :
@@ -2809,13 +1883,9 @@ const positions = [
       Shade: 'The Forest Owlet was thought extinct for 113 years until 1997.',
       Gale: 'Fewer than 15 Bristlefronts may exist on Earth right now.'
     }
-    const chosenBirdKey = this.chosenBird
-      ? (this.chosenBird.charAt(0).toUpperCase() + this.chosenBird.slice(1).toLowerCase())
-      : 'Ember'
-    const factText = birdFacts[chosenBirdKey] || birdFacts[this.chosenBird] || 'Conserving wildlife preserves the balance of all habitats.'
 
     // ── Dark overlay ────────────────────────────────────────────
-    const overlay = this.add.graphics().setScrollFactor(0).setDepth(500)
+    const overlay = this.add.graphics().setScrollFactor(0).setDepth(300)
     overlay.fillStyle(0x000000, 0.93)
     overlay.fillRect(0, 0, width, height)
 
@@ -2825,7 +1895,7 @@ const positions = [
     const cardW = 640
     const cardH = height - 40
 
-    const card = this.add.graphics().setScrollFactor(0).setDepth(501)
+    const card = this.add.graphics().setScrollFactor(0).setDepth(301)
     card.fillStyle(0x0a1420, 1)
     card.fillRoundedRect(cardX, cardY, cardW, cardH, 20)
     card.lineStyle(2, escaped ? 0x1e4e6e : 0x5e1e1e, 1)
@@ -2833,8 +1903,12 @@ const positions = [
 
     // ── Header banner ────────────────────────────────────────────
     const headerH = 88
-    const headerBg = this.add.graphics().setScrollFactor(0).setDepth(502)
-    headerBg.fillStyle(escaped ? 0x0d2a40 : 0x330d0d, 1)
+    const headerBg = this.add.graphics().setScrollFactor(0).setDepth(301)
+    headerBg.fillGradientStyle(
+      escaped ? 0x0d2a40 : 0x330d0d,
+      escaped ? 0x0d2a40 : 0x330d0d,
+      0x0a1420, 0x0a1420, 1
+    )
     headerBg.fillRoundedRect(cardX, cardY, cardW, headerH, { tl: 20, tr: 20, bl: 0, br: 0 })
 
     headerBg.fillStyle(escaped ? 0x00d4ff : 0xff3355, 1)
@@ -2843,19 +1917,19 @@ const positions = [
     this.add.text(cardX + 28, cardY + 18, escaped ? '❄️ ARCTIC CONSERVATION REPORT' : '💀 EXPEDITION FAILED', {
       fontSize: '20px', fontFamily: 'Arial Black',
       color: escaped ? '#00d4ff' : '#ff3355'
-    }).setScrollFactor(0).setDepth(503)
+    }).setScrollFactor(0).setDepth(302)
 
     this.add.text(cardX + 28, cardY + 50, escaped
       ? 'Saplings delivered to the tundra replanting zone'
       : 'The tundra machines won this expedition', {
       fontSize: '11px', fontFamily: 'Arial',
       color: '#7a94aa'
-    }).setScrollFactor(0).setDepth(503)
+    }).setScrollFactor(0).setDepth(302)
 
     // ── Grade badge ───────────────────────────────────────────────
     const gradeX = cardX + cardW - 66
     const gradeY = cardY + 44
-    const gradeGlow = this.add.graphics().setScrollFactor(0).setDepth(502)
+    const gradeGlow = this.add.graphics().setScrollFactor(0).setDepth(301)
     gradeGlow.fillStyle(gradeColorInt, 0.15)
     gradeGlow.fillCircle(gradeX, gradeY, 38)
     gradeGlow.fillStyle(0x0a1420, 1)
@@ -2865,11 +1939,11 @@ const positions = [
 
     this.add.text(gradeX, gradeY, grade, {
       fontSize: '26px', fontFamily: 'Arial Black', color: gradeColor
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(503)
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(303)
 
     this.add.text(gradeX, gradeY + 44, 'GRADE', {
       fontSize: '9px', fontFamily: 'Arial Black', color: '#4a6a80'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(503)
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(302)
 
     // ── Stat rows ────────────────────────────────────────────────
     const stats = [
@@ -2887,37 +1961,36 @@ const positions = [
     stats.forEach((st, i) => {
       const ry = startY + i * (rowH + rowGap)
 
-      const rowBg = this.add.graphics().setScrollFactor(0).setDepth(502)
+      const rowBg = this.add.graphics().setScrollFactor(0).setDepth(301)
       rowBg.fillStyle(0x0f1c28, 1)
       rowBg.fillRoundedRect(cardX + 16, ry, cardW - 32, rowH, 10)
 
-      const chipBg = this.add.graphics().setScrollFactor(0).setDepth(503)
+      const chipBg = this.add.graphics().setScrollFactor(0).setDepth(302)
       chipBg.fillStyle(st.chip, 1)
       chipBg.fillRoundedRect(cardX + 26, ry + 9, 38, 38, 9)
       this.add.text(cardX + 45, ry + 28, st.icon, {
         fontSize: '17px'
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(504)
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(303)
 
       this.add.text(cardX + 76, ry + 10, st.label, {
         fontSize: '10px', fontFamily: 'Arial Black', color: '#e8f2f8'
-      }).setScrollFactor(0).setDepth(503)
+      }).setScrollFactor(0).setDepth(302)
 
       this.add.text(cardX + cardW - 30, ry + 8, st.value, {
         fontSize: '15px', fontFamily: 'Arial Black', color: '#ffffff'
-      }).setOrigin(1, 0).setScrollFactor(0).setDepth(503)
+      }).setOrigin(1, 0).setScrollFactor(0).setDepth(302)
 
       const barX = cardX + 76
       const barY = ry + 32
       const barW = cardW - 122
       const barH = 6
 
-      const barTrack = this.add.graphics().setScrollFactor(0).setDepth(503)
+      const barTrack = this.add.graphics().setScrollFactor(0).setDepth(302)
       barTrack.fillStyle(0x081018, 1)
       barTrack.fillRoundedRect(barX, barY, barW, barH, 3)
 
-      const barRatio = (typeof st.bar === 'number' && !isNaN(st.bar)) ? Math.max(0, Math.min(1, st.bar)) : 0
-      const fillW = Math.max(6, Math.round(barW * barRatio))
-      const barFill = this.add.graphics().setScrollFactor(0).setDepth(504)
+      const fillW = Math.max(6, barW * Math.min(st.bar, 1))
+      const barFill = this.add.graphics().setScrollFactor(0).setDepth(303)
       barFill.fillStyle(st.barColor, 1)
       barFill.fillRoundedRect(barX, barY, fillW, barH, 3)
       barFill.fillStyle(st.barColor, 0.5)
@@ -2926,7 +1999,7 @@ const positions = [
 
     // ── CO2 equivalence banner ───────────────────────────────────
     const eqY = startY + stats.length * (rowH + rowGap) + 4
-    const eqBg = this.add.graphics().setScrollFactor(0).setDepth(502)
+    const eqBg = this.add.graphics().setScrollFactor(0).setDepth(301)
     eqBg.fillStyle(0x0d1f2f, 1)
     eqBg.fillRoundedRect(cardX + 16, eqY, cardW - 32, 34, 10)
     eqBg.lineStyle(1, 0x1e4e6e, 0.6)
@@ -2934,11 +2007,11 @@ const positions = [
     this.add.text(width / 2, eqY + 17,
       `🚗  Equal to removing ${Math.max(1, Math.round(co2 / 140))} car${co2 >= 140 ? 's' : ''} from the road for a year`, {
       fontSize: '11px', fontFamily: 'Arial', color: '#8fc9d9'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(503)
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(302)
 
     // ── Species spotlight ─────────────────────────────────────────
     const spotY = eqY + 44
-    const spotBg = this.add.graphics().setScrollFactor(0).setDepth(502)
+    const spotBg = this.add.graphics().setScrollFactor(0).setDepth(301)
     spotBg.fillStyle(0x1f1a0a, 1)
     spotBg.fillRoundedRect(cardX + 16, spotY, cardW - 32, 58, 10)
     spotBg.lineStyle(1, 0xFFD700, 0.35)
@@ -2946,479 +2019,152 @@ const positions = [
 
     this.add.text(cardX + 32, spotY + 10, '🐦  SPECIES SPOTLIGHT', {
       fontSize: '10px', fontFamily: 'Arial Black', color: '#FFD700'
-    }).setScrollFactor(0).setDepth(503)
+    }).setScrollFactor(0).setDepth(302)
 
-    this.add.text(width / 2, spotY + 34, factText, {
+    this.add.text(width / 2, spotY + 34, birdFacts[this.chosenBird] || '', {
       fontSize: '11px', fontFamily: 'Arial', color: '#d8c9a3',
       wordWrap: { width: cardW - 64 }, align: 'center'
-    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(503)
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(302)
 
     // ── Button ───────────────────────────────────────────────────
     const btnY = cardY + cardH - 58
-    const btnH = 46
-
-    let hasExited = false
-    const returnToMenu = () => {
-      if (hasExited) return
-      hasExited = true
-      this.input.setDefaultCursor('default')
-      this.scene.stop('GameScene2')
-      this.scene.start('MenuScene')
-    }
 
     if (escaped) {
-      const btnW = 270
-      const btnBox = this.add.rectangle(width / 2, btnY + btnH / 2, btnW, btnH, 0x00d4ff)
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(504)
-        .setInteractive({ useHandCursor: true })
-
-      const btnText = this.add.text(width / 2, btnY + btnH / 2, 'EXPEDITION COMPLETE (ESC)', {
+      const nextBtn = this.add.text(width / 2, btnY, '  NEXT LEVEL →  ', {
         fontSize: '15px', fontFamily: 'Arial Black',
-        color: '#04141c'
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(505).setInteractive({ useHandCursor: true })
+        color: '#04141c', backgroundColor: '#00d4ff',
+        padding: { x: 26, y: 13 }
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(303).setInteractive()
 
-      const onHover = () => {
-        btnBox.setFillStyle(0x33e0ff)
-        btnText.setScale(1.04)
-      }
-      const onOut = () => {
-        btnBox.setFillStyle(0x00d4ff)
-        btnText.setScale(1.0)
-      }
-      btnBox.on('pointerover', onHover)
-      btnText.on('pointerover', onHover)
-      btnBox.on('pointerout', onOut)
-      btnText.on('pointerout', onOut)
-
-      btnBox.on('pointerdown', returnToMenu)
-      btnText.on('pointerdown', returnToMenu)
-    } else {
-      const btnW = 230
-      const btnBox = this.add.rectangle(width / 2, btnY + btnH / 2, btnW, btnH, 0xff3355)
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(504)
-        .setInteractive({ useHandCursor: true })
-
-      const btnText = this.add.text(width / 2, btnY + btnH / 2, 'PLAY AGAIN (ESC)', {
-        fontSize: '15px', fontFamily: 'Arial Black',
-        color: '#ffffff'
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(505).setInteractive({ useHandCursor: true })
-
-      const onHover = () => {
-        btnBox.setFillStyle(0xff5577)
-        btnText.setScale(1.04)
-      }
-      const onOut = () => {
-        btnBox.setFillStyle(0xff3355)
-        btnText.setScale(1.0)
-      }
-      btnBox.on('pointerover', onHover)
-      btnText.on('pointerover', onHover)
-      btnBox.on('pointerout', onOut)
-      btnText.on('pointerout', onOut)
-
-      btnBox.on('pointerdown', returnToMenu)
-      btnText.on('pointerdown', returnToMenu)
-    }
-
-    this.input.keyboard.once('keydown-ESC', returnToMenu)
-    this.input.keyboard.once('keydown-ENTER', returnToMenu)
-    this.input.keyboard.once('keydown-SPACE', returnToMenu)
-  }
-
-  togglePauseMenu() {
-    if (this.gameEnding) return
-    if (this.scene.isActive('FlashCardScene') || this.scene.isActive('FlashcardScene2')) return
-    if (this.terminalOpen) return
-
-    const now = Date.now()
-    if (this.lastPauseToggle && now - this.lastPauseToggle < 250) return
-    this.lastPauseToggle = now
-
-    if (this.isPaused) {
-      this.resumeGame()
-    } else {
-      this.pauseGame()
-    }
-  }
-
-  pauseGame() {
-    if (this.isPaused || this.gameEnding) return
-    this.isPaused = true
-    this.physics.pause()
-    if (this.player && this.player.setVelocity) {
-      this.player.setVelocity(0, 0)
-    }
-    if (this.monsterList) {
-      this.monsterList.forEach(m => {
-        if (m.body && m.body.setVelocity) m.body.setVelocity(0, 0)
+      this.tweens.add({
+        targets: nextBtn, scaleX: 1.04, scaleY: 1.04,
+        duration: 700, yoyo: true, repeat: -1
       })
-    }
-
-    const { width, height } = this.scale
-    const cx = width / 2
-    const cy = height / 2
-
-    this.pauseMenuElements = []
-
-    // Full-screen dark overlay
-    const backdrop = this.add.rectangle(cx, cy, width, height, 0x000000, 0.78)
-      .setScrollFactor(0)
-      .setDepth(100000)
-      .setInteractive()
-
-    // Modal card
-    const modalW = 400
-    const modalH = 320
-    const modalBox = this.add.graphics()
-      .setScrollFactor(0)
-      .setDepth(100001)
-    modalBox.fillStyle(0x081622, 0.96)
-    modalBox.fillRoundedRect(cx - modalW / 2, cy - modalH / 2, modalW, modalH, 16)
-    modalBox.lineStyle(3, 0x00bfff, 0.9)
-    modalBox.strokeRoundedRect(cx - modalW / 2, cy - modalH / 2, modalW, modalH, 16)
-
-    // Title
-    const title = this.add.text(cx, cy - 110, '⏸️ GAME PAUSED', {
-      fontSize: '24px',
-      fontFamily: 'Arial Black',
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 4
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(100002)
-
-    const sub = this.add.text(cx, cy - 75, `Level 2: Frozen Tundra • ${this.playerName} (${this.chosenBird})`, {
-      fontSize: '12px',
-      fontFamily: 'Arial',
-      color: '#99ddff'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(100002)
-
-    this.pauseMenuElements.push(backdrop, modalBox, title, sub)
-
-    // Helper to make direct interactive pause menu buttons
-    const makePauseBtn = (x, y, text, colorHex, borderHex, hoverHex, callback) => {
-      const btnW = 270
-      const btnH = 46
-
-      const btnBg = this.add.rectangle(x, y, btnW, btnH, colorHex, 0.92)
-        .setStrokeStyle(2, borderHex, 1)
-        .setScrollFactor(0)
-        .setDepth(100002)
-        .setInteractive({ useHandCursor: true })
-
-      const btnLabel = this.add.text(x, y, text, {
-        fontSize: '15px',
-        fontFamily: 'Arial Black',
-        color: '#ffffff',
-        stroke: '#000000',
-        strokeThickness: 3
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(100003).setInteractive({ useHandCursor: true })
-
-      const onOver = () => {
-        btnBg.setFillStyle(hoverHex || borderHex, 1)
-        btnBg.setStrokeStyle(2, 0xffffff, 1)
-        btnLabel.setScale(1.05)
-      }
-      const onOut = () => {
-        btnBg.setFillStyle(colorHex, 0.92)
-        btnBg.setStrokeStyle(2, borderHex, 1)
-        btnLabel.setScale(1)
-      }
-
-      btnBg.on('pointerover', onOver)
-      btnBg.on('pointerout', onOut)
-      btnBg.on('pointerdown', callback)
-
-      btnLabel.on('pointerover', onOver)
-      btnLabel.on('pointerout', onOut)
-      btnLabel.on('pointerdown', callback)
-
-      this.pauseMenuElements.push(btnBg, btnLabel)
-    }
-
-    // 1. Resume button
-    makePauseBtn(cx, cy - 25, '▶  RESUME', 0x155a8a, 0x00ccff, 0x1d7bbd, () => {
-      this.resumeGame()
-    })
-
-    // 2. Play Again button
-    makePauseBtn(cx, cy + 35, '🔄  PLAY AGAIN', 0xb86214, 0xffaa44, 0xd97718, () => {
-      this.playAgain()
-    })
-
-    // 3. Go to Main button
-    makePauseBtn(cx, cy + 95, '🏠  GO TO MAIN', 0x8a2020, 0xff5555, 0xb32b2b, () => {
-      this.goToMain()
-    })
-
-    this.scene.bringToTop()
-  }
-
-  resumeGame() {
-    if (!this.isPaused) return
-    this.isPaused = false
-    if (this.pauseMenuElements && this.pauseMenuElements.length > 0) {
-      this.pauseMenuElements.forEach(el => {
-        if (el && el.destroy) el.destroy()
+      nextBtn.on('pointerover', () => {
+        nextBtn.setStyle({ backgroundColor: '#33e0ff' })
+        this.input.setDefaultCursor('pointer')
       })
-      this.pauseMenuElements = null
-    }
-    this.physics.resume()
-    if (this.scene.isActive('UIScene')) {
-      this.scene.bringToTop('UIScene')
-    }
-  }
-
-  playAgain() {
-    this.isPaused = false
-    this.cleanupPauseAndListeners()
-    this.scene.stop('UIScene')
-    this.scene.start('GameScene2', this.initData || {
-      playerName: this.playerName,
-      chosenBird: this.chosenBird,
-      score: this.score,
-      previousScore: this.previousScore || this.score,
-      evolutionStage: this.evolutionStage || 1,
-      playerHP: 5,
-      maxHP: 5
-    })
-  }
-
-  goToMain() {
-    this.isPaused = false
-    this.cleanupPauseAndListeners()
-    this.scene.stop('UIScene')
-    this.scene.start('MenuScene')
-  }
-
-  cleanupPauseAndListeners() {
-    if (this.onEscKeyDown) {
-      window.removeEventListener('keydown', this.onEscKeyDown)
-      this.onEscKeyDown = null
-    }
-    if (this.pauseMenuElements && this.pauseMenuElements.length > 0) {
-      this.pauseMenuElements.forEach(el => {
-        if (el && el.destroy) el.destroy()
+      nextBtn.on('pointerout', () => {
+        nextBtn.setStyle({ backgroundColor: '#00d4ff' })
+        this.input.setDefaultCursor('default')
       })
-      this.pauseMenuElements = null
-    }
-  }
-
-  update(time, delta) {
-    if (this.gameEnding) return
-    if (this.isPaused) {
-      if (this.player && this.player.setVelocity) this.player.setVelocity(0, 0)
-      return
-    }
-
-    // Check if player pressed any movement key to unfreeze animal notification
-    const moveInput = (this.wasd && (this.wasd.left.isDown || this.wasd.right.isDown ||
-                      this.wasd.up.isDown || this.wasd.down.isDown)) ||
-                      (this.cursors && (this.cursors.left.isDown || this.cursors.right.isDown ||
-                      this.cursors.up.isDown || this.cursors.down.isDown))
-
-    if (this.animalNotificationFrozen) {
-      const now = (this.time && this.time.now) ? this.time.now : Date.now()
-      const elapsed = now - (this.cardFreezeTimestamp || 0)
-      if (moveInput && elapsed > 250) {
-        this.dismissWildlifeCard()
-      } else {
-        this.player.setVelocity(0, 0)
-        this.monsterList.forEach(m => {
-          if (m.body && m.body.active) m.body.setVelocity(0, 0)
+      nextBtn.on('pointerdown', () => {
+        console.log('NEXT LEVEL → GameScene3')
+        this.scene.start('GameScene3', {
+          playerName: this.playerName,
+          chosenBird: this.chosenBird,
+          score: this.score
         })
-        return
-      }
+      })
+    } else {
+      const retryBtn = this.add.text(width / 2, btnY, '  PLAY AGAIN  ', {
+        fontSize: '16px', fontFamily: 'Arial Black',
+        color: '#ffffff', backgroundColor: '#ff3355',
+        padding: { x: 26, y: 13 }
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(303).setInteractive()
+
+      this.tweens.add({
+        targets: retryBtn, scaleX: 1.04, scaleY: 1.04,
+        duration: 700, yoyo: true, repeat: -1
+      })
+      retryBtn.on('pointerover', () => {
+        retryBtn.setStyle({ backgroundColor: '#ff5577' })
+        this.input.setDefaultCursor('pointer')
+      })
+      retryBtn.on('pointerout', () => {
+        retryBtn.setStyle({ backgroundColor: '#ff3355' })
+        this.input.setDefaultCursor('default')
+      })
+      retryBtn.on('pointerdown', () => this.scene.start('MenuScene'))
     }
+  }
 
-    const frameDelta = (delta !== undefined && delta !== null) ? delta : (this.game && this.game.loop ? this.game.loop.delta : 16.6)
-    const dt = (frameDelta > 0 && frameDelta < 500) ? (frameDelta / 1000) : (1 / 60)
+  update() {
+  if (this.gameEnding) return
 
-    // ── Shield duration countdown (strictly temporary 10s) ──────
-    if (this.shieldActive) {
-      this.shieldTimeRemaining = Math.max(0, this.shieldTimeRemaining - dt)
-      if (this.shieldTimeRemaining <= 0) {
-        this.deactivateShield()
-      }
-    }
+  const delta = this.game.loop.delta
+  this.updateWarmth(delta)
+  this.isRescuing = false
+  this.maybePlayerFootprint()
 
-    this.updateWarmth(frameDelta)
-    this.isRescuing = false
-    this.maybePlayerFootprint()
+  const speed = (this.evolutionStage >= 2 ? 190 : 140) * (this.warmth <= 0 ? 0.8 : 1)
+  let vx = 0, vy = 0
+  this.isMoving = false
 
-    const speed = (this.evolutionStage >= 2 ? 190 : 140) * (this.warmth <= 0 ? 0.8 : 1)
-    let vx = 0, vy = 0
-    this.isMoving = false
+  if (this.terminalOpen) {
+    this.player.setVelocity(0, 0)
+    this.monsterList.forEach(m => { if (m.alive && m.body && m.body.active) m.body.setVelocity(0, 0) })
+    this.portalAngle += 0.035
+    this.drawPortal()
+    return
+  }
 
-    if (this.terminalOpen) {
-      this.player.setVelocity(0, 0)
-      this.monsterList.forEach(m => { if (m.alive && m.body && m.body.active) m.body.setVelocity(0, 0) })
-      this.portalAngle += 0.035
-      this.drawPortal()
+  const b = this.chosenBird.toLowerCase()
+  if (this.wasd.left.isDown || this.cursors.left.isDown) {
+    vx = -speed; this.playerDir = 'left'
+    this.player.setTexture(b + '_left'); this.isMoving = true
+  } else if (this.wasd.right.isDown || this.cursors.right.isDown) {
+    vx = speed; this.playerDir = 'right'
+    this.player.setTexture(b + '_right'); this.isMoving = true
+  }
+  if (this.wasd.up.isDown || this.cursors.up.isDown) {
+    vy = -speed; this.playerDir = 'up'
+    this.player.setTexture(b + '_back'); this.isMoving = true
+  } else if (this.wasd.down.isDown || this.cursors.down.isDown) {
+    vy = speed; this.playerDir = 'down'
+    this.player.setTexture(b + '_front'); this.isMoving = true
+  }
+
+  const nextX = this.player.x + vx * 0.05
+  const nextY = this.player.y + vy * 0.05
+  const hw = 16
+  const curRow = Math.floor(this.player.y / this.TILE)
+  const curCol = Math.floor(this.player.x / this.TILE)
+  if (vx < 0 && this.isWall(Math.floor((nextX - hw) / this.TILE), curRow)) vx = 0
+  if (vx > 0 && this.isWall(Math.floor((nextX + hw) / this.TILE), curRow)) vx = 0
+  if (vy < 0 && this.isWall(curCol, Math.floor((nextY - hw) / this.TILE))) vy = 0
+  if (vy > 0 && this.isWall(curCol, Math.floor((nextY + hw) / this.TILE))) vy = 0
+
+  this.player.setVelocity(vx, vy)
+
+  if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) this.useWeapon()
+
+  // ── Hunter AI ──────────────────────────────────────────────
+  this.monsterList.forEach(m => {
+    if (!m.alive || !m.body || !m.body.active) return
+
+    if (m.frozen) {
+      this.drawMonster(m, m.body.x, m.body.y, true)
+      this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
       return
     }
 
-    const b = this.chosenBird.toLowerCase()
-    if (this.wasd.left.isDown || this.cursors.left.isDown) {
-      vx = -speed; this.playerDir = 'left'
-      this.player.setTexture(b + '_left'); this.isMoving = true
-    } else if (this.wasd.right.isDown || this.cursors.right.isDown) {
-      vx = speed; this.playerDir = 'right'
-      this.player.setTexture(b + '_right'); this.isMoving = true
-    }
-    if (this.wasd.up.isDown || this.cursors.up.isDown) {
-      vy = -speed; this.playerDir = 'up'
-      this.player.setTexture(b + '_back'); this.isMoving = true
-    } else if (this.wasd.down.isDown || this.cursors.down.isDown) {
-      vy = speed; this.playerDir = 'down'
-      this.player.setTexture(b + '_front'); this.isMoving = true
+    const mc = Math.floor(m.body.x / this.TILE)
+    const mr = Math.floor(m.body.y / this.TILE)
+    if (this.isWall(mc, mr)) {
+      m.body.setPosition(m.spawnX, m.spawnY)
+      m.body.setVelocity(0, 0); m.patrolTimer = 0
+      this.drawMonster(m, m.body.x, m.body.y, false)
+      this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+      return
     }
 
-    const nextX = this.player.x + (vx * 0.05)
-    const nextY = this.player.y + (vy * 0.05)
-    const hw = 14
-    const leftTile = Math.floor((nextX - hw) / this.TILE)
-    const rightTile = Math.floor((nextX + hw) / this.TILE)
-    const topTile = Math.floor((nextY - hw) / this.TILE)
-    const bottomTile = Math.floor((nextY + hw) / this.TILE)
-    const curRow = Math.floor(this.player.y / this.TILE)
-    const curCol = Math.floor(this.player.x / this.TILE)
+    const distToPlayer = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
+    const alerted = m.alertedUntil && this.time.now < m.alertedUntil
+    const chaseRange = (m.alwaysChase || alerted) ? 9999 : this.stealthMode ? 0 : (this.evolutionStage >= 2 ? 110 : 140) * (this.blizzardActive ? 0.7 : 1)
 
-    // Check all 3 vertical points along the left side
-    if (vx < 0 && (this.isWall(leftTile, curRow) || this.isWall(leftTile, topTile) || this.isWall(leftTile, bottomTile))) {
-      vx = 0
-      this.player.x = Math.max(this.player.x, (leftTile + 1) * this.TILE + hw)
-    }
-    // Check all 3 vertical points along the right side
-    if (vx > 0 && (this.isWall(rightTile, curRow) || this.isWall(rightTile, topTile) || this.isWall(rightTile, bottomTile))) {
-      vx = 0
-      this.player.x = Math.min(this.player.x, rightTile * this.TILE - hw)
-    }
-    // Check all 3 horizontal points along the top side
-    if (vy < 0 && (this.isWall(curCol, topTile) || this.isWall(leftTile, topTile) || this.isWall(rightTile, topTile))) {
-      vy = 0
-      this.player.y = Math.max(this.player.y, (topTile + 1) * this.TILE + hw)
-    }
-    // Check all 3 horizontal points along the bottom side
-    if (vy > 0 && (this.isWall(curCol, bottomTile) || this.isWall(leftTile, bottomTile) || this.isWall(rightTile, bottomTile))) {
-      vy = 0
-      this.player.y = Math.min(this.player.y, bottomTile * this.TILE - hw)
-    }
-
-    // Prevent diagonal corner-cutting into wall vertices
-    if (vx !== 0 && vy !== 0) {
-      const checkX = vx < 0 ? (this.player.x - hw + vx * 0.05) : (this.player.x + hw + vx * 0.05)
-      const checkY = vy < 0 ? (this.player.y - hw + vy * 0.05) : (this.player.y + hw + vy * 0.05)
-      const cCol = Math.floor(checkX / this.TILE)
-      const cRow = Math.floor(checkY / this.TILE)
-      if (this.isWall(cCol, cRow)) {
-        const dx = Math.abs(checkX - (cCol * this.TILE + (vx > 0 ? 0 : this.TILE)))
-        const dy = Math.abs(checkY - (cRow * this.TILE + (vy > 0 ? 0 : this.TILE)))
-        if (dx > dy) vx = 0
-        else vy = 0
-      }
-    }
-
-    // Safety net: if player is ever inside a wall tile, smoothly push out to nearest open tile
-    const checkCurC = Math.floor(this.player.x / this.TILE)
-    const checkCurR = Math.floor(this.player.y / this.TILE)
-    if (this.isWall(checkCurC, checkCurR)) {
-      const neighbors = [
-        { c: checkCurC, r: checkCurR - 1 }, { c: checkCurC, r: checkCurR + 1 },
-        { c: checkCurC - 1, r: checkCurR }, { c: checkCurC + 1, r: checkCurR }
-      ]
-      const openTile = neighbors.find(n => !this.isWall(n.c, n.r))
-      if (openTile) {
-        this.player.setPosition(
-          openTile.c * this.TILE + this.TILE / 2,
-          openTile.r * this.TILE + this.TILE / 2
-        )
-      }
-    }
-
-    this.player.setVelocity(vx, vy)
-
-    if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) this.useWeapon()
-
-    // ── Hunter AI ──────────────────────────────────────────────
-    this.monsterList.forEach(m => {
-      if (!m.alive || !m.body || !m.body.active) return
-
-      if (m.frozen) {
-        this.drawMonster(m, m.body.x, m.body.y, true)
-        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 48, m.hp, m.maxHp)
-        return
-      }
-
-      const mc = Math.floor(m.body.x / this.TILE)
-      const mr = Math.floor(m.body.y / this.TILE)
-      if (this.isWall(mc, mr)) {
-        m.body.setPosition(m.spawnX, m.spawnY)
-        m.body.setVelocity(0, 0); m.patrolTimer = 0
-        this.drawMonster(m, m.body.x, m.body.y, false)
-        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 48, m.hp, m.maxHp)
-        return
-      }
-
-      const distToPlayer = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
-      const alerted = m.alertedUntil && this.time.now < m.alertedUntil
-      const chaseRange = (m.alwaysChase || alerted) ? 9999 : (this.stealthMode || this.shieldActive) ? 0 : (this.evolutionStage >= 2 ? 110 : 140) * (this.blizzardActive ? 0.7 : 1)
-
-      // Solid obstacles block enemy vision for tactical sneak evasion
-      const hasLOS = this.hasLineOfSight(m.body.x, m.body.y, this.player.x, this.player.y)
-      const canDetectPlayer = alerted || m.alwaysChase || (distToPlayer < chaseRange && hasLOS)
-
-      // 🪤 Investigating a trapped animal takes priority over patrolling,
-      // unless the player wanders close enough to draw the hunter's attention.
-      if (m.state === 'investigate' && !canDetectPlayer) {
-        const target = m.investigateTarget
-        if (!target || target.rescued || target.lost) {
-          m.state = null
-          m.investigateTarget = null
-        } else {
-          m.alert.setVisible(true)
-          m.alert.setPosition(m.body.x, m.body.y - 60)
-          const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, target.x, target.y)
-          const ms = 65
-          const mvx = Math.cos(angle) * ms, mvy = Math.sin(angle) * ms
-          const nc = Math.floor((m.body.x + mvx * 0.05) / this.TILE)
-          const nr = Math.floor((m.body.y + mvy * 0.05) / this.TILE)
-          const finalVx = this.isWall(nc, mr) ? 0 : mvx
-          const finalVy = this.isWall(mc, nr) ? 0 : mvy
-          m.body.setVelocity(finalVx, finalVy)
-          this.animateHunterWalk(m)
-
-          if (Math.abs(finalVx) > Math.abs(finalVy)) {
-            if (finalVx !== 0) m.graphic.setTexture(finalVx > 0 ? 'hunter_right' : 'hunter_left')
-          } else if (finalVy !== 0) {
-            m.graphic.setTexture(finalVy > 0 ? 'hunter_front' : 'hunter_back')
-          }
-          m.graphic.setDisplaySize(58, 74)
-
-          if (Phaser.Math.Distance.Between(m.body.x, m.body.y, target.x, target.y) < 34) {
-            this.loseTrappedAnimal(target, 'hunter')
-            m.state = null
-            m.investigateTarget = null
-          }
-
-          this.maybeLayHunterFootprint(m)
-          this.drawMonster(m, m.body.x, m.body.y, false)
-          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 48, m.hp, m.maxHp)
-          return
-        }
-      }
-
-      if (canDetectPlayer) {
+    // 🪤 Investigating a trapped animal takes priority over patrolling,
+    // unless the player wanders close enough to draw the hunter's attention.
+    if (m.state === 'investigate' && distToPlayer >= chaseRange) {
+      const target = m.investigateTarget
+      if (!target || target.rescued || target.lost) {
         m.state = null
         m.investigateTarget = null
-        m.chasing = true
+      } else {
         m.alert.setVisible(true)
-        m.alert.setPosition(m.body.x, m.body.y - 60)
-        const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, this.player.x, this.player.y)
-        const ms = 55
+        m.alert.setPosition(m.body.x, m.body.y - 42)
+        const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, target.x, target.y)
+        const ms = 65
         const mvx = Math.cos(angle) * ms, mvy = Math.sin(angle) * ms
         const nc = Math.floor((m.body.x + mvx * 0.05) / this.TILE)
         const nr = Math.floor((m.body.y + mvy * 0.05) / this.TILE)
@@ -3432,22 +2178,58 @@ const positions = [
         } else if (finalVy !== 0) {
           m.graphic.setTexture(finalVy > 0 ? 'hunter_front' : 'hunter_back')
         }
-        m.graphic.setDisplaySize(58, 74)
+        m.graphic.setDisplaySize(48, 58)
 
-        if (!this.shieldActive && distToPlayer < 36 && !this.playerHitCooldown) {
-          this.playerHitCooldown = true
-          this.playerHP--
-          this.cameras.main.shake(200, 0.008)
-          this.player.setTint(0xff0000)
-          this.showFloatingText(this.player.x, this.player.y - 30, '💔 -1 Heart', '#ff0000')
-          this.time.delayedCall(1500, () => {
-            this.player.clearTint()
-            if (this.evolutionStage === 2) this.player.setTint(0xaaffff)
-            if (this.evolutionStage === 3) this.player.setTint(0xFFD700)
-            this.playerHitCooldown = false
-          })
-          if (this.playerHP <= 0) this.endGame(false)
+        if (Phaser.Math.Distance.Between(m.body.x, m.body.y, target.x, target.y) < 34) {
+          this.loseTrappedAnimal(target, 'hunter')
+          m.state = null
+          m.investigateTarget = null
         }
+
+        this.maybeLayHunterFootprint(m)
+        this.drawMonster(m, m.body.x, m.body.y, false)
+        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+        return
+      }
+    }
+
+    if (distToPlayer < chaseRange) {
+      m.state = null
+      m.investigateTarget = null
+      m.chasing = true
+      m.alert.setVisible(true)
+      m.alert.setPosition(m.body.x, m.body.y - 42)
+      const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, this.player.x, this.player.y)
+      const ms = 55
+      const mvx = Math.cos(angle) * ms, mvy = Math.sin(angle) * ms
+      const nc = Math.floor((m.body.x + mvx * 0.05) / this.TILE)
+      const nr = Math.floor((m.body.y + mvy * 0.05) / this.TILE)
+      const finalVx = this.isWall(nc, mr) ? 0 : mvx
+      const finalVy = this.isWall(mc, nr) ? 0 : mvy
+      m.body.setVelocity(finalVx, finalVy)
+      this.animateHunterWalk(m)
+
+      if (Math.abs(finalVx) > Math.abs(finalVy)) {
+        if (finalVx !== 0) m.graphic.setTexture(finalVx > 0 ? 'hunter_right' : 'hunter_left')
+      } else if (finalVy !== 0) {
+        m.graphic.setTexture(finalVy > 0 ? 'hunter_front' : 'hunter_back')
+      }
+      m.graphic.setDisplaySize(48, 58)
+
+      if (distToPlayer < 36 && !this.playerHitCooldown) {
+        this.playerHitCooldown = true
+        this.playerHP--
+        this.cameras.main.shake(200, 0.008)
+        this.player.setTint(0xff0000)
+        this.showFloatingText(this.player.x, this.player.y - 30, '💔 -1 Heart', '#ff0000')
+        this.time.delayedCall(1500, () => {
+          this.player.clearTint()
+          if (this.evolutionStage === 2) this.player.setTint(0xaaffff)
+          if (this.evolutionStage === 3) this.player.setTint(0xFFD700)
+          this.playerHitCooldown = false
+        })
+        if (this.playerHP <= 0) this.endGame(false)
+      }
 
     } else {
       m.chasing = false
@@ -3467,7 +2249,7 @@ const positions = [
         } else if (d.vy !== 0) {
           m.graphic.setTexture(d.vy > 0 ? 'hunter_front' : 'hunter_back')
         }
-        m.graphic.setDisplaySize(58, 74)
+        m.graphic.setDisplaySize(48, 58)
       }
 
       for (let i = 0; i < this.eggList.length; i++) {
@@ -3512,7 +2294,7 @@ const positions = [
 
     this.maybeLayHunterFootprint(m)
     this.drawMonster(m, m.body.x, m.body.y, false)
-    this.drawHPBar(m.hpBar, m.body.x, m.body.y - 48, m.hp, m.maxHp)
+    this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
   })
 
   // ── Sapling collection ────────────────────────────────────────
@@ -3691,60 +2473,33 @@ w.fleeing = nearestHunterDist < 90
     })
   }
 
-  // ── Shield pickup ─────────────────────────────────────────────
-  if (this.shieldList) {
-    this.shieldList.forEach(s => {
-      if (s.collected) return
-      const dist = Phaser.Math.Distance.Between(
-        this.player.x, this.player.y, s.x, s.y
-      )
-      if (dist < 32) {
-        s.collected = true
-        if (s.bg) s.bg.destroy()
-        if (s.ring) s.ring.destroy()
-        if (s.icon) s.icon.destroy()
-        if (s.label) s.label.destroy()
-        this.activateShield(10)
-      }
-    })
-  }
-
-  // ── Shield protective aura update ─────────────────────────────
-  if (this.shieldActive && this.playerShieldGfx && this.player && this.player.active) {
-    this.playerShieldGfx.clear()
-    const pulse = 0.5 + Math.sin(Date.now() / 250) * 0.25
-    this.playerShieldGfx.lineStyle(2, 0x00e5ff, pulse)
-    this.playerShieldGfx.strokeCircle(this.player.x, this.player.y, 24)
-    this.playerShieldGfx.fillStyle(0x00e5ff, 0.12 * pulse)
-    this.playerShieldGfx.fillCircle(this.player.x, this.player.y, 24)
-  }
-
+  // ── Weapon pickup ─────────────────────────────────────────────
+  this.weaponList.forEach(w => {
+    if (w.collected) return
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, w.x, w.y) < 32) {
+      w.collected = true
+      w.bg.destroy(); w.label.destroy(); w.desc.destroy()
+      this.currentWeapon = w.type
+      const labels = { bomb: '💣 BOMB equipped!', ice: '❄️ ICE equipped!', lightning: '⚡ LIGHTNING equipped!', boomerang: '🪃 BOOMERANG equipped!' }
+      this.showFloatingText(this.player.x, this.player.y - 30, labels[w.type], '#ffffff')
+    }
+  })
 
   // ── Portal check ────────────────────────────────────────────
   const px = this.portalCol * this.TILE + this.TILE / 2
   const py = this.portalRow * this.TILE + this.TILE / 2
-  if (Phaser.Math.Distance.Between(this.player.x, this.player.y, px, py) < 38) {
-    this.endGame(true)
-    return
-  }
-  if (this.timeLeft < 0) {
-    this.endGame(false)
-    return
-  }
+  if (Phaser.Math.Distance.Between(this.player.x, this.player.y, px, py) < 38) this.endGame(true)
+  if (this.timeLeft < 0) this.endGame(false)
 
   this.portalAngle += 0.035
   this.drawPortal()
 
   this.bobTimer += 1
-  const baseSize = this.playerBaseSize || 52
   if (this.isMoving) {
-    this.player.setDisplaySize(
-      this.bobTimer > 8 ? baseSize + 3 : baseSize - 2,
-      this.bobTimer > 8 ? baseSize - 3 : baseSize + 3
-    )
+    this.player.setDisplaySize(this.bobTimer > 8 ? (this.TILE + 8) + 5 : (this.TILE + 8) - 2, this.bobTimer > 8 ? (this.TILE + 8) - 5 : (this.TILE + 8) + 5)
     if (this.bobTimer > 15) this.bobTimer = 0
   } else {
-    this.player.setDisplaySize(baseSize, baseSize)
+    this.player.setDisplaySize(this.TILE + 8, this.TILE + 8)
   }
 }
 }
