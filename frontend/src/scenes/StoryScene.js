@@ -25,10 +25,10 @@ export class StoryScene extends Phaser.Scene {
     try {
       let bgm = this.sound.get('menu_bg_music')
       if (!bgm) {
-        bgm = this.sound.add('menu_bg_music', { loop: true, volume: 0.55 })
+        bgm = this.sound.add('menu_bg_music', { loop: true, volume: 0.38 })
         bgm.play()
       } else if (!bgm.isPlaying) {
-        bgm.play({ loop: true, volume: 0.55 })
+        bgm.play({ loop: true, volume: 0.38 })
       }
     } catch (e) {
       console.warn('Story BGM notice:', e)

@@ -873,6 +873,7 @@ export class GameScene extends Phaser.Scene {
         }
         if (!this.animalRescueNotificationContainer.visible) {
           this.animalRescueNotificationContainer.setVisible(true)
+          try { this.sound.play('notification_popup', { volume: 0.7 }) } catch (e) {}
         }
       } else {
         if (this.animalRescueNotificationContainer.visible) {
@@ -883,6 +884,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   showWildlifeCard(species, fact) {
+    try { this.sound.play('notification_popup', { volume: 0.75 }) } catch (e) {}
     if (this.activeWildlifeCard) {
       this.activeWildlifeCard.forEach(el => {
         if (el && el.destroy) el.destroy()
@@ -3051,6 +3053,7 @@ export class GameScene extends Phaser.Scene {
         if (!this.shieldActive && distToPlayer < attackRange && !this.playerHitCooldown && !this.isAttacking) {
           this.playerHitCooldown = true
           this.playerHP--
+          try { this.sound.play('horror_sound', { volume: 0.85 }) } catch (e) {}
           this.cameras.main.shake(200, 0.008)
           this.player.setTint(0xff0000)
           this.showFloatingText(this.player.x, this.player.y - 30, '💔 -1 Heart', '#ff0000')
@@ -3168,6 +3171,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         this.eggsCollected++
+        try { this.sound.play('notification_popup', { volume: 0.75 }) } catch (e) {}
         const flashCardMap = {
           normal: 'flashCard_1',
           fire: 'flashCard_2',
@@ -3235,6 +3239,7 @@ export class GameScene extends Phaser.Scene {
     if (nearbyShrine && !nearbyShrine.used && !this.gameEnding && !this.isPaused) {
       if (this.heartNotificationContainer && !this.heartNotificationContainer.visible) {
         this.heartNotificationContainer.setVisible(true)
+        try { this.sound.play('notification_popup', { volume: 0.7 }) } catch (e) {}
       }
     } else {
       if (this.heartNotificationContainer && this.heartNotificationContainer.visible) {

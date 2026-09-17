@@ -85,6 +85,8 @@ export class GameScene3 extends Phaser.Scene {
     this.load.audio('electrofied_poisoned_sound', 'resource/audio/electrofied_poisoned.mp3')
     this.load.audio('esc_sound', 'resource/audio/esc.mp3')
     this.load.audio('last_scene_music', 'resource/audio/last_scene.mp3')
+    this.load.audio('horror_sound', 'resource/audio/horror_sound.mp3')
+    this.load.audio('notification_popup', 'resource/audio/notification_popup.mp3')
   }
 
   init(data) {
@@ -1291,6 +1293,7 @@ export class GameScene3 extends Phaser.Scene {
   }
 
   showWildlifeCard(species, fact) {
+    try { this.sound.play('notification_popup', { volume: 0.75 }) } catch (e) {}
     if (this.activeWildlifeCard) {
       this.activeWildlifeCard.forEach(el => {
         if (el && el.destroy) el.destroy()

@@ -7,6 +7,13 @@ export class GameScene2 extends Phaser.Scene {
   preload() {
     this.load.image('snow_ground', 'resource/tiles/0_snow_ground.png')
     this.load.image('dark_snow', 'resource/tiles/1_dark_snow.png')
+    this.load.audio('select_sound', 'resource/audio/select_sound.mp3')
+    this.load.audio('final_portal_sound', 'resource/audio/reaching_final_portal.mp3')
+    this.load.audio('game_over_sound', 'resource/audio/game_over.mp3')
+    this.load.audio('attacking_the_monsters_sound', 'resource/audio/attacking_the_monsters.mp3')
+    this.load.audio('esc_sound', 'resource/audio/esc.mp3')
+    this.load.audio('horror_sound', 'resource/audio/horror_sound.mp3')
+    this.load.audio('notification_popup', 'resource/audio/notification_popup.mp3')
     this.load.image('ice', 'resource/tiles/2_ice.png')
     this.load.image('frozen_water', 'resource/tiles/3_frozen_water.png')
     this.load.image('snow_cliff', 'resource/tiles/4_snow_cliff.png')
@@ -77,7 +84,20 @@ export class GameScene2 extends Phaser.Scene {
     this.timeLeft = 200
     this.bobTimer = 0
     this.isMoving = false
-    this.currentWeapon = 'normal'
+
+    const birdPowerMap = {
+      Ember: 'fire',
+      Frost: 'ice',
+      Volt: 'lightning',
+      Shade: 'bomb',
+      Gale: 'boomerang'
+    }
+    const birdKey = this.chosenBird
+      ? (this.chosenBird.charAt(0).toUpperCase() + this.chosenBird.slice(1).toLowerCase())
+      : 'Ember'
+    this.currentWeapon = birdPowerMap[birdKey] || 'fire'
+    this.basePower = this.currentWeapon
+
     this.playerHitCooldown = false
     this.playerHP = data.playerHP || 5
     this.maxHP = data.maxHP || 5
@@ -117,6 +137,23 @@ export class GameScene2 extends Phaser.Scene {
     this.input.keyboard.enabled = true
     this.input.keyboard.enableGlobalCapture()
     document.querySelectorAll('input').forEach(el => el.remove())
+
+    this.isPaused = false
+    this.pauseMenuElements = null
+
+    // Bulletproof ESC Pause key bindings
+    this.input.keyboard.addCapture(Phaser.Input.Keyboard.KeyCodes.ESC)
+    this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
+    this.escKey.on('down', () => this.togglePauseMenu())
+    this.input.keyboard.on('keydown-ESC', () => this.togglePauseMenu())
+
+    this.onEscKeyDown = (e) => {
+      if (e.key === 'Escape' || e.code === 'Escape' || e.keyCode === 27) {
+        e.preventDefault()
+        this.togglePauseMenu()
+      }
+    }
+    window.addEventListener('keydown', this.onEscKeyDown)
 
     this.TILE = 48
 
@@ -322,6 +359,7 @@ export class GameScene2 extends Phaser.Scene {
   }
 
   showWildlifeCard(species, fact) {
+    try { this.sound.play('notification_popup', { volume: 0.75 }) } catch (e) {}
     const { width, height } = this.scale
 
     const card = this.add.graphics().setScrollFactor(0).setDepth(400)
@@ -1628,100 +1666,364 @@ const positions = [
   useWeapon() {
     if (this.isAttacking) return
     this.isAttacking = true
-    const range = this.evolutionStage >= 3 ? 220 :
-      this.evolutionStage >= 2 ? 170 : 120
 
-    // Same two-layer ring effect GameScene1 uses for every attack:
-    // a thin expanding stroke ring, optionally paired with a soft glow.
+    if (this.sound && this.sound.play) {
+      this.sound.play('attacking_the_monsters_sound', { volume: 0.85 })
+    }
+
+    // Safe reset. Even if a power does nothing, attack will unlock.
+    this.time.delayedCall(500, () => {
+      this.isAttacking = false
+    })
+
+    const range = this.evolutionStage >= 3 ? 165 :
+      this.evolutionStage >= 2 ? 125 : 95
+
+    const attackColorMap = {
+      fire: 0xff2200,
+      lightning: 0xffdd00,
+      bomb: 0x111111,
+      ice: 0x00bfff,
+      wind: 0x88ffee,
+      boomerang: 0xc8a25a,
+      normal: this.birdColor || 0xffffff
+    }
+
+    const attackColor = attackColorMap[this.currentWeapon] || this.birdColor || 0xffffff
+
     const makeRing = (color, startRadius, finalScale, duration = 350) => {
       const ring = this.add.graphics()
       ring.setPosition(this.player.x, this.player.y)
       ring.lineStyle(3, color, 0.65)
       ring.strokeCircle(0, 0, startRadius)
+
       this.tweens.add({
-        targets: ring, scaleX: finalScale, scaleY: finalScale, alpha: 0,
-        duration, onComplete: () => ring.destroy()
+        targets: ring,
+        scaleX: finalScale,
+        scaleY: finalScale,
+        alpha: 0,
+        duration,
+        onComplete: () => ring.destroy()
       })
+
       return ring
     }
 
     switch (this.currentWeapon) {
-      case 'normal': {
-        makeRing(this.birdColor, 10, range / 10, 350)
-        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, this.birdColor)
+      case 'fire': {
+        makeRing(attackColor, 10, range / 16, 300)
+
+        const flame = this.add.graphics()
+        flame.setPosition(this.player.x, this.player.y)
+        flame.fillStyle(0xff6600, 0.35)
+        flame.fillCircle(0, 0, 22)
+
+        this.tweens.add({
+          targets: flame,
+          scaleX: 4,
+          scaleY: 4,
+          alpha: 0,
+          duration: 350,
+          onComplete: () => flame.destroy()
+        })
+
+        this.hitMonstersInRange(
+          this.player.x,
+          this.player.y,
+          range,
+          1,
+          0xff4500
+        )
+
+        this.showFloatingText(
+          this.player.x,
+          this.player.y - 30,
+          '🔥 Fire Burst!',
+          '#ff8844'
+        )
+
         break
       }
+
       case 'bomb': {
-        makeRing(0xFF6600, 12, range / 9, 320)
+        makeRing(attackColor, 12, range / 18, 320)
+
         const boom = this.add.graphics()
-        boom.fillStyle(0xFF6600, 0.7)
-        boom.fillCircle(this.player.x, this.player.y, 20)
-        this.tweens.add({ targets: boom, scaleX: 8, scaleY: 8, alpha: 0, duration: 500, onComplete: () => boom.destroy() })
-        this.hitMonstersInRange(this.player.x, this.player.y, range * 2.2, 3, 0xFF6600)
-        this.cameras.main.shake(300, 0.01)
-        this.showFloatingText(this.player.x, this.player.y - 30, '💣 Bomb Blast!', '#ff9955')
+        boom.setPosition(this.player.x, this.player.y)
+        boom.fillStyle(0x111111, 0.35)
+        boom.fillCircle(0, 0, 24)
+
+        this.tweens.add({
+          targets: boom,
+          scaleX: 5,
+          scaleY: 5,
+          alpha: 0,
+          duration: 420,
+          onComplete: () => boom.destroy()
+        })
+
+        this.hitMonstersInRange(
+          this.player.x,
+          this.player.y,
+          range * 1.05,
+          2,
+          attackColor
+        )
+
+        this.cameras.main.shake(180, 0.006)
+
+        this.showFloatingText(
+          this.player.x,
+          this.player.y - 30,
+          '💣 Bomb Blast!',
+          '#ff9955'
+        )
+
         break
       }
+
       case 'ice': {
-        makeRing(0x00BFFF, 10, range / 10, 400)
+        makeRing(0x00bfff, 10, range / 10, 400)
+
         let frozeAnyone = false
+
         this.monsterList.forEach(m => {
           if (!m.alive || !m.body || !m.body.active) return
-          const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
+
+          const dist = Phaser.Math.Distance.Between(
+            this.player.x,
+            this.player.y,
+            m.body.x,
+            m.body.y
+          )
+
           if (dist < range) {
             frozeAnyone = true
-            m.frozen = true
-            m.body.setVelocity(0, 0)
-            this.drawMonster(m, m.body.x, m.body.y, true)
-            this.showFloatingText(m.body.x, m.body.y - 20, '❄️ FROZEN!', '#00BFFF')
-            this.time.delayedCall(3000, () => { if (m.alive) { m.frozen = false; this.drawMonster(m, m.body.x, m.body.y, false) } })
+            m.hp -= 1
+            this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+            if (m.hp <= 0) {
+              this.killMonster(m)
+            } else {
+              m.frozen = true
+              m.body.setVelocity(0, 0)
+              this.drawMonster(m, m.body.x, m.body.y, true)
+              this.showFloatingText(m.body.x, m.body.y - 20, '❄️ FROZEN!', '#00BFFF')
+              this.time.delayedCall(3000, () => {
+                if (m.alive && m.body) {
+                  m.frozen = false
+                  this.drawMonster(m, m.body.x, m.body.y, false)
+                }
+              })
+            }
           }
         })
+
         if (!frozeAnyone) {
           this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#88ccff')
+        } else {
+          this.showFloatingText(this.player.x, this.player.y - 30, '❄️ Frost Blast!', '#88ccff')
         }
+
         break
       }
+
       case 'lightning': {
-        const sorted = this.monsterList.filter(m => m.alive && m.body && m.body.active)
-          .sort((a, b) => Phaser.Math.Distance.Between(this.player.x, this.player.y, a.body.x, a.body.y) - Phaser.Math.Distance.Between(this.player.x, this.player.y, b.body.x, b.body.y))
+        makeRing(attackColor, 10, range / 16, 280)
+        const targets = this.monsterList
+          .filter(m => {
+            if (!m.alive || !m.body || !m.body.active) return false
+
+            const dist = Phaser.Math.Distance.Between(
+              this.player.x,
+              this.player.y,
+              m.body.x,
+              m.body.y
+            )
+
+            return dist <= range * 1.7
+          })
+          .sort((a, b) =>
+            Phaser.Math.Distance.Between(this.player.x, this.player.y, a.body.x, a.body.y) -
+            Phaser.Math.Distance.Between(this.player.x, this.player.y, b.body.x, b.body.y)
+          )
           .slice(0, 3)
 
-        if (sorted.length === 0) {
+        if (targets.length === 0) {
           this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#888888')
           break
         }
 
-        makeRing(0xFFD700, 10, range / 16, 280)
         const lightning = this.add.graphics()
-        lightning.lineStyle(3, 0xFFD700, 1)
-        let lx = this.player.x, ly = this.player.y
-        sorted.forEach(m => {
-          lightning.beginPath(); lightning.moveTo(lx, ly)
-          const mx = (lx + m.body.x) / 2 + Phaser.Math.Between(-20, 20)
-          const my = (ly + m.body.y) / 2 + Phaser.Math.Between(-20, 20)
-          lightning.lineTo(mx, my); lightning.lineTo(m.body.x, m.body.y); lightning.strokePath()
-          lx = m.body.x; ly = m.body.y
-          m.hp--; this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
-          this.showFloatingText(m.body.x, m.body.y - 20, '⚡ ZAP!', '#FFD700')
-          if (m.hp <= 0) this.killMonster(m)
+        lightning.lineStyle(4, 0xffdd00, 1)
+
+        let lastX = this.player.x
+        let lastY = this.player.y
+
+        targets.forEach(m => {
+          if (!m.alive || !m.body || !m.body.active) return
+
+          lightning.beginPath()
+          lightning.moveTo(lastX, lastY)
+
+          const midX = (lastX + m.body.x) / 2 + Phaser.Math.Between(-18, 18)
+          const midY = (lastY + m.body.y) / 2 + Phaser.Math.Between(-18, 18)
+
+          lightning.lineTo(midX, midY)
+          lightning.lineTo(m.body.x, m.body.y)
+          lightning.strokePath()
+
+          lastX = m.body.x
+          lastY = m.body.y
+
+          m.hp -= 1
+          m.stunnedUntil = this.time.now + 450
+          m.body.setVelocity(0, 0)
+
+          if (m.hp <= 0) {
+            this.killMonster(m)
+            return
+          }
+
+          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+          this.showFloatingText(
+            m.body.x,
+            m.body.y - 20,
+            '⚡ ZAP!',
+            '#FFD700'
+          )
         })
-        this.tweens.add({ targets: lightning, alpha: 0, duration: 300, onComplete: () => lightning.destroy() })
-        this.showFloatingText(this.player.x, this.player.y - 30, '⚡ Electric Chain!', '#FFD700')
+
+        this.tweens.add({
+          targets: lightning,
+          alpha: 0,
+          duration: 260,
+          onComplete: () => lightning.destroy()
+        })
+
+        this.showFloatingText(
+          this.player.x,
+          this.player.y - 30,
+          '⚡ Electric Chain!',
+          '#FFD700'
+        )
+
         break
       }
-      case 'boomerang': {
-        makeRing(0xC8A25A, 10, range / 10, 250)
-        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xC8A25A)
-        this.time.delayedCall(400, () => {
-          makeRing(0xC8A25A, 10, range / 10, 250)
-          this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xC8A25A)
+
+      case 'wind': {
+        makeRing(0x88ffee, 10, range / 9, 380)
+
+        let hitAnyone = false
+
+        this.monsterList.forEach(m => {
+          if (!m.alive || !m.body || !m.body.active) return
+
+          const dist = Phaser.Math.Distance.Between(
+            this.player.x,
+            this.player.y,
+            m.body.x,
+            m.body.y
+          )
+
+          if (dist < range * 1.2) {
+            hitAnyone = true
+
+            const angle = Phaser.Math.Angle.Between(
+              this.player.x,
+              this.player.y,
+              m.body.x,
+              m.body.y
+            )
+
+            m.hp -= 1
+            m.stunnedUntil = this.time.now + 550
+
+            m.body.setVelocity(
+              Math.cos(angle) * 180,
+              Math.sin(angle) * 180
+            )
+
+            if (m.hp <= 0) {
+              this.killMonster(m)
+              return
+            }
+
+            this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+            this.showFloatingText(
+              m.body.x,
+              m.body.y - 20,
+              '🌪 Pushed!',
+              '#88ffee'
+            )
+          }
         })
+
+        if (!hitAnyone) {
+          this.showFloatingText(this.player.x, this.player.y - 30, 'Miss!', '#88ffee')
+        } else {
+          this.showFloatingText(this.player.x, this.player.y - 30, '🌪 Wind Force!', '#88ffee')
+        }
+
+        break
+      }
+
+      case 'boomerang': {
+        makeRing(0xc8a25a, 10, range / 10, 250)
+        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xc8a25a)
+
+        // Spawn spinning boomerang projectile arcing out
+        const b = this.add.text(this.player.x, this.player.y, '🪃', { fontSize: '24px' }).setOrigin(0.5).setDepth(20)
+        let targetAngle = 0
+        let closestDist = 9999
+        this.monsterList.forEach(m => {
+          if (m.alive && m.body) {
+            const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
+            if (d < range * 1.5 && d < closestDist) {
+              closestDist = d
+              targetAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, m.body.x, m.body.y)
+            }
+          }
+        })
+        const throwDist = Math.min(range, closestDist < 9999 ? closestDist : range)
+        const targetX = this.player.x + Math.cos(targetAngle) * throwDist
+        const targetY = this.player.y + Math.sin(targetAngle) * throwDist
+
+        this.tweens.add({
+          targets: b,
+          x: targetX,
+          y: targetY,
+          angle: 720,
+          duration: 260,
+          ease: 'Sine.easeOut',
+          onComplete: () => {
+            this.tweens.add({
+              targets: b,
+              x: this.player.x,
+              y: this.player.y,
+              angle: 1440,
+              duration: 260,
+              ease: 'Sine.easeIn',
+              onComplete: () => b.destroy()
+            })
+          }
+        })
+
+        this.time.delayedCall(300, () => {
+          makeRing(0xc8a25a, 10, range / 10, 250)
+          this.hitMonstersInRange(this.player.x, this.player.y, range, 1, 0xc8a25a)
+        })
+
         this.showFloatingText(this.player.x, this.player.y - 30, '🪃 Boomerang!', '#C8A25A')
         break
       }
+
+      case 'normal':
+      default: {
+        makeRing(this.birdColor || 0xffffff, 10, range / 10, 350)
+        this.hitMonstersInRange(this.player.x, this.player.y, range, 1, this.birdColor || 0xffffff)
+        break
+      }
     }
-    this.time.delayedCall(400, () => { this.isAttacking = false })
   }
 
   hitMonstersInRange(x, y, range, damage, color) {
@@ -1733,8 +2035,10 @@ const positions = [
         hit = true
         m.hp -= damage
         this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
-        m.graphic.setAlpha(0.3)
-        this.time.delayedCall(150, () => { if (m.graphic) m.graphic.setAlpha(1) })
+        if (m.graphic) {
+          m.graphic.setAlpha(0.3)
+          this.time.delayedCall(150, () => { if (m.graphic) m.graphic.setAlpha(1) })
+        }
         for (let i = 0; i < 8; i++) {
           const angle = (i / 8) * Math.PI * 2
           const burst = this.add.graphics()
@@ -1758,6 +2062,7 @@ const positions = [
   }
 
   killMonster(m) {
+    if (!m || !m.alive) return
     m.alive = false
     for (let i = 0; i < 10; i++) {
       const angle = (i / 10) * Math.PI * 2
@@ -1773,7 +2078,10 @@ const positions = [
         onComplete: () => burst.destroy()
       })
     }
-    m.graphic.destroy(); m.hpBar.destroy(); m.alert.destroy(); m.body.destroy()
+    if (m.graphic) m.graphic.destroy()
+    if (m.hpBar) m.hpBar.destroy()
+    if (m.alert) m.alert.destroy()
+    if (m.body) m.body.destroy()
     this.score += 300
     this.showFloatingText(m.body.x, m.body.y, '💥 +300', '#4488ff')
   }
@@ -1795,6 +2103,7 @@ const positions = [
   endGame(escaped) {
     if (this.gameEnding) return
     this.gameEnding = true
+    this.cleanupPauseAndListeners()
     this.cameras.main.shake(1, 0)
     this.cameras.main.stopFollow()
     this.cameras.main.resetFX()
@@ -1828,14 +2137,95 @@ const positions = [
       escaped: escaped
     }
 
-    // OPEN FLASHCARD SCENE (report is shown afterwards, from goToReport())
-    this.scene.launch('FlashcardScene2', {
-      flashCards: reportData.flashCards,
-      reportData: reportData
+    const launchNextScene = () => {
+      this.scene.launch('FlashcardScene2', {
+        flashCards: reportData.flashCards,
+        reportData: reportData
+      })
+      this.scene.pause('GameScene2')
+    }
+
+    if (escaped) {
+      if (this.sound && this.sound.play) {
+        this.sound.play('final_portal_sound', { volume: 0.9 })
+      }
+      this.playPortalGlam(() => {
+        launchNextScene()
+      })
+    } else {
+      if (this.sound && this.sound.play) {
+        this.sound.play('game_over_sound', { volume: 0.9 })
+      }
+      this.time.delayedCall(1200, () => {
+        launchNextScene()
+      })
+    }
+  }
+
+  playPortalGlam(onComplete) {
+    const { width, height } = this.scale
+    const duration = 6430 // Length of reaching_final_portal.mp3 (6.43s)
+
+    // Full-screen radiant glam overlay
+    const glam = this.add.rectangle(width / 2, height / 2, width, height, 0xffffff, 0)
+      .setScrollFactor(0)
+      .setDepth(999998)
+
+    // Radiant colored aura (celestial cyan/gold bloom)
+    const bloom = this.add.graphics()
+      .setScrollFactor(0)
+      .setDepth(999999)
+    bloom.fillStyle(0x00d4ff, 0.3)
+    bloom.fillCircle(width / 2, height / 2, Math.max(width, height) * 0.7)
+
+    // Radiant expanding rings
+    const rings = []
+    for (let i = 0; i < 3; i++) {
+      const ring = this.add.circle(width / 2, height / 2, 40 + i * 35, 0xffffff, 0)
+        .setStrokeStyle(4, 0x00e5ff, 0.8)
+        .setScrollFactor(0)
+        .setDepth(1000000)
+      rings.push(ring)
+      this.tweens.add({
+        targets: ring,
+        scaleX: 3.5,
+        scaleY: 3.5,
+        alpha: 0,
+        delay: i * 350,
+        duration: 1800,
+        repeat: -1,
+        ease: 'Cubic.easeOut'
+      })
+    }
+
+    if (this.cameras && this.cameras.main) {
+      this.cameras.main.flash(600, 255, 255, 255)
+    }
+
+    // Glam brightness tween across the duration of the audio
+    this.tweens.add({
+      targets: glam,
+      fillAlpha: { from: 0.1, to: 0.85 },
+      duration: 500,
+      onComplete: () => {
+        this.tweens.add({
+          targets: glam,
+          fillAlpha: 0.95,
+          duration: 900,
+          yoyo: true,
+          repeat: 5,
+          ease: 'Sine.easeInOut'
+        })
+      }
     })
 
-    // Pause GameScene2 AFTER launching flashcards
-    this.scene.pause('GameScene2')
+    this.time.delayedCall(duration, () => {
+      this.tweens.killTweensOf([glam, bloom, ...rings])
+      glam.destroy()
+      bloom.destroy()
+      rings.forEach(r => r.destroy())
+      if (onComplete) onComplete()
+    })
   }
   animateHunterWalk(m) {
     if (m.walkTween) return // already animating
@@ -1876,13 +2266,45 @@ const positions = [
           grade === 'B' ? '#00d4ff' :
             grade === 'C' ? '#FF8C00' : '#ff3355'
 
-    const birdFacts = {
-      Ember: 'Scarlet Macaws mate for life and can live 75 years in the wild.',
-      Frost: 'Snowy Owls are now Vulnerable due to rapid Arctic habitat loss.',
-      Volt: 'Only ~800 Philippine Eagles remain. Every individual matters.',
-      Shade: 'The Forest Owlet was thought extinct for 113 years until 1997.',
-      Gale: 'Fewer than 15 Bristlefronts may exist on Earth right now.'
+    const arcticSpeciesFacts = {
+      Frost: {
+        name: 'Snowy Owl (Bubo scandiacus)',
+        fact: 'Equipped with feathers down to their talons to withstand -50°C polar gales; rapid Arctic sea ice loss threatens their lemming hunting grounds.'
+      },
+      Ember: {
+        name: 'Red-throated Loon (Gavia stellata)',
+        fact: 'Breeds across Arctic tundra wetlands; their haunting calls signal unpolluted glacial lakes, but melting permafrost threatens their nesting grounds.'
+      },
+      Volt: {
+        name: 'Gyrfalcon (Falco rusticolus)',
+        fact: 'The world’s largest falcon, nesting on sheer Arctic sea cliffs and diving through blizzards at over 130 km/h to catch tundra prey.'
+      },
+      Shade: {
+        name: 'Boreal Owl (Aegolius funereus)',
+        fact: 'A secretive sub-arctic owl nesting exclusively in old-growth boreal cavities, serving as an indicator of ancient northern wilderness health.'
+      },
+      Gale: {
+        name: 'Arctic Tern (Sterna paradisaea)',
+        fact: 'Undertakes a 90,000 km pole-to-pole round-trip each year, linking polar ecosystems and witnessing more daylight than any creature on Earth.'
+      },
+      Bear: {
+        name: 'Polar Bear (Ursus maritimus)',
+        fact: 'Classified as marine mammals, Polar Bears rely on sea ice to hunt; retreating pack ice forces perilous swims that exhaust mothers and cubs.'
+      },
+      Penguin: {
+        name: 'Emperor Penguin (Aptenodytes forsteri)',
+        fact: 'Huddles in giant colonies during Antarctic blizzards at -60°C, rotating thousands of birds so all share life-saving body heat.'
+      }
     }
+    const chosenBirdKey = this.chosenBird
+      ? (this.chosenBird.charAt(0).toUpperCase() + this.chosenBird.slice(1).toLowerCase())
+      : 'Frost'
+    let spotlight = arcticSpeciesFacts[chosenBirdKey] || arcticSpeciesFacts.Frost
+    if (this.wildlifeJournal && this.wildlifeJournal.length > 0 && Math.random() < 0.5) {
+      spotlight = Math.random() < 0.5 ? arcticSpeciesFacts.Bear : arcticSpeciesFacts.Penguin
+    }
+    const spotlightName = spotlight.name
+    const factText = spotlight.fact
 
     // ── Dark overlay ────────────────────────────────────────────
     const overlay = this.add.graphics().setScrollFactor(0).setDepth(300)
@@ -2010,31 +2432,32 @@ const positions = [
     }).setOrigin(0.5).setScrollFactor(0).setDepth(302)
 
     // ── Species spotlight ─────────────────────────────────────────
-    const spotY = eqY + 44
-    const spotBg = this.add.graphics().setScrollFactor(0).setDepth(301)
-    spotBg.fillStyle(0x1f1a0a, 1)
-    spotBg.fillRoundedRect(cardX + 16, spotY, cardW - 32, 58, 10)
-    spotBg.lineStyle(1, 0xFFD700, 0.35)
-    spotBg.strokeRoundedRect(cardX + 16, spotY, cardW - 32, 58, 10)
+    const spotY = eqY + 40
+    const spotH = 68
+    const spotBg = this.add.graphics().setScrollFactor(0).setDepth(302)
+    spotBg.fillStyle(0x1a2410, 1)
+    spotBg.fillRoundedRect(cardX + 16, spotY, cardW - 32, spotH, 10)
+    spotBg.lineStyle(1.5, 0xFFD700, 0.5)
+    spotBg.strokeRoundedRect(cardX + 16, spotY, cardW - 32, spotH, 10)
 
-    this.add.text(cardX + 32, spotY + 10, '🐦  SPECIES SPOTLIGHT', {
-      fontSize: '10px', fontFamily: 'Arial Black', color: '#FFD700'
-    }).setScrollFactor(0).setDepth(302)
+    this.add.text(cardX + 26, spotY + 12, `🐦  SPECIES SPOTLIGHT — ${spotlightName.toUpperCase()}`, {
+      fontSize: '11px', fontFamily: 'Arial Black', color: '#FFD700', stroke: '#000000', strokeThickness: 2
+    }).setScrollFactor(0).setDepth(303)
 
-    this.add.text(width / 2, spotY + 34, birdFacts[this.chosenBird] || '', {
-      fontSize: '11px', fontFamily: 'Arial', color: '#d8c9a3',
-      wordWrap: { width: cardW - 64 }, align: 'center'
-    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(302)
+    this.add.text(width / 2, spotY + 40, factText, {
+      fontSize: '12px', fontFamily: 'Arial', color: '#ffffff', stroke: '#000000', strokeThickness: 2.5,
+      wordWrap: { width: cardW - 56 }, align: 'center', lineSpacing: 3
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(303)
 
     // ── Button ───────────────────────────────────────────────────
     const btnY = cardY + cardH - 58
 
     if (escaped) {
-      const nextBtn = this.add.text(width / 2, btnY, '  NEXT LEVEL →  ', {
+      const nextBtn = this.add.text(width / 2, btnY, '  NEXT LEVEL (ENTER) →  ', {
         fontSize: '15px', fontFamily: 'Arial Black',
         color: '#04141c', backgroundColor: '#00d4ff',
         padding: { x: 26, y: 13 }
-      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(303).setInteractive()
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(303).setInteractive({ useHandCursor: true })
 
       this.tweens.add({
         targets: nextBtn, scaleX: 1.04, scaleY: 1.04,
@@ -2048,20 +2471,33 @@ const positions = [
         nextBtn.setStyle({ backgroundColor: '#00d4ff' })
         this.input.setDefaultCursor('default')
       })
-      nextBtn.on('pointerdown', () => {
+
+      const proceedToLevel3 = () => {
+        if (this.sound && this.sound.play) {
+          this.sound.play('select_sound', { volume: 0.85 })
+        }
+        this.input.setDefaultCursor('default')
         console.log('NEXT LEVEL → GameScene3')
         this.scene.start('GameScene3', {
           playerName: this.playerName,
           chosenBird: this.chosenBird,
           score: this.score
         })
-      })
+      }
+
+      nextBtn.on('pointerdown', proceedToLevel3)
+
+      if (this.input && this.input.keyboard) {
+        this.input.keyboard.enabled = true
+        this.input.keyboard.once('keydown-ENTER', proceedToLevel3)
+        this.input.keyboard.once('keydown-SPACE', proceedToLevel3)
+      }
     } else {
-      const retryBtn = this.add.text(width / 2, btnY, '  PLAY AGAIN  ', {
-        fontSize: '16px', fontFamily: 'Arial Black',
+      const retryBtn = this.add.text(width / 2, btnY, '  PLAY AGAIN (ENTER)  ', {
+        fontSize: '15px', fontFamily: 'Arial Black',
         color: '#ffffff', backgroundColor: '#ff3355',
         padding: { x: 26, y: 13 }
-      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(303).setInteractive()
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(303).setInteractive({ useHandCursor: true })
 
       this.tweens.add({
         targets: retryBtn, scaleX: 1.04, scaleY: 1.04,
@@ -2075,12 +2511,238 @@ const positions = [
         retryBtn.setStyle({ backgroundColor: '#ff3355' })
         this.input.setDefaultCursor('default')
       })
-      retryBtn.on('pointerdown', () => this.scene.start('MenuScene'))
+
+      const doRetry = () => {
+        if (this.sound && this.sound.play) {
+          this.sound.play('select_sound', { volume: 0.85 })
+        }
+        this.input.setDefaultCursor('default')
+        this.scene.start('MenuScene')
+      }
+
+      retryBtn.on('pointerdown', doRetry)
+
+      if (this.input && this.input.keyboard) {
+        this.input.keyboard.enabled = true
+        this.input.keyboard.once('keydown-ENTER', doRetry)
+        this.input.keyboard.once('keydown-SPACE', doRetry)
+      }
+    }
+  }
+
+  togglePauseMenu() {
+    if (this.gameEnding) return
+    if (this.scene.isActive('FlashCardScene')) return
+    if (this.terminal && this.terminal.isOpen) return
+
+    const now = Date.now()
+    if (this.lastPauseToggle && now - this.lastPauseToggle < 250) return
+    this.lastPauseToggle = now
+
+    if (this.isPaused) {
+      this.resumeGame()
+    } else {
+      this.pauseGame()
+    }
+  }
+
+  pauseGame() {
+    if (this.isPaused || this.gameEnding) return
+    this.isPaused = true
+    try {
+      if (this.sound && this.sound.play) {
+        this.sound.play('esc_sound', { volume: 0.85 })
+      }
+    } catch (e) {}
+    this.physics.pause()
+    if (this.player && this.player.setVelocity) {
+      this.player.setVelocity(0, 0)
+    }
+    if (this.monsterList) {
+      this.monsterList.forEach(m => {
+        if (m.body && m.body.setVelocity) m.body.setVelocity(0, 0)
+      })
+    }
+
+    const { width, height } = this.scale
+    const cx = width / 2
+    const cy = height / 2
+
+    this.pauseMenuElements = []
+
+    // Full-screen dark overlay
+    const backdrop = this.add.rectangle(cx, cy, width, height, 0x000000, 0.78)
+      .setScrollFactor(0)
+      .setDepth(100000)
+      .setInteractive()
+
+    // Modal card
+    const modalW = 400
+    const modalH = 320
+    const modalBox = this.add.graphics()
+      .setScrollFactor(0)
+      .setDepth(100001)
+    modalBox.fillStyle(0x0a1420, 0.96)
+    modalBox.fillRoundedRect(cx - modalW / 2, cy - modalH / 2, modalW, modalH, 16)
+    modalBox.lineStyle(3, 0x55bbff, 0.9)
+    modalBox.strokeRoundedRect(cx - modalW / 2, cy - modalH / 2, modalW, modalH, 16)
+
+    // Title
+    const title = this.add.text(cx, cy - 110, '⏸️ GAME PAUSED', {
+      fontSize: '24px',
+      fontFamily: 'Arial Black',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 4
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(100002)
+
+    const sub = this.add.text(cx, cy - 75, `Level 2: Tundra Frontier • ${this.playerName} (${this.chosenBird})`, {
+      fontSize: '12px',
+      fontFamily: 'Arial',
+      color: '#a0ddff'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(100002)
+
+    this.pauseMenuElements.push(backdrop, modalBox, title, sub)
+
+    const makePauseBtn = (x, y, text, colorHex, borderHex, hoverHex, callback) => {
+      const btnW = 270
+      const btnH = 46
+
+      const btnBg = this.add.rectangle(x, y, btnW, btnH, colorHex, 0.92)
+        .setStrokeStyle(2, borderHex, 1)
+        .setScrollFactor(0)
+        .setDepth(100002)
+        .setInteractive({ useHandCursor: true })
+
+      const btnLabel = this.add.text(x, y, text, {
+        fontSize: '15px',
+        fontFamily: 'Arial Black',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 3
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(100003).setInteractive({ useHandCursor: true })
+
+      const onOver = () => {
+        btnBg.setFillStyle(hoverHex || borderHex, 1)
+        btnBg.setStrokeStyle(2, 0xffffff, 1)
+        btnLabel.setScale(1.05)
+      }
+      const onOut = () => {
+        btnBg.setFillStyle(colorHex, 0.92)
+        btnBg.setStrokeStyle(2, borderHex, 1)
+        btnLabel.setScale(1)
+      }
+
+      const onClick = () => {
+        if (this.sound && this.sound.play) {
+          this.sound.play('select_sound', { volume: 0.85 })
+        }
+        callback()
+      }
+
+      btnBg.on('pointerover', onOver)
+      btnBg.on('pointerout', onOut)
+      btnBg.on('pointerdown', onClick)
+
+      btnLabel.on('pointerover', onOver)
+      btnLabel.on('pointerout', onOut)
+      btnLabel.on('pointerdown', onClick)
+
+      this.pauseMenuElements.push(btnBg, btnLabel)
+    }
+
+    // 1. Resume button
+    makePauseBtn(cx, cy - 25, '▶  RESUME', 0x185675, 0x44bbff, 0x2280a8, () => {
+      this.resumeGame()
+    })
+
+    // 2. Play Again button
+    makePauseBtn(cx, cy + 35, '🔄  PLAY AGAIN', 0xb86214, 0xffaa44, 0xd97718, () => {
+      this.playAgain()
+    })
+
+    // 3. Go to Main button
+    makePauseBtn(cx, cy + 95, '🏠  GO TO MAIN', 0x8a2020, 0xff5555, 0xb32b2b, () => {
+      this.goToMain()
+    })
+
+    this.scene.bringToTop()
+  }
+
+  resumeGame() {
+    if (!this.isPaused) return
+    this.isPaused = false
+    try {
+      const escSnd = this.sound.get('esc_sound')
+      if (escSnd && escSnd.isPlaying) escSnd.stop()
+    } catch (e) {}
+    if (this.pauseMenuElements && this.pauseMenuElements.length > 0) {
+      this.pauseMenuElements.forEach(el => {
+        if (el && el.destroy) el.destroy()
+      })
+      this.pauseMenuElements = null
+    }
+    this.physics.resume()
+    if (this.monsterList) {
+      this.monsterList.forEach(m => {
+        if (m.alive && m.body && m.body.active && !m.frozen && !m.stunnedUntil) {
+          m.patrolTimer = 150
+        }
+      })
+    }
+    if (this.scene.isActive('UIScene')) {
+      this.scene.bringToTop('UIScene')
+    }
+  }
+
+  playAgain() {
+    this.isPaused = false
+    try {
+      const escSnd = this.sound.get('esc_sound')
+      if (escSnd && escSnd.isPlaying) escSnd.stop()
+    } catch (e) {}
+    this.cleanupPauseAndListeners()
+    this.scene.stop('UIScene')
+    this.scene.start('GameScene2', {
+      playerName: this.playerName,
+      chosenBird: this.chosenBird
+    })
+  }
+
+  goToMain() {
+    this.isPaused = false
+    try {
+      const escSnd = this.sound.get('esc_sound')
+      if (escSnd && escSnd.isPlaying) escSnd.stop()
+    } catch (e) {}
+    this.cleanupPauseAndListeners()
+    this.scene.stop('UIScene')
+    this.scene.start('MenuScene')
+  }
+
+  cleanupPauseAndListeners() {
+    try {
+      const escSnd = this.sound.get('esc_sound')
+      if (escSnd && escSnd.isPlaying) escSnd.stop()
+    } catch (e) {}
+    if (this.onEscKeyDown) {
+      window.removeEventListener('keydown', this.onEscKeyDown)
+      this.onEscKeyDown = null
+    }
+    if (this.pauseMenuElements && this.pauseMenuElements.length > 0) {
+      this.pauseMenuElements.forEach(el => {
+        if (el && el.destroy) el.destroy()
+      })
+      this.pauseMenuElements = null
     }
   }
 
   update() {
   if (this.gameEnding) return
+  if (this.isPaused) {
+    if (this.player && this.player.setVelocity) this.player.setVelocity(0, 0)
+    return
+  }
 
   const delta = this.game.loop.delta
   this.updateWarmth(delta)
@@ -2139,19 +2801,44 @@ const positions = [
       return
     }
 
-    const mc = Math.floor(m.body.x / this.TILE)
-    const mr = Math.floor(m.body.y / this.TILE)
-    if (this.isWall(mc, mr)) {
-      m.body.setPosition(m.spawnX, m.spawnY)
-      m.body.setVelocity(0, 0); m.patrolTimer = 0
+    if (m.stunnedUntil && this.time.now < m.stunnedUntil) {
+      m.body.setVelocity(0, 0)
       this.drawMonster(m, m.body.x, m.body.y, false)
       this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
       return
     }
 
+    const curMc = Math.floor(m.body.x / this.TILE)
+    const curMr = Math.floor(m.body.y / this.TILE)
+    if (this.isWall(curMc, curMr)) {
+      let placed = false
+      const offsets = [{ dc: 1, dr: 0 }, { dc: -1, dr: 0 }, { dc: 0, dr: 1 }, { dc: 0, dr: -1 }]
+      for (const off of offsets) {
+        if (!this.isWall(curMc + off.dc, curMr + off.dr)) {
+          m.body.setPosition((curMc + off.dc) * this.TILE + this.TILE / 2, (curMr + off.dr) * this.TILE + this.TILE / 2)
+          placed = true
+          break
+        }
+      }
+      if (!placed) {
+        m.body.setPosition(m.spawnX, m.spawnY)
+      }
+    }
+
+    const mc = Math.floor(m.body.x / this.TILE)
+    const mr = Math.floor(m.body.y / this.TILE)
+
     const distToPlayer = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.body.x, m.body.y)
     const alerted = m.alertedUntil && this.time.now < m.alertedUntil
     const chaseRange = (m.alwaysChase || alerted) ? 9999 : this.stealthMode ? 0 : (this.evolutionStage >= 2 ? 110 : 140) * (this.blizzardActive ? 0.7 : 1)
+
+    // ── Helper to check if moving along (dx, dy) would hit a wall ──
+    const isBlocked = (dx, dy, dist = 22) => {
+      if (dx === 0 && dy === 0) return false
+      const cx = m.body.x + dx * dist
+      const cy = m.body.y + dy * dist
+      return this.isWall(Math.floor(cx / this.TILE), Math.floor(cy / this.TILE))
+    }
 
     // 🪤 Investigating a trapped animal takes priority over patrolling,
     // unless the player wanders close enough to draw the hunter's attention.
@@ -2160,16 +2847,56 @@ const positions = [
       if (!target || target.rescued || target.lost) {
         m.state = null
         m.investigateTarget = null
+        m.investigateBypass = null
       } else {
         m.alert.setVisible(true)
         m.alert.setPosition(m.body.x, m.body.y - 42)
-        const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, target.x, target.y)
         const ms = 65
-        const mvx = Math.cos(angle) * ms, mvy = Math.sin(angle) * ms
-        const nc = Math.floor((m.body.x + mvx * 0.05) / this.TILE)
-        const nr = Math.floor((m.body.y + mvy * 0.05) / this.TILE)
-        const finalVx = this.isWall(nc, mr) ? 0 : mvx
-        const finalVy = this.isWall(mc, nr) ? 0 : mvy
+        const diffX = target.x - m.body.x
+        const diffY = target.y - m.body.y
+        const signX = diffX !== 0 ? Math.sign(diffX) : 0
+        const signY = diffY !== 0 ? Math.sign(diffY) : 0
+
+        const canDirectX = signX !== 0 && !isBlocked(signX, 0, 20)
+        const canDirectY = signY !== 0 && !isBlocked(0, signY, 20)
+
+        m.investigateCooldown = Math.max(0, (m.investigateCooldown || 0) - 1)
+        let finalVx = 0, finalVy = 0
+
+        if (canDirectX && canDirectY) {
+          const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, target.x, target.y)
+          finalVx = Math.cos(angle) * ms
+          finalVy = Math.sin(angle) * ms
+          m.investigateBypass = null
+        } else if (canDirectX && Math.abs(diffX) >= Math.abs(diffY) * 0.5) {
+          finalVx = signX * ms; finalVy = 0; m.investigateBypass = null
+        } else if (canDirectY && Math.abs(diffY) >= Math.abs(diffX) * 0.5) {
+          finalVx = 0; finalVy = signY * ms; m.investigateBypass = null
+        } else if (canDirectX) {
+          finalVx = signX * ms; finalVy = 0; m.investigateBypass = null
+        } else if (canDirectY) {
+          finalVx = 0; finalVy = signY * ms; m.investigateBypass = null
+        } else {
+          if (m.investigateBypass && m.investigateCooldown > 0 && !isBlocked(m.investigateBypass.dx, m.investigateBypass.dy, 18)) {
+            finalVx = m.investigateBypass.dx * ms
+            finalVy = m.investigateBypass.dy * ms
+          } else {
+            const altDirs = [{ dx: 0, dy: 1 }, { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: -1, dy: 0 }].filter(d => !isBlocked(d.dx, d.dy, 20))
+            if (altDirs.length > 0) {
+              altDirs.sort((a, b) => {
+                const distA = Phaser.Math.Distance.Between(m.body.x + a.dx * this.TILE, m.body.y + a.dy * this.TILE, target.x, target.y)
+                const distB = Phaser.Math.Distance.Between(m.body.x + b.dx * this.TILE, m.body.y + b.dy * this.TILE, target.x, target.y)
+                return distA - distB
+              })
+              m.investigateBypass = altDirs[0]
+              m.investigateCooldown = 20
+              finalVx = altDirs[0].dx * ms; finalVy = altDirs[0].dy * ms
+            } else {
+              finalVx = signX * ms; finalVy = signY * ms
+            }
+          }
+        }
+
         m.body.setVelocity(finalVx, finalVy)
         this.animateHunterWalk(m)
 
@@ -2184,6 +2911,7 @@ const positions = [
           this.loseTrappedAnimal(target, 'hunter')
           m.state = null
           m.investigateTarget = null
+          m.investigateBypass = null
         }
 
         this.maybeLayHunterFootprint(m)
@@ -2199,13 +2927,53 @@ const positions = [
       m.chasing = true
       m.alert.setVisible(true)
       m.alert.setPosition(m.body.x, m.body.y - 42)
-      const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, this.player.x, this.player.y)
+
       const ms = 55
-      const mvx = Math.cos(angle) * ms, mvy = Math.sin(angle) * ms
-      const nc = Math.floor((m.body.x + mvx * 0.05) / this.TILE)
-      const nr = Math.floor((m.body.y + mvy * 0.05) / this.TILE)
-      const finalVx = this.isWall(nc, mr) ? 0 : mvx
-      const finalVy = this.isWall(mc, nr) ? 0 : mvy
+      const diffX = this.player.x - m.body.x
+      const diffY = this.player.y - m.body.y
+      const signX = diffX !== 0 ? Math.sign(diffX) : 0
+      const signY = diffY !== 0 ? Math.sign(diffY) : 0
+
+      const canDirectX = signX !== 0 && !isBlocked(signX, 0, 20)
+      const canDirectY = signY !== 0 && !isBlocked(0, signY, 20)
+
+      m.chaseCooldown = Math.max(0, (m.chaseCooldown || 0) - 1)
+      let finalVx = 0, finalVy = 0
+
+      if (canDirectX && canDirectY) {
+        const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, this.player.x, this.player.y)
+        finalVx = Math.cos(angle) * ms
+        finalVy = Math.sin(angle) * ms
+        m.chaseBypass = null
+      } else if (canDirectX && Math.abs(diffX) >= Math.abs(diffY) * 0.5) {
+        finalVx = signX * ms; finalVy = 0; m.chaseBypass = null
+      } else if (canDirectY && Math.abs(diffY) >= Math.abs(diffX) * 0.5) {
+        finalVx = 0; finalVy = signY * ms; m.chaseBypass = null
+      } else if (canDirectX) {
+        finalVx = signX * ms; finalVy = 0; m.chaseBypass = null
+      } else if (canDirectY) {
+        finalVx = 0; finalVy = signY * ms; m.chaseBypass = null
+      } else {
+        if (m.chaseBypass && m.chaseCooldown > 0 && !isBlocked(m.chaseBypass.dx, m.chaseBypass.dy, 18)) {
+          finalVx = m.chaseBypass.dx * ms
+          finalVy = m.chaseBypass.dy * ms
+        } else {
+          const altDirs = [{ dx: 0, dy: 1 }, { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: -1, dy: 0 }].filter(d => !isBlocked(d.dx, d.dy, 20))
+          if (altDirs.length > 0) {
+            altDirs.sort((a, b) => {
+              const distA = Phaser.Math.Distance.Between(m.body.x + a.dx * this.TILE, m.body.y + a.dy * this.TILE, this.player.x, this.player.y)
+              const distB = Phaser.Math.Distance.Between(m.body.x + b.dx * this.TILE, m.body.y + b.dy * this.TILE, this.player.x, this.player.y)
+              return distA - distB
+            })
+            m.chaseBypass = altDirs[0]
+            m.chaseCooldown = 20
+            finalVx = altDirs[0].dx * ms; finalVy = altDirs[0].dy * ms
+          } else {
+            finalVx = signX * ms; finalVy = signY * ms
+          }
+        }
+      }
+
       m.body.setVelocity(finalVx, finalVy)
       this.animateHunterWalk(m)
 
@@ -2219,6 +2987,7 @@ const positions = [
       if (distToPlayer < 36 && !this.playerHitCooldown) {
         this.playerHitCooldown = true
         this.playerHP--
+        try { this.sound.play('horror_sound', { volume: 0.85 }) } catch (e) {}
         this.cameras.main.shake(200, 0.008)
         this.player.setTint(0xff0000)
         this.showFloatingText(this.player.x, this.player.y - 30, '💔 -1 Heart', '#ff0000')
@@ -2232,25 +3001,62 @@ const positions = [
       }
 
     } else {
+      // Patrol Mode
       m.chasing = false
       m.alert.setVisible(false)
+      m.chaseBypass = null
+
+      if (!m.patrolDir || (m.body.body.velocity.x === 0 && m.body.body.velocity.y === 0)) {
+        const startDirs = [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }].filter(d => !isBlocked(d.dx, d.dy, 22))
+        m.patrolDir = startDirs.length > 0 ? startDirs[Phaser.Math.Between(0, startDirs.length - 1)] : { dx: 1, dy: 0 }
+        m.patrolCooldown = 20
+        m.patrolTimer = 0
+      }
+
+      m.patrolCooldown = Math.max(0, (m.patrolCooldown || 0) - 1)
       m.patrolTimer = (m.patrolTimer || 0) + 1
 
-      if (m.patrolTimer > 120) {
+      const wallAhead = isBlocked(m.patrolDir.dx, m.patrolDir.dy, 20)
+      const isStopped = Math.abs(m.body.body.velocity.x) + Math.abs(m.body.body.velocity.y) < 5
+
+      if (wallAhead || isStopped || (m.patrolTimer > 200 && m.patrolCooldown === 0)) {
         m.patrolTimer = 0
-        const allDirs = [{ vx: 55, vy: 0, dc: 1, dr: 0 }, { vx: -55, vy: 0, dc: -1, dr: 0 }, { vx: 0, vy: 55, dc: 0, dr: 1 }, { vx: 0, vy: -55, dc: 0, dr: -1 }]
-        const safe = allDirs.filter(d => !this.isWall(mc + d.dc, mr + d.dr))
-        const dirs = safe.length > 0 ? safe : allDirs
-        const d = dirs[Phaser.Math.Between(0, dirs.length - 1)]
-        m.body.setVelocity(d.vx, d.vy)
-        this.animateHunterWalk(m)
-        if (Math.abs(d.vx) > Math.abs(d.vy)) {
-          if (d.vx !== 0) m.graphic.setTexture(d.vx > 0 ? 'hunter_right' : 'hunter_left')
-        } else if (d.vy !== 0) {
-          m.graphic.setTexture(d.vy > 0 ? 'hunter_front' : 'hunter_back')
+        let perpDirs = []
+        if (m.patrolDir.dx !== 0) {
+          perpDirs = [{ dx: 0, dy: 1 }, { dx: 0, dy: -1 }].filter(d => !isBlocked(d.dx, d.dy, 22))
+        } else {
+          perpDirs = [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }].filter(d => !isBlocked(d.dx, d.dy, 22))
         }
-        m.graphic.setDisplaySize(48, 58)
+
+        let newDir = null
+        if (perpDirs.length > 0) {
+          newDir = perpDirs[Phaser.Math.Between(0, perpDirs.length - 1)]
+          if (m.patrolDir.dx !== 0) {
+            m.body.x = mc * this.TILE + this.TILE / 2
+          } else {
+            m.body.y = mr * this.TILE + this.TILE / 2
+          }
+        } else if (!wallAhead && m.patrolTimer > 200) {
+          newDir = m.patrolDir
+        } else {
+          newDir = { dx: -m.patrolDir.dx, dy: -m.patrolDir.dy }
+        }
+
+        m.patrolDir = newDir
+        m.patrolCooldown = 25
       }
+
+      const pvx = m.patrolDir.dx * 55
+      const pvy = m.patrolDir.dy * 55
+      m.body.setVelocity(pvx, pvy)
+      this.animateHunterWalk(m)
+      if (Math.abs(pvx) > Math.abs(pvy)) {
+        if (pvx !== 0) m.graphic.setTexture(pvx > 0 ? 'hunter_right' : 'hunter_left')
+      } else if (pvy !== 0) {
+        m.graphic.setTexture(pvy > 0 ? 'hunter_front' : 'hunter_back')
+      }
+      m.graphic.setDisplaySize(48, 58)
+    }
 
       for (let i = 0; i < this.eggList.length; i++) {
         const e = this.eggList[i]
@@ -2290,7 +3096,6 @@ const positions = [
           }
         }
       }
-    }
 
     this.maybeLayHunterFootprint(m)
     this.drawMonster(m, m.body.x, m.body.y, false)
@@ -2310,6 +3115,7 @@ const positions = [
         e.glow = null
       }
       this.eggsCollected++
+      try { this.sound.play('notification_popup', { volume: 0.75 }) } catch (e) {}
       // The sapling determines the flashcard, but the card is only
       // recorded here — it is NOT shown during gameplay anymore.
       // FlashcardScene2 opens once, after the game ends (see endGame()).
