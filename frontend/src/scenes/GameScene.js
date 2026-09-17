@@ -2926,21 +2926,30 @@ export class GameScene extends Phaser.Scene {
         return
       }
 
-      // Unstuck if clipped into a solid tile: shift smoothly to center of nearest open tile
-      const curMc = Math.floor(m.body.x / this.TILE)
-      const curMr = Math.floor(m.body.y / this.TILE)
-      if (this.isWall(curMc, curMr)) {
-        let placed = false
-        const offsets = [{ dc: 1, dr: 0 }, { dc: -1, dr: 0 }, { dc: 0, dr: 1 }, { dc: 0, dr: -1 }]
-        for (const off of offsets) {
-          if (!this.isWall(curMc + off.dc, curMr + off.dr)) {
-            m.body.setPosition((curMc + off.dc) * this.TILE + this.TILE / 2, (curMr + off.dr) * this.TILE + this.TILE / 2)
-            placed = true
-            break
+      // Unstuck if monster centre is deeply inside a solid tile.
+      // Only fires when the centre pixel is inside a wall cell, with a
+      // per-monster cooldown so it cannot teleport every frame.
+      m._unstuckCooldown = Math.max(0, (m._unstuckCooldown || 0) - 1)
+      if (m._unstuckCooldown === 0) {
+        const curMc = Math.floor(m.body.x / this.TILE)
+        const curMr = Math.floor(m.body.y / this.TILE)
+        if (this.isWall(curMc, curMr)) {
+          let placed = false
+          const offsets = [{ dc: 1, dr: 0 }, { dc: -1, dr: 0 }, { dc: 0, dr: 1 }, { dc: 0, dr: -1 }]
+          for (const off of offsets) {
+            if (!this.isWall(curMc + off.dc, curMr + off.dr)) {
+              m.body.setPosition(
+                (curMc + off.dc) * this.TILE + this.TILE / 2,
+                (curMr + off.dr) * this.TILE + this.TILE / 2
+              )
+              placed = true
+              break
+            }
           }
-        }
-        if (!placed) {
-          m.body.setPosition(m.spawnX, m.spawnY)
+          if (!placed) {
+            m.body.setPosition(m.spawnX, m.spawnY)
+          }
+          m._unstuckCooldown = 30 // don't re-check for ~0.5 s
         }
       }
 
@@ -3041,8 +3050,9 @@ export class GameScene extends Phaser.Scene {
               finalVx = altDirs[0].dx * ms
               finalVy = altDirs[0].dy * ms
             } else {
-              finalVx = signX * ms
-              finalVy = signY * ms
+              // Completely hemmed in — stop rather than ram the wall
+              finalVx = 0
+              finalVy = 0
             }
           }
         }
@@ -3084,9 +3094,12 @@ export class GameScene extends Phaser.Scene {
         m.chasing = false
         m.alert.setVisible(false)
         m.chaseBypass = null
+        m.chaseCooldown = 0  // reset so stale bypass doesn't re-activate on re-enter chase
 
         // Initialize patrol direction if not set or stopped
-        if (!m.patrolDir || (m.body.body.velocity.x === 0 && m.body.body.velocity.y === 0)) {
+        const velX = m.body.body ? m.body.body.velocity.x : 0
+        const velY = m.body.body ? m.body.body.velocity.y : 0
+        if (!m.patrolDir || (velX === 0 && velY === 0)) {
           const startDirs = [
             { dx: 1, dy: 0 },
             { dx: -1, dy: 0 },
@@ -3103,7 +3116,7 @@ export class GameScene extends Phaser.Scene {
 
         // Check strictly in current movement direction (never checks side walls!)
         const wallAhead = isBlocked(m.patrolDir.dx, m.patrolDir.dy, 20)
-        const isStopped = Math.abs(m.body.body.velocity.x) + Math.abs(m.body.body.velocity.y) < 5
+        const isStopped = Math.abs(velX) + Math.abs(velY) < 5
 
         // Change direction ONLY if facing a wall, stopped, or timer expired after long walk
         if (wallAhead || isStopped || (m.patrolTimer > 200 && m.patrolCooldown === 0)) {
@@ -3120,11 +3133,12 @@ export class GameScene extends Phaser.Scene {
           let newDir = null
           if (perpDirs.length > 0) {
             newDir = perpDirs[Phaser.Math.Between(0, perpDirs.length - 1)]
-            // Align center of tile on the axis we were moving so we don't scrape the corner
+            // Align centre of tile on the axis we were moving so we don't scrape the corner
+            // Use setPosition() to keep physics body in sync
             if (m.patrolDir.dx !== 0) {
-              m.body.x = mc * this.TILE + this.TILE / 2
+              m.body.setPosition(m.body.x, mr * this.TILE + this.TILE / 2)
             } else {
-              m.body.y = mr * this.TILE + this.TILE / 2
+              m.body.setPosition(mc * this.TILE + this.TILE / 2, m.body.y)
             }
           } else if (!wallAhead && m.patrolTimer > 200) {
             // Keep going forward if clear
