@@ -3115,7 +3115,7 @@ const positions = [
         e.glow = null
       }
       this.eggsCollected++
-      try { this.sound.play('notification_popup', { volume: 0.75 }) } catch (e) {}
+      try { this.sound.play('notification_popup', { volume: 0.75 }) } catch (_err) {}
       // The sapling determines the flashcard, but the card is only
       // recorded here — it is NOT shown during gameplay anymore.
       // FlashcardScene2 opens once, after the game ends (see endGame()).

@@ -3171,7 +3171,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         this.eggsCollected++
-        try { this.sound.play('notification_popup', { volume: 0.75 }) } catch (e) {}
+        try { this.sound.play('notification_popup', { volume: 0.75 }) } catch (_err) {}
         const flashCardMap = {
           normal: 'flashCard_1',
           fire: 'flashCard_2',
