@@ -31,6 +31,18 @@ export class GameScene3 extends Phaser.Scene {
   constructor() { super('GameScene3') }
 
   preload() {
+    // Player bird sprites for all directions
+    const birds = ['ember', 'frost', 'volt', 'shade', 'gale']
+    const dirs = ['front', 'back', 'left', 'right']
+    birds.forEach(b => {
+      dirs.forEach(d => {
+        const key = `${b}_${d}`
+        if (!this.textures.exists(key)) {
+          this.load.image(key, `resource/player/${key}.png`)
+        }
+      })
+    })
+
     this.load.image('underwater_reef', 'resource/level3/backgrounds/underwater_reef.png')
     this.load.image('underwater_ruins', 'resource/level3/backgrounds/underwater_ruins.png')
     this.load.image('underwater_kelp', 'resource/level3/backgrounds/underwater_kelp.png')
@@ -58,41 +70,66 @@ export class GameScene3 extends Phaser.Scene {
     ]
     pack3Ruins.forEach(name => this.load.image(name, `resource/level3/Pack3/${name}.png`))
 
-    // Zone 4 (cave, the darker zone with the exit portal) wildlife
-    const pack3Cave = ['urchin_1', 'stingray_2', 'jellyfish_1', 'squid_2']
+    // Zone 4 (cave, the darker zone with the exit portal) wildlife & hazards
+    const pack3Cave = ['urchin_1', 'stingray_2', 'jellyfish_1', 'jellyfish_2', 'squid_2']
     pack3Cave.forEach(name => this.load.image(name, `resource/level3/Pack3/${name}.png`))
 
-    // Zone 3 (kelp, the remaining zone) wildlife
+    // Zone 3 (kelp, the remaining zone) wildlife & hazards
     const pack3Kelp = ['blowfish_1', 'eel_1', 'manta_ray_1', 'fish_school_2', 'starfish_1']
     pack3Kelp.forEach(name => this.load.image(name, `resource/level3/Pack3/${name}.png`))
+
+    this.load.audio('select_sound', 'resource/audio/select_sound.mp3')
+    this.load.audio('portal_sound', 'resource/audio/portal.mp3')
+    this.load.audio('final_portal_sound', 'resource/audio/reaching_final_portal.mp3')
+    this.load.audio('game_over_sound', 'resource/audio/game_over.mp3')
+    this.load.audio('electrofied_poisoned_sound', 'resource/audio/electrofied_poisoned.mp3')
+    this.load.audio('esc_sound', 'resource/audio/esc.mp3')
+    this.load.audio('last_scene_music', 'resource/audio/last_scene.mp3')
   }
 
   init(data) {
     this.playerName = data?.playerName || 'Adventurer'
-    this.chosenBird = data?.chosenBird || 'Ember'
+    this.chosenBird = (data?.chosenBird || 'Ember').toLowerCase()
     this.score = data?.score || 0
     this.facing = 1
     this.setupFailed = false
+    this.portalAudio = null
+    this.hazardHitAudio = null
+    this.finalPortalAudio = null
+    this.gameOverAudio = null
 
     // wildlife journal — same pattern as GameScene2
     this.wildlifeJournal = data?.wildlifeJournal || []
 
-    // 🫧 Oxygen system — same shape as Level 2's warmth: drains over
-    // time, refills near a source (air pockets instead of campfires),
-    // and drains faster the deeper you are — real diving logic, not
-    // just a flat timer.
+    // 📖 Level 1 Freeze-and-Resume Notification System
+    this.speciesCardFrozen = false
+    this.cardFreezeTimestamp = 0
+    this.activeWildlifeCard = null
+
+    // ⚔️ Hazards, Health & Run Tracking
+    this.invulnerableUntil = 0
+    this.netsFreed = 0
+    this.levelStartTime = Date.now()
+    this.reportShown = false
+    this.hazardList = []
+
+    // 🫧 Oxygen system — drains over time, refills near air pockets
     this.oxygen = 100
     this.maxOxygen = 100
     this.playerHP = 3
     this.maxHP = 3
     this.lastDrowningTick = 0
     this.nearAirPocket = false
-    this.OXYGEN_BASE_DRAIN_PER_SEC = 1.8
-    this.OXYGEN_DEPTH_DRAIN_BONUS = 1.6
-    this.OXYGEN_REGEN_PER_SEC = 16
+    this.OXYGEN_BASE_DRAIN_PER_SEC = 1.6
+    this.OXYGEN_DEPTH_DRAIN_BONUS = 1.4
+    this.OXYGEN_REGEN_PER_SEC = 18
 
     // 🕸️ Net hazard — brushing an uncut net snags you briefly
     this.snareTimer = 0
+
+    // 📡 Bioluminescent Sonar Pulse System
+    this.sonarCooldown = 0
+    this.SONAR_COOLDOWN_MS = 3400
   }
 
   create() {
@@ -130,6 +167,7 @@ export class GameScene3 extends Phaser.Scene {
     this.createKelpNets()
     this.spawnCaveWildlife()
     this.createCaveNets()
+    this.createHazards()
     this.createPlayer()
 
     this.physics.add.collider(this.player, this.platforms)
@@ -151,6 +189,32 @@ export class GameScene3 extends Phaser.Scene {
     })
     this.cursors = this.input.keyboard.createCursorKeys()
     this.collectKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E)
+    this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
+
+    this.isPaused = false
+    this.pauseMenuElements = null
+
+    this.input.keyboard.addCapture(Phaser.Input.Keyboard.KeyCodes.ESC)
+    this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
+    this.escKey.on('down', () => this.togglePauseMenu())
+    this.input.keyboard.on('keydown-ESC', () => this.togglePauseMenu())
+
+    this.onEscKeyDown = (e) => {
+      if (e.key === 'Escape' || e.code === 'Escape' || e.keyCode === 27) {
+        if (!this.reportShown && !this.speciesCardFrozen) {
+          e.preventDefault()
+          this.togglePauseMenu()
+        }
+      }
+    }
+    window.addEventListener('keydown', this.onEscKeyDown)
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.cleanupPauseAndListeners()
+      if (this.portalAudio && this.portalAudio.isPlaying) {
+        this.portalAudio.stop()
+      }
+    })
   }
 
   showSetupError(err) {
@@ -193,23 +257,21 @@ export class GameScene3 extends Phaser.Scene {
     this.worldH = H * 2
 
     this.tunnels = [
-      // reef <-> ruins (shared vertical edge, x = 1600)
-      // reef trigger spans x:1520-1600 · ruins trigger spans x:1600-1680
-      { fromZone: 'reef',  trigger: { x: 1560, y: 450, w: 80, h: 220 }, toZone: 'ruins', entry: { x: 1800, y: 450 }, orientation: 'vertical' },
-      { fromZone: 'ruins', trigger: { x: 1640, y: 450, w: 80, h: 220 }, toZone: 'reef',  entry: { x: 1400, y: 450 }, orientation: 'vertical' },
+      // reef <-> ruins (shared vertical edge, x = 1600, mid-east edge)
+      { fromZone: 'reef',  trigger: { x: 1570, y: 550, w: 60, h: 180 }, toZone: 'ruins', entry: { x: 1760, y: 550 }, orientation: 'vertical' },
+      { fromZone: 'ruins', trigger: { x: 1630, y: 550, w: 60, h: 180 }, toZone: 'reef',  entry: { x: 1440, y: 550 }, orientation: 'vertical' },
 
-      // reef <-> kelp (shared horizontal edge, y = 900)
-      // reef trigger spans y:820-900 · kelp trigger spans y:900-980
-      { fromZone: 'reef', trigger: { x: 800, y: 860, w: 220, h: 80 }, toZone: 'kelp', entry: { x: 800, y: 1100 }, orientation: 'horizontal' },
-      { fromZone: 'kelp', trigger: { x: 800, y: 940, w: 220, h: 80 }, toZone: 'reef', entry: { x: 800, y: 700 }, orientation: 'horizontal' },
+      // reef <-> kelp (shared horizontal edge, y = 900, far bottom-right at x = 1420, away from spawn at x = 220)
+      { fromZone: 'reef', trigger: { x: 1420, y: 875, w: 180, h: 50 }, toZone: 'kelp', entry: { x: 1420, y: 1060 }, orientation: 'horizontal' },
+      { fromZone: 'kelp', trigger: { x: 1420, y: 925, w: 180, h: 50 }, toZone: 'reef', entry: { x: 1420, y: 760 }, orientation: 'horizontal' },
 
-      // ruins <-> cave (shared horizontal edge, y = 900, right half)
-      { fromZone: 'ruins', trigger: { x: 2400, y: 860, w: 220, h: 80 }, toZone: 'cave',  entry: { x: 2400, y: 1100 }, orientation: 'horizontal' },
-      { fromZone: 'cave',  trigger: { x: 2400, y: 940, w: 220, h: 80 }, toZone: 'ruins', entry: { x: 2400, y: 700 }, orientation: 'horizontal' },
+      // ruins <-> cave (shared horizontal edge, y = 900, far bottom-right of ruins at x = 3020)
+      { fromZone: 'ruins', trigger: { x: 3020, y: 875, w: 180, h: 50 }, toZone: 'cave',  entry: { x: 3020, y: 1060 }, orientation: 'horizontal' },
+      { fromZone: 'cave',  trigger: { x: 3020, y: 925, w: 180, h: 50 }, toZone: 'ruins', entry: { x: 3020, y: 760 }, orientation: 'horizontal' },
 
-      // kelp <-> cave (shared vertical edge, x = 1600, bottom half)
-      { fromZone: 'kelp', trigger: { x: 1560, y: 1350, w: 80, h: 220 }, toZone: 'cave', entry: { x: 1800, y: 1350 }, orientation: 'vertical' },
-      { fromZone: 'cave', trigger: { x: 1640, y: 1350, w: 80, h: 220 }, toZone: 'kelp', entry: { x: 1400, y: 1350 }, orientation: 'vertical' },
+      // kelp <-> cave (shared vertical edge, x = 1600, bottom-right of kelp at y = 1520)
+      { fromZone: 'kelp', trigger: { x: 1570, y: 1520, w: 60, h: 180 }, toZone: 'cave', entry: { x: 1760, y: 1520 }, orientation: 'vertical' },
+      { fromZone: 'cave', trigger: { x: 1630, y: 1520, w: 60, h: 180 }, toZone: 'kelp', entry: { x: 1440, y: 1520 }, orientation: 'vertical' },
     ]
   }
 
@@ -260,22 +322,48 @@ export class GameScene3 extends Phaser.Scene {
   }
 
   transitionToZone(toZone, ex, ey) {
-    if (this.transitioning) return
+    if (this.transitioning || this.reportShown) return
     this.transitioning = true
-    this.player.body.setVelocity(0, 0)
-    this.player.body.enable = false
+    if (this.player && this.player.body) {
+      this.player.body.setVelocity(0, 0)
+      this.player.body.enable = false
+    }
 
-    this.cameras.main.fadeOut(350, 0, 0, 0)
-    this.cameras.main.once('camerafadeoutcomplete', () => {
+    if (this.sound) {
+      try {
+        if (this.portalAudio && this.portalAudio.isPlaying) {
+          this.portalAudio.stop()
+        }
+        this.portalAudio = this.sound.add('portal_sound', { volume: 0.85 })
+        this.portalAudio.play()
+      } catch (e) {
+        if (this.sound.play) {
+          this.sound.play('portal_sound', { volume: 0.85 })
+        }
+      }
+    }
+
+    this.cameras.main.stopFollow()
+    this.cameras.main.fadeOut(250, 0, 0, 0)
+
+    this.time.delayedCall(260, () => {
+      if (this.reportShown) return
       this.currentZone = toZone
-      this.player.setPosition(ex, ey)
+      if (this.player && this.player.body) {
+        this.player.setPosition(ex, ey)
+      }
       this.applyZoneBounds(toZone)
       this.cameras.main.centerOn(ex, ey)
-      this.tunnelCooldownUntil = this.time.now + 800
+      if (this.player) {
+        this.cameras.main.startFollow(this.player, true, 0.08, 0.08)
+      }
+      this.tunnelCooldownUntil = this.time.now + 1600
 
-      this.cameras.main.fadeIn(350, 0, 0, 0)
-      this.cameras.main.once('camerafadeincomplete', () => {
-        this.player.body.enable = true
+      this.cameras.main.fadeIn(250, 0, 0, 0)
+      this.time.delayedCall(270, () => {
+        if (this.player && this.player.body) {
+          this.player.body.enable = true
+        }
         this.transitioning = false
       })
     })
@@ -289,11 +377,9 @@ export class GameScene3 extends Phaser.Scene {
   // ================================================================
 
   createExitPortal() {
-    // Bottom of the cave zone, clear of the cave's platforms
-    // (which sit around y = H+500 to H+640) and away from both
-    // tunnel entries into this zone.
-    const x = 1600 + 800
-    const y = 900 + 750
+    // Bottom-right sanctum of the cave zone, resting gracefully above the ancient seabed dais
+    const x = 1600 + 1400
+    const y = 900 + 680
 
     const g = this.add.graphics().setDepth(6)
     g.fillStyle(0x66ffcc, 0.22); g.fillCircle(0, 0, 60)
@@ -306,16 +392,16 @@ export class GameScene3 extends Phaser.Scene {
     this.tweens.add({ targets: g, angle: 360, duration: 7000, repeat: -1, ease: 'Linear' })
     this.tweens.add({ targets: g, scaleX: 1.08, scaleY: 1.08, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
 
-    this.add.text(x, y - 90, '✨ Portal', {
+    this.add.text(x, y - 90, '✨ Exit Portal', {
       fontSize: '14px', fontFamily: 'Arial Black', color: '#aaffee',
       stroke: '#000000', strokeThickness: 3
     }).setOrigin(0.5).setDepth(6)
 
-    this.exitPortal = { x, y, radius: 60 }
+    this.exitPortal = { x, y, radius: 75 }
   }
 
   checkExitPortal() {
-    if (this.transitioning || this.currentZone !== 'cave') return
+    if (this.reportShown || this.transitioning || this.currentZone !== 'cave' || !this.exitPortal) return
     const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.exitPortal.x, this.exitPortal.y)
     if (d < this.exitPortal.radius) this.triggerExit()
   }
@@ -410,32 +496,493 @@ export class GameScene3 extends Phaser.Scene {
   }
 
   triggerExit() {
-    if (this.transitioning) return
-    this.transitioning = true
-    this.player.body.setVelocity(0, 0)
-    this.player.body.enable = false
+    if (this.reportShown) return
+    this.reportShown = true
+    this.cleanupPauseAndListeners()
+    this.transitioning = false
+    this.physics.pause()
+    if (this.portalAudio && this.portalAudio.isPlaying) {
+      this.portalAudio.stop()
+    }
+    if (this.hazardHitAudio && this.hazardHitAudio.isPlaying) {
+      this.hazardHitAudio.stop()
+    }
+    if (this.player && this.player.body) {
+      this.player.body.setVelocity(0, 0)
+      this.player.body.enable = false
+    }
 
-    this.cameras.main.fadeOut(600, 255, 255, 255)
-    this.cameras.main.once('camerafadeoutcomplete', () => {
-      const { width, height } = this.scale
-      this.add.rectangle(width / 2, height / 2, width, height, 0x001a12, 1).setScrollFactor(0).setDepth(999)
-      this.add.text(width / 2, height / 2 - 10, '🌊 You escaped the depths!', {
-        fontSize: '22px', fontFamily: 'Arial Black', color: '#aaffee'
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(1000)
-      this.add.text(width / 2, height / 2 + 26, 'Level 3 — Stage 1 complete', {
-        fontSize: '13px', fontFamily: 'Arial', color: '#dddddd'
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(1000)
+    if (this.sound) {
+      try {
+        this.finalPortalAudio = this.sound.add('final_portal_sound', { volume: 0.9 })
+        this.finalPortalAudio.play()
+      } catch (e) {
+        if (this.sound.play) this.sound.play('final_portal_sound', { volume: 0.9 })
+      }
+    }
 
-      // Hold on the banner briefly, then hand off to the main menu —
-      // same data shape the rest of this project passes between scenes.
-      this.time.delayedCall(2200, () => {
-        this.scene.start('MenuScene', {
+    this.playPortalGlam(() => {
+      this.showConservationReport(true)
+    })
+  }
+
+  triggerDefeat() {
+    if (this.reportShown) return
+    this.reportShown = true
+    this.cleanupPauseAndListeners()
+    this.transitioning = false
+
+    this.physics.pause()
+    if (this.portalAudio && this.portalAudio.isPlaying) {
+      this.portalAudio.stop()
+    }
+    if (this.hazardHitAudio && this.hazardHitAudio.isPlaying) {
+      this.hazardHitAudio.stop()
+    }
+    if (this.player && this.player.body) {
+      this.player.body.setVelocity(0, 0)
+      this.player.body.enable = false
+    }
+
+    if (this.sound) {
+      try {
+        this.gameOverAudio = this.sound.add('game_over_sound', { volume: 0.9 })
+        this.gameOverAudio.play()
+      } catch (e) {
+        if (this.sound.play) this.sound.play('game_over_sound', { volume: 0.9 })
+      }
+    }
+
+    if (this.cameras && this.cameras.main) {
+      this.cameras.main.stopFollow()
+      this.cameras.main.resetFX()
+      this.cameras.main.flash(500, 180, 20, 20)
+      this.cameras.main.shake(300, 0.02)
+    }
+    this.showConservationReport(false)
+  }
+
+  playPortalGlam(onComplete) {
+    const { width, height } = this.scale
+    const duration = 6430 // Length of reaching_final_portal.mp3 (6.43s)
+
+    // Full-screen radiant glam overlay
+    const glam = this.add.rectangle(width / 2, height / 2, width, height, 0xffffff, 0)
+      .setScrollFactor(0)
+      .setDepth(999998)
+
+    // Radiant colored aura (celestial abyss cyan bloom)
+    const bloom = this.add.graphics()
+      .setScrollFactor(0)
+      .setDepth(999999)
+    bloom.fillStyle(0x00ffcc, 0.3)
+    bloom.fillCircle(width / 2, height / 2, Math.max(width, height) * 0.7)
+
+    // Radiant expanding rings
+    const rings = []
+    for (let i = 0; i < 3; i++) {
+      const ring = this.add.circle(width / 2, height / 2, 40 + i * 35, 0xffffff, 0)
+        .setStrokeStyle(4, 0x00ffcc, 0.8)
+        .setScrollFactor(0)
+        .setDepth(1000000)
+      rings.push(ring)
+      this.tweens.add({
+        targets: ring,
+        scaleX: 3.5,
+        scaleY: 3.5,
+        alpha: 0,
+        delay: i * 350,
+        duration: 1800,
+        repeat: -1,
+        ease: 'Cubic.easeOut'
+      })
+    }
+
+    if (this.cameras && this.cameras.main) {
+      this.cameras.main.flash(600, 255, 255, 255)
+    }
+
+    // Glam brightness tween across the duration of the audio
+    this.tweens.add({
+      targets: glam,
+      fillAlpha: { from: 0.1, to: 0.85 },
+      duration: 500,
+      onComplete: () => {
+        this.tweens.add({
+          targets: glam,
+          fillAlpha: 0.95,
+          duration: 900,
+          yoyo: true,
+          repeat: 5,
+          ease: 'Sine.easeInOut'
+        })
+      }
+    })
+
+    this.time.delayedCall(duration, () => {
+      this.tweens.killTweensOf([glam, bloom, ...rings])
+      glam.destroy()
+      bloom.destroy()
+      rings.forEach(r => r.destroy())
+      if (onComplete) onComplete()
+    })
+  }
+
+  showConservationReport(escaped) {
+    if (this.reportContainer) return
+    this.reportShown = true
+    this.physics.pause()
+    if (this.player && this.player.body) {
+      this.player.body.setVelocity(0, 0)
+    }
+    this.dismissWildlifeCard()
+
+    const { width, height } = this.scale
+
+    const nets = this.netsFreed || 0
+    const totalNets = 4
+    const journalCount = this.wildlifeJournal.length
+    const totalSpecies = this.totalWildlifeSpecies || 8
+    const blueCarbon = Math.round((nets * 75) + (journalCount * 30) + (escaped ? 150 : 30))
+    const hearts = Math.max(0, this.playerHP)
+    const timeTaken = Math.max(1, Math.round((Date.now() - (this.levelStartTime || Date.now())) / 1000))
+
+    const grade = !escaped ? 'D' :
+      (nets >= 4 && journalCount >= 6) ? 'S' :
+      (nets >= 3) ? 'A' :
+      (nets >= 2) ? 'B' : 'C'
+
+    const gradeColorInt =
+      grade === 'S' ? 0xFFD700 :
+      grade === 'A' ? 0x00ff88 :
+      grade === 'B' ? 0x00d4ff :
+      grade === 'C' ? 0xFF8C00 : 0xff3355
+
+    const gradeColor =
+      grade === 'S' ? '#FFD700' :
+      grade === 'A' ? '#00ff88' :
+      grade === 'B' ? '#00d4ff' :
+      grade === 'C' ? '#FF8C00' : '#ff3355'
+
+    const marineSpeciesFacts = [
+      {
+        name: 'Blue Whale (Balaenoptera musculus)',
+        fact: 'A single Blue Whale sequesters ~33 tons of carbon over its lifetime; their iron-rich plumes nourish phytoplankton that generate over 50% of Earth’s atmospheric oxygen.'
+      },
+      {
+        name: 'Green Sea Turtle (Chelonia mydas)',
+        fact: 'By grazing on ocean seagrass beds, Sea Turtles maintain underwater meadows that store twice as much blue carbon per hectare as terrestrial rainforests.'
+      },
+      {
+        name: 'Giant Manta Ray (Mobula birostris)',
+        fact: 'Possessing the highest brain-to-body ratio among fish, Manta Rays transfer essential nutrients between shallow coral reefs and deep pelagic trenches.'
+      },
+      {
+        name: 'Bioluminescent Anglerfish (Melanocetus johnsonii)',
+        fact: 'Survives in crushing midnight abyss at over 2,000 meters, using symbiotic glowing bacteria to illuminate and lure prey in complete darkness.'
+      },
+      {
+        name: 'Pelagic Dolphin (Delphinidae)',
+        fact: 'Uses complex echolocation acoustic clicks and whistles to herd fish schools, acting as vital apex regulators of open-ocean food webs.'
+      }
+    ]
+    const spotlight = marineSpeciesFacts[Math.floor(Math.random() * marineSpeciesFacts.length)]
+
+    // ── Dark overlay ────────────────────────────────────────────
+    const overlay = this.add.graphics().setScrollFactor(0).setDepth(1000)
+    overlay.fillStyle(0x000000, 0.94)
+    overlay.fillRect(0, 0, width, height)
+
+    // ── Main card — deep ocean cyan-navy ─────────────────────────
+    const cardW = 640
+    const cardH = Math.min(680, height - 30)
+    const cardX = width / 2 - cardW / 2
+    const cardY = Math.max(15, (height - cardH) / 2)
+
+    const card = this.add.graphics().setScrollFactor(0).setDepth(1001)
+    card.fillStyle(0x081522, 1)
+    card.fillRoundedRect(cardX, cardY, cardW, cardH, 20)
+    card.lineStyle(2, escaped ? 0x00d4ff : 0x5e1e1e, 1)
+    card.strokeRoundedRect(cardX, cardY, cardW, cardH, 20)
+
+    // ── Header banner ────────────────────────────────────────────
+    const headerH = 80
+    const headerBg = this.add.graphics().setScrollFactor(0).setDepth(1001)
+    headerBg.fillStyle(escaped ? 0x073244 : 0x3a0d0d, 1)
+    headerBg.fillRoundedRect(cardX, cardY, cardW, headerH, { tl: 20, tr: 20, bl: 0, br: 0 })
+
+    headerBg.fillStyle(escaped ? 0x00ffcc : 0xff3355, 1)
+    headerBg.fillRect(cardX, cardY + headerH - 2, cardW, 3)
+
+    this.add.text(cardX + 28, cardY + 16, escaped ? '🌊 OCEAN CONSERVATION REPORT' : '💀 YOU LOST', {
+      fontSize: '22px', fontFamily: 'Arial Black',
+      color: escaped ? '#00ffcc' : '#ff3355'
+    }).setScrollFactor(0).setDepth(1002)
+
+    this.add.text(cardX + 28, cardY + 48, escaped
+      ? 'Marine species protected & escaped the abyssal depths'
+      : 'Depleted oxygen or succumbed to deep-sea hazards. Try again!', {
+      fontSize: '11px', fontFamily: 'Arial',
+      color: '#7aaac4'
+    }).setScrollFactor(0).setDepth(1002)
+
+    // ── Grade badge ───────────────────────────────────────────────
+    const gradeX = cardX + cardW - 66
+    const gradeY = cardY + 40
+    const gradeGlow = this.add.graphics().setScrollFactor(0).setDepth(1001)
+    gradeGlow.fillStyle(gradeColorInt, 0.15)
+    gradeGlow.fillCircle(gradeX, gradeY, 34)
+    gradeGlow.fillStyle(0x081522, 1)
+    gradeGlow.fillCircle(gradeX, gradeY, 28)
+    gradeGlow.lineStyle(2.5, gradeColorInt, 1)
+    gradeGlow.strokeCircle(gradeX, gradeY, 28)
+
+    this.add.text(gradeX, gradeY, grade, {
+      fontSize: '24px', fontFamily: 'Arial Black', color: gradeColor
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1003)
+
+    this.add.text(gradeX, gradeY + 36, 'GRADE', {
+      fontSize: '9px', fontFamily: 'Arial Black', color: '#4a6a80'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1002)
+
+    // ── Stat rows ────────────────────────────────────────────────
+    const oceanHealth = Math.max(0, Math.min(100, Math.round(
+      (nets / totalNets * 40) + (journalCount / totalSpecies * 40) + ((hearts / 3) * 20)
+    )))
+
+    const stats = [
+      { icon: '🎣', label: 'NETTED ANIMALS FREED', value: `${nets}/${totalNets}`, bar: nets / totalNets, barColor: 0x00ff88, chip: 0x0d3320 },
+      { icon: '🐠', label: 'SPECIES JOURNALED', value: `${journalCount}/${totalSpecies}`, bar: journalCount / totalSpecies, barColor: 0x00d4ff, chip: 0x0d2838 },
+      { icon: '🌊', label: 'OCEAN HEALTH', value: `${oceanHealth}%`, bar: oceanHealth / 100, barColor: oceanHealth > 60 ? 0x00ff88 : oceanHealth > 30 ? 0xFF8C00 : 0xff3355, chip: 0x0d3330 },
+      { icon: '💨', label: 'CO₂ ABSORBED/YR', value: `${blueCarbon} kg`, bar: Math.min(blueCarbon / 450, 1), barColor: 0x00ffcc, chip: 0x0d2838 },
+      { icon: '⏱️', label: 'TIME TAKEN', value: `${timeTaken}s`, bar: Math.max(0, 1 - timeTaken / 180), barColor: 0xFFD700, chip: 0x332a0d },
+    ]
+
+    const startY = cardY + headerH + 12
+    const rowH = 46
+    const rowGap = 6
+
+    stats.forEach((st, i) => {
+      const ry = startY + i * (rowH + rowGap)
+
+      const rowBg = this.add.graphics().setScrollFactor(0).setDepth(1001)
+      rowBg.fillStyle(0x0e1d2c, 1)
+      rowBg.fillRoundedRect(cardX + 16, ry, cardW - 32, rowH, 10)
+
+      const chipBg = this.add.graphics().setScrollFactor(0).setDepth(1002)
+      chipBg.fillStyle(st.chip, 1)
+      chipBg.fillRoundedRect(cardX + 26, ry + 6, 34, 34, 8)
+      this.add.text(cardX + 43, ry + 23, st.icon, {
+        fontSize: '16px'
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(1003)
+
+      this.add.text(cardX + 72, ry + 8, st.label, {
+        fontSize: '10px', fontFamily: 'Arial Black', color: '#e0f4ff'
+      }).setScrollFactor(0).setDepth(1002)
+
+      this.add.text(cardX + cardW - 30, ry + 7, st.value, {
+        fontSize: '14px', fontFamily: 'Arial Black', color: '#ffffff'
+      }).setOrigin(1, 0).setScrollFactor(0).setDepth(1002)
+
+      const barX = cardX + 72
+      const barY = ry + 28
+      const barW = cardW - 118
+      const barH = 5
+
+      const barTrack = this.add.graphics().setScrollFactor(0).setDepth(1002)
+      barTrack.fillStyle(0x06101a, 1)
+      barTrack.fillRoundedRect(barX, barY, barW, barH, 2)
+
+      const fillW = Math.max(6, barW * Math.min(st.bar, 1))
+      const barFill = this.add.graphics().setScrollFactor(0).setDepth(1003)
+      barFill.fillStyle(st.barColor, 1)
+      barFill.fillRoundedRect(barX, barY, fillW, barH, 2)
+      barFill.fillStyle(st.barColor, 0.5)
+      barFill.fillCircle(barX + fillW, barY + barH / 2, 4)
+    })
+
+    // ── Blue Carbon equivalence banner ───────────────────────────
+    const eqY = startY + stats.length * (rowH + rowGap) + 4
+    const eqBg = this.add.graphics().setScrollFactor(0).setDepth(1001)
+    eqBg.fillStyle(0x0a2233, 1)
+    eqBg.fillRoundedRect(cardX + 16, eqY, cardW - 32, 32, 8)
+    eqBg.lineStyle(1, 0x00aacc, 0.6)
+    eqBg.strokeRoundedRect(cardX + 16, eqY, cardW - 32, 32, 8)
+    this.add.text(width / 2, eqY + 16,
+      `🌱  Equal to protecting ${Math.max(1, Math.round(blueCarbon / 80))} hectares of coastal seagrass & kelp beds`, {
+      fontSize: '11px', fontFamily: 'Arial', color: '#8fe3f0'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1002)
+
+    // ── Marine species spotlight ──────────────────────────────────
+    const spotY = eqY + 38
+    const spotH = 64
+    const spotBg = this.add.graphics().setScrollFactor(0).setDepth(1002)
+    spotBg.fillStyle(0x0a241b, 1)
+    spotBg.fillRoundedRect(cardX + 16, spotY, cardW - 32, spotH, 8)
+    spotBg.lineStyle(1.5, 0x00ffcc, 0.6)
+    spotBg.strokeRoundedRect(cardX + 16, spotY, cardW - 32, spotH, 8)
+
+    this.add.text(cardX + 26, spotY + 11, `🌊  MARINE SPOTLIGHT — ${spotlight.name.toUpperCase()}`, {
+      fontSize: '11px', fontFamily: 'Arial Black', color: '#00ffcc', stroke: '#000000', strokeThickness: 2
+    }).setScrollFactor(0).setDepth(1003)
+
+    this.add.text(width / 2, spotY + 38, spotlight.fact, {
+      fontSize: '11px', fontFamily: 'Arial', color: '#ffffff', stroke: '#000000', strokeThickness: 2,
+      wordWrap: { width: cardW - 56 }, align: 'center', lineSpacing: 2
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(1003)
+
+    // ── Buttons ───────────────────────────────────────────────────
+    const btnY = cardY + cardH - 52
+
+    const stopAllSounds = () => {
+      [this.portalAudio, this.hazardHitAudio, this.finalPortalAudio, this.gameOverAudio].forEach(a => {
+        if (a && a.isPlaying) a.stop()
+      })
+      try {
+        const escSnd = this.sound.get('esc_sound')
+        if (escSnd && escSnd.isPlaying) escSnd.stop()
+      } catch (e) {}
+    }
+
+    const doRestart = () => {
+      stopAllSounds()
+      if (this.sound && this.sound.play) {
+        this.sound.play('select_sound', { volume: 0.85 })
+      }
+      this.input.setDefaultCursor('default')
+      this.scene.restart({
+        playerName: this.playerName,
+        chosenBird: this.chosenBird,
+        score: this.score
+      })
+    }
+
+    const doMenu = () => {
+      stopAllSounds()
+      if (this.sound && this.sound.play) {
+        this.sound.play('select_sound', { volume: 0.85 })
+      }
+      this.input.setDefaultCursor('default')
+      this.scene.start('MenuScene', {
+        playerName: this.playerName,
+        chosenBird: this.chosenBird,
+        score: this.score
+      })
+    }
+
+    const doLastScene = () => {
+      stopAllSounds()
+      if (this.sound && this.sound.play) {
+        this.sound.play('select_sound', { volume: 0.85 })
+      }
+      this.input.setDefaultCursor('default')
+      this.cameras.main.fadeOut(400, 0, 0, 0)
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start('LastScene', {
           playerName: this.playerName,
           chosenBird: this.chosenBird,
           score: this.score
         })
       })
-    })
+    }
+
+    if (escaped) {
+      // Victory: PLAY AGAIN and NEXT (to last page) side-by-side
+      const playAgainBtn = this.add.text(width / 2 - 115, btnY, '  PLAY AGAIN (R)  ', {
+        fontSize: '14px', fontFamily: 'Arial Black',
+        color: '#061622', backgroundColor: '#00e5ff',
+        padding: { x: 18, y: 11 }
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1004).setInteractive({ useHandCursor: true })
+
+      const nextBtn = this.add.text(width / 2 + 115, btnY, '  NEXT (ENTER) →  ', {
+        fontSize: '14px', fontFamily: 'Arial Black',
+        color: '#04141c', backgroundColor: '#00ffcc',
+        padding: { x: 18, y: 11 }
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1004).setInteractive({ useHandCursor: true })
+
+      this.tweens.add({
+        targets: [playAgainBtn, nextBtn], scaleX: 1.04, scaleY: 1.04,
+        duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+      })
+
+      playAgainBtn.on('pointerover', () => {
+        playAgainBtn.setStyle({ backgroundColor: '#80f2ff' })
+        this.input.setDefaultCursor('pointer')
+      })
+      playAgainBtn.on('pointerout', () => {
+        playAgainBtn.setStyle({ backgroundColor: '#00e5ff' })
+        this.input.setDefaultCursor('default')
+      })
+      playAgainBtn.on('pointerdown', doRestart)
+
+      nextBtn.on('pointerover', () => {
+        nextBtn.setStyle({ backgroundColor: '#80ffea' })
+        this.input.setDefaultCursor('pointer')
+      })
+      nextBtn.on('pointerout', () => {
+        nextBtn.setStyle({ backgroundColor: '#00ffcc' })
+        this.input.setDefaultCursor('default')
+      })
+      nextBtn.on('pointerdown', doLastScene)
+
+      if (this.input && this.input.keyboard) {
+        this.input.keyboard.enabled = true
+        this.input.keyboard.once('keydown-R', doRestart)
+        this.input.keyboard.once('keydown-ENTER', doLastScene)
+        this.input.keyboard.once('keydown-SPACE', doLastScene)
+        this.input.keyboard.once('keydown-ESC', doMenu)
+      }
+
+      this.reportContainer = [overlay, card, headerBg, gradeGlow, playAgainBtn, nextBtn]
+    } else {
+      // Defeat: YOU LOST screen with PLAY AGAIN and MENU
+      const playAgainBtn = this.add.text(width / 2 - 100, btnY, '  PLAY AGAIN (ENTER)  ', {
+        fontSize: '14px', fontFamily: 'Arial Black',
+        color: '#ffffff', backgroundColor: '#ff3355',
+        padding: { x: 18, y: 11 }
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1004).setInteractive({ useHandCursor: true })
+
+      const menuBtn = this.add.text(width / 2 + 100, btnY, '  MENU (ESC)  ', {
+        fontSize: '14px', fontFamily: 'Arial Black',
+        color: '#ffffff', backgroundColor: '#1d3e56',
+        padding: { x: 18, y: 11 }
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1004).setInteractive({ useHandCursor: true })
+
+      this.tweens.add({
+        targets: playAgainBtn, scaleX: 1.04, scaleY: 1.04,
+        duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+      })
+
+      playAgainBtn.on('pointerover', () => {
+        playAgainBtn.setStyle({ backgroundColor: '#ff7799' })
+        this.input.setDefaultCursor('pointer')
+      })
+      playAgainBtn.on('pointerout', () => {
+        playAgainBtn.setStyle({ backgroundColor: '#ff3355' })
+        this.input.setDefaultCursor('default')
+      })
+      playAgainBtn.on('pointerdown', doRestart)
+
+      menuBtn.on('pointerover', () => {
+        menuBtn.setStyle({ backgroundColor: '#2d5e82' })
+        this.input.setDefaultCursor('pointer')
+      })
+      menuBtn.on('pointerout', () => {
+        menuBtn.setStyle({ backgroundColor: '#1d3e56' })
+        this.input.setDefaultCursor('default')
+      })
+      menuBtn.on('pointerdown', doMenu)
+
+      if (this.input && this.input.keyboard) {
+        this.input.keyboard.enabled = true
+        this.input.keyboard.once('keydown-R', doRestart)
+        this.input.keyboard.once('keydown-ENTER', doRestart)
+        this.input.keyboard.once('keydown-SPACE', doRestart)
+        this.input.keyboard.once('keydown-ESC', doMenu)
+      }
+
+      this.reportContainer = [overlay, card, headerBg, gradeGlow, playAgainBtn, menuBtn]
+    }
   }
 
   // ================================================================
@@ -461,27 +1008,28 @@ export class GameScene3 extends Phaser.Scene {
 
   drawReefEnvironment() {
     const objects = [
-      // coral
-      [120, 780, 'coral_1', 1.0],
-      [1400, 200, 'coral_2', 0.9],
-      [80, 150, 'coral_cluster', 1.1],
+      // Corals on seabed & shelves (origin 0.5, 1 rests cleanly on top)
+      [140, 850, 'coral_1', 0.95],
+      [1120, 850, 'coral_cluster', 1.0],
+      [1260, 314, 'coral_2', 0.85],     // Resting on eastern shelf top
+      [80, 850, 'coral_cluster', 0.9],
 
-      // kelp
-      [200, 300, 'kelp_1', 1.0],
-      [1300, 700, 'kelp_2', 0.9],
-      [60, 500, 'kelp_cluster', 1.1],
+      // Kelp anchored to seabed and platforms
+      [440, 850, 'kelp_1', 0.95],
+      [680, 850, 'kelp_cluster', 1.0],
+      [380, 394, 'seaweed_1', 0.85],     // Growing on starting platform top
+      [1320, 314, 'kelp_2', 0.8],        // Growing on eastern shelf top
 
-      // rocks
-      [500, 780, 'rock_1', 1.0],
-      [1200, 780, 'rock_2', 1.0],
-      [1420, 480, 'rock_cluster', 1.05],
-
-      // small plant
-      [750, 200, 'seaweed_1', 0.9],
+      // Rocks resting on seabed and platforms
+      [60, 850, 'rock_1', 0.95],
+      [580, 850, 'rock_2', 0.95],
+      [880, 850, 'rock_cluster', 0.9],
+      [140, 394, 'rock_1', 0.75],        // Resting on starting platform top
+      [420, 654, 'rock_2', 0.8],         // Resting on lower canyon shelf top
     ]
 
     objects.forEach(([x, y, key, scale]) => {
-      this.add.image(x, y, key).setScale(scale).setDepth(12)
+      this.add.image(x, y, key).setScale(scale).setOrigin(0.5, 1).setDepth(12)
     })
   }
 
@@ -504,11 +1052,14 @@ export class GameScene3 extends Phaser.Scene {
     if (!this.wildlifeList) this.wildlifeList = []
 
     positions.forEach(p => {
+      const scale = scaleByKey[p.key] || 0.5
       const sprite = this.add.image(p.x, p.y, p.key)
-        .setScale(scaleByKey[p.key] || 0.5)
+        .setScale(scale)
         .setDepth(25)
 
-      const shadow = this.add.ellipse(p.x, p.y + 24, 40, 14, 0x000000, 0.22).setDepth(24)
+      const standOffset = p.standOffset || 22
+      const shadowY = p.isBenthic ? p.y + standOffset : p.y + 24
+      const shadow = this.add.ellipse(p.x, shadowY, 36, 12, 0x000000, 0.28).setDepth(24)
 
       const prompt = this.add.text(p.x, p.y - 44, 'Press E', {
         fontSize: '10px', fontFamily: 'Arial Black',
@@ -525,7 +1076,10 @@ export class GameScene3 extends Phaser.Scene {
         moving: false,
         species: p.species,
         fact: p.fact,
-        collected: this.wildlifeJournal.includes(p.species)
+        collected: this.wildlifeJournal.includes(p.species),
+        isBenthic: !!p.isBenthic,
+        platformBounds: p.platformBounds || null,
+        standOffset
       })
 
       if (this.wildlifeJournal.includes(p.species)) {
@@ -545,14 +1099,25 @@ export class GameScene3 extends Phaser.Scene {
     }
 
     const positions = [
-      { x: 300, y: 250, key: 'crab_1', species: 'Reef Crab', fact: 'Sidesteps quickly across the sea floor to escape danger.' },
-      { x: 1250, y: 300, key: 'dolphin_2', species: 'Bottlenose Dolphin', fact: 'Uses echolocation clicks to find fish hidden in the coral.' },
-      { x: 600, y: 150, key: 'fish_1', species: 'Reef Fish', fact: 'Sticks close to the coral it calls home its whole life.' },
-      { x: 950, y: 350, key: 'fish_2', species: 'Blue Tang', fact: 'Can shift the shade of its blue to signal mood to others.' },
-      { x: 400, y: 550, key: 'fish_3', species: 'Butterflyfish', fact: 'Mates for life and is almost always seen swimming in pairs.' },
-      { x: 1100, y: 550, key: 'fish_school_1', species: 'Sardine School', fact: 'Swims in massive schools to confuse and overwhelm predators.' },
-      { x: 700, y: 700, key: 'turtle_1', species: 'Green Sea Turtle', fact: 'Can hold its breath underwater for several hours while resting.' },
-      { x: 1350, y: 150, key: 'whale_1', species: 'Humpback Whale', fact: 'Sings long, complex songs that can travel for miles underwater.' },
+      // Reef Crab stands firmly on the starting shelf (top: 394, y: 370, feet touch 394)
+      {
+        x: 320, y: 370, key: 'crab_1', species: 'Reef Crab',
+        fact: 'Sidesteps quickly across the sea floor to escape danger.',
+        isBenthic: true, standOffset: 24, platformBounds: { minX: 120, maxX: 380 }
+      },
+      // Green Sea Turtle rests atop the eastern shelf (top: 314, y: 278, belly touches 314)
+      {
+        x: 1240, y: 278, key: 'turtle_1', species: 'Green Sea Turtle',
+        fact: 'Can hold its breath underwater for several hours while resting.',
+        isBenthic: true, standOffset: 36, platformBounds: { minX: 980, maxX: 1260 }
+      },
+      // Open-water swimming creatures
+      { x: 1050, y: 180, key: 'dolphin_2', species: 'Bottlenose Dolphin', fact: 'Uses echolocation clicks to find fish hidden in the coral.' },
+      { x: 600, y: 160, key: 'fish_1', species: 'Reef Fish', fact: 'Sticks close to the coral it calls home its whole life.' },
+      { x: 920, y: 500, key: 'fish_2', species: 'Blue Tang', fact: 'Can shift the shade of its blue to signal mood to others.' },
+      { x: 450, y: 580, key: 'fish_3', species: 'Butterflyfish', fact: 'Mates for life and is almost always seen swimming in pairs.' },
+      { x: 1150, y: 560, key: 'fish_school_1', species: 'Sardine School', fact: 'Swims in massive schools to confuse and overwhelm predators.' },
+      { x: 1200, y: 150, key: 'whale_1', species: 'Humpback Whale', fact: 'Sings long, complex songs that can travel for miles underwater.' },
     ]
 
     this.spawnWildlifeGroup('reef', scaleByKey, positions)
@@ -571,58 +1136,81 @@ export class GameScene3 extends Phaser.Scene {
     const W = 1600
 
     const positions = [
-      { x: W + 150, y: 200, key: 'fish_4', species: 'Regal Fish', fact: 'Drifts through half-sunken columns looking for hidden crevices.' },
-      { x: W + 1450, y: 250, key: 'fish_5', species: 'Emerald Fish', fact: 'Its shimmering scales help it blend into shafts of light.' },
-      { x: W + 500, y: 700, key: 'fish_school_3', species: 'Copper School', fact: 'Moves as one to make it harder for predators to single one out.' },
-      { x: W + 1300, y: 300, key: 'fish_school_4', species: 'Violet School', fact: 'Prefers the shadows cast by old stone archways.' },
-      { x: W + 350, y: 750, key: 'seahorse_1', species: 'Ruins Seahorse', fact: 'Anchors itself to coral or stone with its curled tail.' },
-      { x: W + 950, y: 200, key: 'turtle_2', species: 'Loggerhead Turtle', fact: 'Has one of the most powerful bites of any sea turtle.' },
+      // Ruins Seahorse anchored on top of Altar Shelf (top: 314, y: 290)
+      {
+        x: W + 1160, y: 290, key: 'seahorse_1', species: 'Ruins Seahorse',
+        fact: 'Anchors itself to coral or stone with its curled tail.',
+        isBenthic: true, standOffset: 24, platformBounds: { minX: W + 1020, maxX: W + 1280 }
+      },
+      // Loggerhead Turtle resting on Sunken Treasury Shelf (top: 516, y: 488)
+      {
+        x: W + 1440, y: 488, key: 'turtle_2', species: 'Loggerhead Turtle',
+        fact: 'Has one of the most powerful bites of any sea turtle.',
+        isBenthic: true, standOffset: 28, platformBounds: { minX: W + 1340, maxX: W + 1520 }
+      },
+      // Open-water swimming creatures
+      { x: W + 240, y: 180, key: 'fish_4', species: 'Regal Fish', fact: 'Drifts through half-sunken columns looking for hidden crevices.' },
+      { x: W + 1380, y: 200, key: 'fish_5', species: 'Emerald Fish', fact: 'Its shimmering scales help it blend into shafts of light.' },
+      { x: W + 480, y: 500, key: 'fish_school_3', species: 'Copper School', fact: 'Moves as one to make it harder for predators to single one out.' },
+      { x: W + 800, y: 680, key: 'fish_school_4', species: 'Violet School', fact: 'Prefers the shadows cast by old stone archways.' },
     ]
 
     this.spawnWildlifeGroup('ruins', scaleByKey, positions)
   }
 
   // ================================================================
-  // ZONE 3 (KELP) — the remaining zone, mixed leftover wildlife
+  // ZONE 3 (KELP) — WILDLIFE
   // ================================================================
 
   spawnKelpWildlife() {
     const scaleByKey = {
-      blowfish_1: 0.45, eel_1: 0.5, manta_ray_1: 0.65,
+      blowfish_1: 0.45, fish_3: 0.45, manta_ray_1: 0.65,
       fish_school_2: 0.55, starfish_1: 0.35, turtle_1: 0.55
     }
 
     const H = 900
 
     const positions = [
-      { x: 250, y: H + 250, key: 'blowfish_1', species: 'Pufferfish', fact: 'Inflates into a spiky ball when it feels threatened.' },
-      { x: 1300, y: H + 300, key: 'eel_1', species: 'Moray Eel', fact: 'Hides in kelp and rocky crevices, mouth agape to breathe.' },
-      { x: 700, y: H + 150, key: 'manta_ray_1', species: 'Manta Ray', fact: 'Glides through open water by flapping wing-like fins.' },
-      { x: 1100, y: H + 750, key: 'fish_school_2', species: 'Golden School', fact: 'Weaves between kelp stalks to stay hidden from predators.' },
-      { x: 450, y: H + 800, key: 'starfish_1', species: 'Sea Star', fact: 'Can regrow an entire lost arm over several months.' },
-      { x: 900, y: H + 850, key: 'turtle_1', species: 'Green Sea Turtle', fact: 'Often grazes on the kelp itself as part of its diet.' },
+      // Sea Star resting on Seafloor Root Shelf (top: H + 654, y: H + 634)
+      {
+        x: 340, y: H + 634, key: 'starfish_1', species: 'Sea Star',
+        fact: 'Can regrow an entire lost arm over several months.',
+        isBenthic: true, standOffset: 20, platformBounds: { minX: 180, maxX: 480 }
+      },
+      // Open-water swimming creatures
+      { x: 320, y: H + 260, key: 'blowfish_1', species: 'Pufferfish', fact: 'Inflates into a spiky ball when it feels threatened.' },
+      { x: 1350, y: H + 550, key: 'fish_3', species: 'Sunburst Damselfish', fact: 'Defends its kelp territory fearlessly from much larger creatures.' },
+      { x: 750, y: H + 200, key: 'manta_ray_1', species: 'Manta Ray', fact: 'Glides through open water by flapping wing-like fins.' },
+      { x: 1050, y: H + 460, key: 'fish_school_2', species: 'Golden School', fact: 'Weaves between kelp stalks to stay hidden from predators.' },
+      { x: 650, y: H + 680, key: 'turtle_1', species: 'Green Sea Turtle', fact: 'Often grazes on the kelp itself as part of its diet.' },
     ]
 
     this.spawnWildlifeGroup('kelp', scaleByKey, positions)
   }
 
   // ================================================================
-  // ZONE 4 (CAVE) — the darkest zone, where the exit portal is
+  // ZONE 4 (CAVE) — WILDLIFE
   // ================================================================
 
   spawnCaveWildlife() {
     const scaleByKey = {
-      urchin_1: 0.4, stingray_2: 0.6, jellyfish_1: 0.5, squid_2: 0.5
+      urchin_1: 0.4, stingray_2: 0.6, fish_4: 0.45, squid_2: 0.5
     }
 
     const W = 1600
     const H = 900
 
     const positions = [
-      { x: W + 150, y: H + 150, key: 'urchin_1', species: 'Sea Urchin', fact: 'Its spines deter almost every predator in the cave.' },
-      { x: W + 450, y: H + 100, key: 'stingray_2', species: 'Stingray', fact: 'Glides just above the cave floor, half-buried in silt.' },
-      { x: W + 1050, y: H + 150, key: 'jellyfish_1', species: 'Cave Jellyfish', fact: 'Pulses gently, drifting wherever the current carries it.' },
-      { x: W + 1450, y: H + 300, key: 'squid_2', species: 'Deep Squid', fact: 'Can shoot a cloud of ink to vanish from danger in an instant.' },
+      // Sea Urchin resting atop Central Obsidian Bridge (top: H + 454, y: H + 430)
+      {
+        x: W + 720, y: H + 430, key: 'urchin_1', species: 'Sea Urchin',
+        fact: 'Its spines deter almost every predator in the cave.',
+        isBenthic: true, standOffset: 24, platformBounds: { minX: W + 600, maxX: W + 840 }
+      },
+      // Open-water swimming creatures
+      { x: W + 400, y: H + 600, key: 'stingray_2', species: 'Stingray', fact: 'Glides just above the cave floor, half-buried in silt.' },
+      { x: W + 1050, y: H + 180, key: 'fish_4', species: 'Abyssal Darter', fact: 'Has adapted large reflective pupils to see prey in pitch-black caves.' },
+      { x: W + 1420, y: H + 280, key: 'squid_2', species: 'Deep Squid', fact: 'Can shoot a cloud of ink to vanish from danger in an instant.' },
     ]
 
     this.spawnWildlifeGroup('cave', scaleByKey, positions)
@@ -654,23 +1242,33 @@ export class GameScene3 extends Phaser.Scene {
 
       if (!w.moving) {
         w.wanderTimer = (w.wanderTimer || 0) + 1
-        if (w.wanderTimer > 90) {
+        if (w.wanderTimer > 100) {
           w.wanderTimer = 0
-          const zone = this.ZONES[w.zoneKey] || this.ZONES.reef
-          w.targetX = Phaser.Math.Clamp(
-            w.spawnX + Phaser.Math.Between(-220, 220),
-            zone.x + margin, zone.x + zone.w - margin
-          )
-          w.targetY = Phaser.Math.Clamp(
-            w.spawnY + Phaser.Math.Between(-160, 160),
-            zone.y + margin, zone.y + zone.h - margin
-          )
-          w.moving = true
+          if (w.isBenthic && w.platformBounds) {
+            // Benthic creatures stand and walk horizontally on top of their platform!
+            w.targetX = Phaser.Math.Clamp(
+              w.spawnX + Phaser.Math.Between(-120, 120),
+              w.platformBounds.minX, w.platformBounds.maxX
+            )
+            w.targetY = w.spawnY // Never sink into or float off the platform
+            w.moving = true
+          } else {
+            const zone = this.ZONES[w.zoneKey] || this.ZONES.reef
+            w.targetX = Phaser.Math.Clamp(
+              w.spawnX + Phaser.Math.Between(-180, 180),
+              zone.x + margin, zone.x + zone.w - margin
+            )
+            w.targetY = Phaser.Math.Clamp(
+              w.spawnY + Phaser.Math.Between(-100, 100),
+              zone.y + margin, zone.y + zone.h - margin
+            )
+            w.moving = true
+          }
         }
       }
 
       if (w.moving) {
-        const speed = 0.6
+        const speed = w.isBenthic ? 0.45 : 0.6
         const dx = w.targetX - w.x
         const dy = w.targetY - w.y
         const d = Math.sqrt(dx * dx + dy * dy)
@@ -687,48 +1285,72 @@ export class GameScene3 extends Phaser.Scene {
       }
 
       w.graphic.setPosition(w.x, w.y)
-      w.shadow.setPosition(w.x, w.y + 24)
+      const shadowY = w.isBenthic ? w.y + w.standOffset : w.y + 24
+      w.shadow.setPosition(w.x, shadowY)
     })
   }
 
   showWildlifeCard(species, fact) {
+    if (this.activeWildlifeCard) {
+      this.activeWildlifeCard.forEach(el => {
+        if (el && el.destroy) el.destroy()
+      })
+      this.activeWildlifeCard = null
+    }
+
+    // 🧊 Freeze the screen and player
+    this.speciesCardFrozen = true
+    this.cardFreezeTimestamp = (this.time && this.time.now) ? this.time.now : Date.now()
+    if (this.player && this.player.body) {
+      this.player.body.setVelocity(0, 0)
+      this.player.body.setAcceleration(0, 0)
+    }
+
     const { width, height } = this.scale
 
     const card = this.add.graphics().setScrollFactor(0).setDepth(400)
     card.fillStyle(0x0a1420, 0.97)
-    card.fillRoundedRect(width / 2 - 180, height / 2 - 90, 360, 180, 16)
+    card.fillRoundedRect(width / 2 - 190, height / 2 - 100, 380, 200, 16)
     card.lineStyle(3, 0x00ffcc, 1)
-    card.strokeRoundedRect(width / 2 - 180, height / 2 - 90, 360, 180, 16)
+    card.strokeRoundedRect(width / 2 - 190, height / 2 - 100, 380, 200, 16)
 
-    const title = this.add.text(width / 2, height / 2 - 60, '🐠 SPECIES COLLECTED!', {
+    const title = this.add.text(width / 2, height / 2 - 70, '🐠 SPECIES JOURNALED!', {
       fontSize: '15px', fontFamily: 'Arial Black', color: '#00ffcc'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const name = this.add.text(width / 2, height / 2 - 30, species, {
-      fontSize: '18px', fontFamily: 'Arial Black', color: '#ffffff'
+    const name = this.add.text(width / 2, height / 2 - 40, species, {
+      fontSize: '19px', fontFamily: 'Arial Black', color: '#ffffff'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const factText = this.add.text(width / 2, height / 2 + 10, fact, {
+    const factText = this.add.text(width / 2, height / 2 + 2, fact, {
       fontSize: '11px', fontFamily: 'Arial', color: '#aaccdd',
-      wordWrap: { width: 320 }, align: 'center'
+      wordWrap: { width: 340 }, align: 'center'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
     const count = this.wildlifeJournal.length
     const total = this.totalWildlifeSpecies || 8
-    const counter = this.add.text(width / 2, height / 2 + 60, `Journal: ${count} / ${total} species`, {
+    const counter = this.add.text(width / 2, height / 2 + 46, `Journal: ${count} / ${total} species`, {
       fontSize: '11px', fontFamily: 'Arial Black', color: '#00d4ff'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const elements = [card, title, name, factText, counter]
-    elements.forEach(el => el.setAlpha(0))
+    const resumeHint = this.add.text(width / 2, height / 2 + 74, '👉 Move in any direction (W,A,S,D / Arrows) to resume', {
+      fontSize: '10px', fontFamily: 'Arial Black', color: '#ffdd77'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    this.tweens.add({ targets: elements, alpha: 1, duration: 250 })
-    this.time.delayedCall(2600, () => {
-      this.tweens.add({
-        targets: elements, alpha: 0, duration: 300,
-        onComplete: () => elements.forEach(el => el.destroy())
+    const elements = [card, title, name, factText, counter, resumeHint]
+    this.activeWildlifeCard = elements
+    elements.forEach(el => el.setAlpha(1))
+  }
+
+  dismissWildlifeCard() {
+    if (!this.speciesCardFrozen && !this.activeWildlifeCard) return
+    this.speciesCardFrozen = false
+    if (this.activeWildlifeCard) {
+      this.activeWildlifeCard.forEach(el => {
+        if (el && el.destroy) el.destroy()
       })
-    })
+      this.activeWildlifeCard = null
+    }
   }
 
   // ================================================================
@@ -803,8 +1425,8 @@ export class GameScene3 extends Phaser.Scene {
     this.drawNetMesh(1450, 650, 100, 80)
 
     // the one net that actually has something caught in it
-    const nx = 1000
-    const ny = 220
+    const nx = 1050
+    const ny = 240
 
     const netGfx = this.drawNetMesh(nx, ny, 120, 100)
 
@@ -868,7 +1490,7 @@ export class GameScene3 extends Phaser.Scene {
     // seahorses are frequent fishing-net bycatch in real reef/ruins
     // waters — a fitting trapped animal for this zone
     this.addTrappedNet(
-      W + 1000, 420, 120, 95, 'seahorse_1',
+      W + 1160, 440, 120, 95, 'seahorse_1',
       'Trapped Seahorse',
       'Seahorses are one of the most common bycatch casualties of ghost fishing nets.'
     )
@@ -883,7 +1505,7 @@ export class GameScene3 extends Phaser.Scene {
 
     // manta rays are large, well-documented net-entanglement victims
     this.addTrappedNet(
-      950, H + 300, 130, 100, 'manta_ray_1',
+      750, H + 280, 130, 100, 'manta_ray_1',
       'Trapped Manta Ray',
       'A manta ray\u2019s size and wide fins make it especially prone to entanglement in nets.'
     )
@@ -900,7 +1522,7 @@ export class GameScene3 extends Phaser.Scene {
     // stingrays glide along the seafloor, exactly where abandoned
     // nets tend to settle and snag on the bottom
     this.addTrappedNet(
-      W + 800, H + 300, 120, 95, 'stingray_2',
+      W + 720, H + 360, 120, 95, 'stingray_2',
       'Trapped Stingray',
       'Bottom-dwelling nets can trap stingrays as they glide along the seafloor.'
     )
@@ -960,6 +1582,7 @@ export class GameScene3 extends Phaser.Scene {
   rescueNetAnimal(n) {
     if (n.rescued) return
     n.rescued = true
+    this.netsFreed = (this.netsFreed || 0) + 1
 
     if (!this.wildlifeJournal.includes(n.species)) {
       this.wildlifeJournal.push(n.species)
@@ -1048,10 +1671,18 @@ export class GameScene3 extends Phaser.Scene {
     const H = 900
 
     const spots = [
-      { x: 500, y: 80 },          // reef, near the surface
-      { x: W + 1400, y: 80 },     // ruins, near the surface
-      { x: 300, y: H + 80 },      // kelp
-      { x: W + 1500, y: H + 80 }, // cave
+      // Zone 1: Coral Reef
+      { x: 450, y: 90 },           // reef west lagoon
+      { x: 1320, y: 110 },         // reef east grotto
+      // Zone 2: Sunken Ruins
+      { x: W + 450, y: 90 },       // ruins west colonnade
+      { x: W + 1300, y: 110 },      // ruins east altar
+      // Zone 3: Kelp Forest
+      { x: 350, y: H + 90 },       // kelp canopy
+      { x: 1250, y: H + 110 },     // kelp deep trench
+      // Zone 4: Abyssal Cave
+      { x: W + 420, y: H + 100 },  // upper cavern
+      { x: W + 1180, y: H + 110 }, // sanctum threshold
     ]
 
     this.airPockets = spots.map(p => {
@@ -1120,12 +1751,29 @@ export class GameScene3 extends Phaser.Scene {
       color: '#aee6ff', stroke: '#000000', strokeThickness: 3
     }).setOrigin(0.5).setScrollFactor(0).setDepth(251)
 
+    this.heartsText = this.add.text(x + this.oxygenBarW / 2, y - 20, '❤️ ❤️ ❤️', {
+      fontSize: '14px'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(251)
+
+    this.sonarHUDText = this.add.text(x + this.oxygenBarW / 2, y + 36, '📡 [SPACE] SONAR: READY', {
+      fontSize: '10px', fontFamily: 'Arial Black',
+      color: '#00e5ff', stroke: '#000000', strokeThickness: 3
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(251)
+
     this.updateOxygenHUD()
   }
 
   updateOxygenHUD() {
     if (!this.oxygenBarFill) return
     const pct = Phaser.Math.Clamp(this.oxygen / this.maxOxygen, 0, 1)
+
+    if (this.heartsText) {
+      let heartsStr = ''
+      for (let i = 0; i < this.maxHP; i++) {
+        heartsStr += i < this.playerHP ? '❤️ ' : '🖤 '
+      }
+      this.heartsText.setText(heartsStr.trim())
+    }
 
     const color =
       pct > 0.6 ? 0x00BFFF :
@@ -1148,6 +1796,17 @@ export class GameScene3 extends Phaser.Scene {
 
     this.oxygenText.setText(label)
     this.oxygenText.setColor(this.oxygen <= 0 ? '#ff5577' : '#aee6ff')
+
+    if (this.sonarHUDText) {
+      if (this.sonarCooldown > 0) {
+        const secLeft = (this.sonarCooldown / 1000).toFixed(1)
+        this.sonarHUDText.setText(`📡 SONAR: ${secLeft}s`)
+        this.sonarHUDText.setColor('#ffaa44')
+      } else {
+        this.sonarHUDText.setText('📡 [SPACE] SONAR: READY')
+        this.sonarHUDText.setColor('#00e5ff')
+      }
+    }
   }
 
   updateOxygen(delta) {
@@ -1178,7 +1837,8 @@ export class GameScene3 extends Phaser.Scene {
       })
 
       if (this.playerHP <= 0) {
-        this.handleBlackout()
+        this.triggerDefeat()
+        return
       }
     }
 
@@ -1212,12 +1872,46 @@ export class GameScene3 extends Phaser.Scene {
   createPlatforms() {
     this.platforms = this.physics.add.staticGroup()
 
-    const addPlatform = (x, y, w, h) => {
+    const addPlatform = (x, y, w, h, biome = 'reef') => {
       const g = this.add.graphics().setDepth(10)
-      g.fillStyle(0x2f5c4f, 1)
+      let baseColor = 0x184438
+      let edgeColor = 0x3ea88b
+      let accentColor = 0x6be0c2
+      let trimColor = 0xdf7366
+
+      if (biome === 'ruins') {
+        baseColor = 0x182933
+        edgeColor = 0x3d6478
+        accentColor = 0x6e9ab0
+        trimColor = 0xd4a853
+      } else if (biome === 'kelp') {
+        baseColor = 0x122e1f
+        edgeColor = 0x276b45
+        accentColor = 0x4aa36d
+        trimColor = 0x66c788
+      } else if (biome === 'cave') {
+        baseColor = 0x0f141e
+        edgeColor = 0x243245
+        accentColor = 0x405575
+        trimColor = 0x6894c7
+      }
+
+      // 1. Solid foundation block
+      g.fillStyle(baseColor, 1)
       g.fillRoundedRect(x - w / 2, y - h / 2, w, h, 8)
-      g.fillStyle(0x5aa98e, 1)
-      g.fillRoundedRect(x - w / 2, y - h / 2, w, 6, 6)
+
+      // 2. High-contrast top walking surface slab
+      const slabH = Math.min(12, Math.floor(h / 3))
+      g.fillStyle(edgeColor, 1)
+      g.fillRoundedRect(x - w / 2, y - h / 2, w, slabH, 5)
+
+      // 3. Bright top-edge specular highlight
+      g.fillStyle(accentColor, 0.95)
+      g.fillRoundedRect(x - w / 2 + 2, y - h / 2 + 1, w - 4, 3, 2)
+
+      // 4. Distinct biome surface rim separating the slab from the base
+      g.fillStyle(trimColor, 0.85)
+      g.fillRoundedRect(x - w / 2 + 6, y - h / 2 + slabH, w - 12, 2, 1)
 
       const zone = this.add.zone(x, y, w, h)
       this.physics.add.existing(zone, true)
@@ -1227,25 +1921,83 @@ export class GameScene3 extends Phaser.Scene {
     const W = this.zoneWidth
     const H = this.zoneHeight
 
-    // reef (top-left)
-    addPlatform(220, 640, 220, 30)
-    addPlatform(560, 520, 180, 26)
-    addPlatform(900, 660, 240, 30)
+    // ============================================================
+    // ZONE 1: CORAL REEF (Top-Left, x: 0..1600, y: 0..900)
+    // ============================================================
+    // Starting platform directly under player spawn (spawn is at 220, 320)
+    addPlatform(260, 420, 380, 52, 'reef')
+    // Upper coral barrier (forces detour to reach surface air pocket at 350, 100)
+    addPlatform(640, 240, 360, 48, 'reef')
+    // Center vertical coral pillar creating chicane swimways
+    addPlatform(740, 520, 48, 300, 'reef')
+    // Lower canyon floor shelf
+    addPlatform(360, 680, 360, 52, 'reef')
+    // East grotto upper shelf (shelters trapped turtle at 1050, 240 and air pocket at 1200, 100)
+    addPlatform(1120, 340, 380, 52, 'reef')
+    // East grotto divider barrier (forces swimming around y: 550 for the Ruins portal at 1570, 550)
+    addPlatform(1060, 640, 48, 240, 'reef')
+    // South-east seabed terrace
+    addPlatform(1340, 720, 320, 52, 'reef')
+    // Reef seafloor barrier (leaves x: 1330..1510 open for the Kelp portal at x: 1420, y: 875)
+    addPlatform(650, 876, 1300, 52, 'reef')
 
-    // ruins (top-right)
-    addPlatform(W + 300, 600, 220, 28)
-    addPlatform(W + 700, 500, 200, 26)
-    addPlatform(W + 1150, 660, 260, 30)
+    // ============================================================
+    // ZONE 2: SUNKEN RUINS (Top-Right, x: 1600..3200, y: 0..900)
+    // ============================================================
+    // Arrival shelf for entering from Reef (entry at 1760, 550)
+    addPlatform(W + 200, 640, 340, 52, 'ruins')
+    // Grand Colonnade Pillar 1 (hangs from ceiling)
+    addPlatform(W + 480, 240, 52, 340, 'ruins')
+    // Grand Colonnade Pillar 2 (rises from seabed)
+    addPlatform(W + 720, 680, 52, 340, 'ruins')
+    // Sunken Hall Archway (creates winding S-curve corridor)
+    addPlatform(W + 640, 340, 320, 48, 'ruins')
+    // Grand Colonnade Pillar 3 (hangs from ceiling)
+    addPlatform(W + 960, 240, 52, 340, 'ruins')
+    // Sacred Altar Shelf (trapped seahorse at W + 1120, 440)
+    addPlatform(W + 1160, 340, 380, 52, 'ruins')
+    // Crypt divider wall
+    addPlatform(W + 1160, 680, 52, 280, 'ruins')
+    // Sunken Treasury shelf
+    addPlatform(W + 1440, 540, 260, 48, 'ruins')
+    // Ruins seabed floor (leaves x: W + 1330..W + 1510 open for Cave portal at W + 1420, 875)
+    addPlatform(W + 650, 876, 1300, 52, 'ruins')
 
-    // kelp forest (bottom-left)
-    addPlatform(300, H + 560, 200, 26)
-    addPlatform(700, H + 460, 220, 28)
-    addPlatform(1150, H + 600, 200, 26)
+    // ============================================================
+    // ZONE 3: KELP FOREST (Bottom-Left, x: 0..1600, y: 900..1800)
+    // ============================================================
+    // Kelp canopy shelf (under Reef entry at 1420, 1060)
+    addPlatform(1400, H + 260, 360, 48, 'kelp')
+    // Hanging Kelp Ridge 1 (descends from upper kelp canopy)
+    addPlatform(480, H + 280, 52, 380, 'kelp')
+    // Deep kelp seafloor root shelf (starfish rests at 340, H + 654)
+    addPlatform(340, H + 680, 380, 52, 'kelp')
+    // Middle Kelp Terrace (trapped manta ray hovers at 750, H + 280)
+    addPlatform(780, H + 420, 380, 52, 'kelp')
+    // Towering Kelp Barrier (rises from floor, forcing high swimway)
+    addPlatform(1120, H + 620, 52, 400, 'kelp')
+    // Lower Kelp Cavern ledge (leads toward Cave tunnel at 1570, 1520)
+    addPlatform(1400, H + 740, 340, 52, 'kelp')
 
-    // deep cave (bottom-right)
-    addPlatform(W + 250, H + 600, 220, 28)
-    addPlatform(W + 650, H + 500, 200, 26)
-    addPlatform(W + 1100, H + 640, 240, 30)
+    // ============================================================
+    // ZONE 4: ABYSSAL CAVE (Bottom-Right, x: 1600..3200, y: 900..1800)
+    // ============================================================
+    // Abyssal Stalactite 1 (hangs near Kelp tunnel entry at 1760, 1520)
+    addPlatform(W + 360, H + 240, 52, 340, 'cave')
+    // Abyssal Stalagmite 1 (rises from floor creating tight chicane)
+    addPlatform(W + 580, H + 680, 52, 360, 'cave')
+    // Central Obsidian Bridge (trapped stingray at W + 720, H + 360)
+    addPlatform(W + 720, H + 480, 320, 52, 'cave')
+    // Abyssal Stalactite 2 (separates Ruins entry from deep cavern)
+    addPlatform(W + 960, H + 250, 52, 340, 'cave')
+    // Upper Chasm Shelf (shelters air pocket at W + 1100, H + 100)
+    addPlatform(W + 1080, H + 260, 220, 44, 'cave')
+    // Abyssal Upper Stalactite (hangs from ceiling, leaving open water below)
+    addPlatform(W + 1180, H + 120, 44, 140, 'cave')
+    // Abyssal Lower Stalagmite (rises from floor, leaving 468px gateway above)
+    addPlatform(W + 1180, H + 820, 48, 140, 'cave')
+    // Sanctum Dais (ancient seabed plinth beneath the open exit portal)
+    addPlatform(W + 1400, H + 810, 280, 48, 'cave')
   }
 
   // ================================================================
@@ -1283,15 +2035,287 @@ export class GameScene3 extends Phaser.Scene {
   }
 
   createPlayer() {
-    const startX = this.zoneWidth / 2
-    const startY = this.zoneHeight / 2
-    const textureKey = this.buildDiverTexture()
+    const startX = 220
+    const startY = 320
+    const birdKey = (this.chosenBird || 'ember').toLowerCase()
+    const initialTexture = this.textures.exists(`${birdKey}_front`) ? `${birdKey}_front` : 'ember_front'
 
-    this.player = this.physics.add.sprite(startX, startY, textureKey)
+    this.player = this.physics.add.sprite(startX, startY, initialTexture)
+    this.player.setDisplaySize(38, 38)
     this.player.setDepth(30)
-    this.player.body.setCircle(18, 14, 14)
+
+    // Bubble radius is 26px (diameter 52px).
+    // Because Phaser's setDisplaySize scales the sprite, body.setSize takes source (unscaled) dimensions.
+    // We compute source dimensions so that in the world, the physics body is exactly 44px wide and 52px high,
+    // perfectly matching the 52px bubble height!
+    const sx = this.player.scaleX
+    const sy = this.player.scaleY
+    const bodyW = 44 / sx
+    const bodyH = 52 / sy
+    this.player.body.setSize(bodyW, bodyH)
+    this.player.body.setOffset(
+      (this.player.width - bodyW) / 2,
+      (this.player.height - bodyH) / 2
+    )
     this.player.body.setCollideWorldBounds(true)
     this.player.body.setMaxVelocity(240, 260)
+
+    // Bubble Graphics: Back glow and front glass reflection sandwiching bird sprite
+    this.playerBubbleBack = this.add.graphics().setDepth(29)
+    this.playerBubbleFront = this.add.graphics().setDepth(31)
+    this.bubbleRadius = 26
+  }
+
+  drawPlayerBubble(x, y) {
+    if (!this.playerBubbleBack || !this.playerBubbleFront) return
+    this.playerBubbleBack.clear()
+    this.playerBubbleFront.clear()
+
+    const pulse = 1 + Math.sin((this.time ? this.time.now : Date.now()) / 260) * 0.035
+    const r = this.bubbleRadius * pulse
+
+    // --- Back Glow & Translucent Aqua Fill ---
+    // Outer aqua halo
+    this.playerBubbleBack.fillStyle(0x40e0d0, 0.16)
+    this.playerBubbleBack.fillCircle(x, y, r + 5)
+
+    // Inner translucent bubble sphere
+    this.playerBubbleBack.fillStyle(0x7fe3ff, 0.26)
+    this.playerBubbleBack.fillCircle(x, y, r)
+
+    // --- Front Glassy Rim & Specular Highlights ---
+    // Outer glass boundary ring
+    this.playerBubbleFront.lineStyle(2.2, 0xdff8ff, 0.85)
+    this.playerBubbleFront.strokeCircle(x, y, r)
+
+    // Subtle inner neon aquatic rim
+    this.playerBubbleFront.lineStyle(1.2, 0x00ffff, 0.4)
+    this.playerBubbleFront.strokeCircle(x, y, r - 1.5)
+
+    // Specular highlight glare (top-left crescent reflection)
+    const hlAngle = -Math.PI * 0.72
+    const hlx = x + Math.cos(hlAngle) * (r * 0.65)
+    const hly = y + Math.sin(hlAngle) * (r * 0.65)
+    this.playerBubbleFront.fillStyle(0xffffff, 0.75)
+    this.playerBubbleFront.fillEllipse(hlx, hly, r * 0.38, r * 0.18)
+
+    // Secondary smaller highlight dot (bottom-right reflection)
+    const brAngle = Math.PI * 0.28
+    const brx = x + Math.cos(brAngle) * (r * 0.72)
+    const bry = y + Math.sin(brAngle) * (r * 0.72)
+    this.playerBubbleFront.fillStyle(0xffffff, 0.4)
+    this.playerBubbleFront.fillCircle(brx, bry, r * 0.1)
+  }
+
+  spawnTrailBubble(x, y) {
+    const size = Phaser.Math.Between(2, 5)
+    const b = this.add.circle(x + Phaser.Math.Between(-4, 4), y, size, 0xaaeaff, 0.6).setDepth(28)
+    this.tweens.add({
+      targets: b,
+      y: y - Phaser.Math.Between(18, 32),
+      x: b.x + Phaser.Math.Between(-6, 6),
+      alpha: 0,
+      scale: 1.3,
+      duration: Phaser.Math.Between(450, 700),
+      ease: 'Sine.easeOut',
+      onComplete: () => b.destroy()
+    })
+  }
+
+  togglePauseMenu() {
+    if (this.reportShown || this.setupFailed) return
+    if (this.speciesCardFrozen) return
+
+    const now = Date.now()
+    if (this.lastPauseToggle && now - this.lastPauseToggle < 250) return
+    this.lastPauseToggle = now
+
+    if (this.isPaused) {
+      this.resumeGame()
+    } else {
+      this.pauseGame()
+    }
+  }
+
+  pauseGame() {
+    if (this.isPaused || this.reportShown || this.setupFailed) return
+    this.isPaused = true
+    try {
+      if (this.sound && this.sound.play) {
+        this.sound.play('esc_sound', { volume: 0.85 })
+      }
+    } catch (e) {}
+    this.physics.pause()
+    if (this.player && this.player.body) {
+      this.player.body.setVelocity(0, 0)
+      this.player.body.setAcceleration(0, 0)
+    }
+
+    const { width, height } = this.scale
+    const cx = width / 2
+    const cy = height / 2
+
+    this.pauseMenuElements = []
+
+    // Full-screen dark overlay
+    const backdrop = this.add.rectangle(cx, cy, width, height, 0x000000, 0.78)
+      .setScrollFactor(0)
+      .setDepth(100000)
+      .setInteractive()
+
+    // Modal card
+    const modalW = 400
+    const modalH = 320
+    const modalBox = this.add.graphics()
+      .setScrollFactor(0)
+      .setDepth(100001)
+    modalBox.fillStyle(0x06141d, 0.96)
+    modalBox.fillRoundedRect(cx - modalW / 2, cy - modalH / 2, modalW, modalH, 16)
+    modalBox.lineStyle(3, 0x00e1ff, 0.9)
+    modalBox.strokeRoundedRect(cx - modalW / 2, cy - modalH / 2, modalW, modalH, 16)
+
+    // Title
+    const title = this.add.text(cx, cy - 110, '⏸️ GAME PAUSED', {
+      fontSize: '24px',
+      fontFamily: 'Arial Black',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 4
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(100002)
+
+    const birdName = this.chosenBird.charAt(0).toUpperCase() + this.chosenBird.slice(1)
+    const sub = this.add.text(cx, cy - 75, `Level 3: Abyssal Depths • ${this.playerName} (${birdName})`, {
+      fontSize: '12px',
+      fontFamily: 'Arial',
+      color: '#70e5ff'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(100002)
+
+    this.pauseMenuElements.push(backdrop, modalBox, title, sub)
+
+    const makePauseBtn = (x, y, text, colorHex, borderHex, hoverHex, callback) => {
+      const btnW = 270
+      const btnH = 46
+
+      const btnBg = this.add.rectangle(x, y, btnW, btnH, colorHex, 0.92)
+        .setStrokeStyle(2, borderHex, 1)
+        .setScrollFactor(0)
+        .setDepth(100002)
+        .setInteractive({ useHandCursor: true })
+
+      const btnLabel = this.add.text(x, y, text, {
+        fontSize: '15px',
+        fontFamily: 'Arial Black',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 3
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(100003).setInteractive({ useHandCursor: true })
+
+      const onOver = () => {
+        btnBg.setFillStyle(hoverHex || borderHex, 1)
+        btnBg.setStrokeStyle(2, 0xffffff, 1)
+        btnLabel.setScale(1.05)
+      }
+      const onOut = () => {
+        btnBg.setFillStyle(colorHex, 0.92)
+        btnBg.setStrokeStyle(2, borderHex, 1)
+        btnLabel.setScale(1)
+      }
+
+      const onClick = () => {
+        if (this.sound && this.sound.play) {
+          this.sound.play('select_sound', { volume: 0.85 })
+        }
+        callback()
+      }
+
+      btnBg.on('pointerover', onOver)
+      btnBg.on('pointerout', onOut)
+      btnBg.on('pointerdown', onClick)
+
+      btnLabel.on('pointerover', onOver)
+      btnLabel.on('pointerout', onOut)
+      btnLabel.on('pointerdown', onClick)
+
+      this.pauseMenuElements.push(btnBg, btnLabel)
+    }
+
+    // 1. Resume button
+    makePauseBtn(cx, cy - 25, '▶  RESUME', 0x0a4b63, 0x00e1ff, 0x126c8c, () => {
+      this.resumeGame()
+    })
+
+    // 2. Play Again / Restart button
+    makePauseBtn(cx, cy + 35, '🔄  PLAY AGAIN', 0xb86214, 0xffaa44, 0xd97718, () => {
+      this.playAgain()
+    })
+
+    // 3. Go to Main button
+    makePauseBtn(cx, cy + 95, '🏠  GO TO MAIN', 0x8a2020, 0xff5555, 0xb32b2b, () => {
+      this.goToMain()
+    })
+
+    this.scene.bringToTop()
+  }
+
+  resumeGame() {
+    if (!this.isPaused) return
+    this.isPaused = false
+    try {
+      const escSnd = this.sound.get('esc_sound')
+      if (escSnd && escSnd.isPlaying) escSnd.stop()
+    } catch (e) {}
+    if (this.pauseMenuElements && this.pauseMenuElements.length > 0) {
+      this.pauseMenuElements.forEach(el => {
+        if (el && el.destroy) el.destroy()
+      })
+      this.pauseMenuElements = null
+    }
+    this.physics.resume()
+  }
+
+  playAgain() {
+    this.isPaused = false
+    try {
+      const escSnd = this.sound.get('esc_sound')
+      if (escSnd && escSnd.isPlaying) escSnd.stop()
+    } catch (e) {}
+    this.cleanupPauseAndListeners()
+    this.scene.restart({
+      playerName: this.playerName,
+      chosenBird: this.chosenBird,
+      score: this.score
+    })
+  }
+
+  goToMain() {
+    this.isPaused = false
+    try {
+      const escSnd = this.sound.get('esc_sound')
+      if (escSnd && escSnd.isPlaying) escSnd.stop()
+    } catch (e) {}
+    this.cleanupPauseAndListeners()
+    this.scene.start('MenuScene', {
+      playerName: this.playerName,
+      chosenBird: this.chosenBird,
+      score: this.score
+    })
+  }
+
+  cleanupPauseAndListeners() {
+    try {
+      const escSnd = this.sound.get('esc_sound')
+      if (escSnd && escSnd.isPlaying) escSnd.stop()
+    } catch (e) {}
+    if (this.onEscKeyDown) {
+      window.removeEventListener('keydown', this.onEscKeyDown)
+      this.onEscKeyDown = null
+    }
+    if (this.pauseMenuElements && this.pauseMenuElements.length > 0) {
+      this.pauseMenuElements.forEach(el => {
+        if (el && el.destroy) el.destroy()
+      })
+      this.pauseMenuElements = null
+    }
   }
 
   // ================================================================
@@ -1300,22 +2324,57 @@ export class GameScene3 extends Phaser.Scene {
 
   update() {
     if (this.setupFailed || !this.player || !this.player.body) return
+    if (this.reportShown) return
+    if (this.isPaused) {
+      if (this.player && this.player.body) {
+        this.player.body.setVelocity(0, 0)
+        this.player.body.setAcceleration(0, 0)
+      }
+      return
+    }
+
+    // Allow exit portal check in cave even if transitioning flag had edge cases
+    this.checkExitPortal()
+    if (this.reportShown) return
+
     if (this.transitioning) return
 
     const delta = this.game.loop.delta
 
+    const movedInput =
+      this.wasd.left.isDown || this.wasd.right.isDown || this.wasd.up.isDown || this.wasd.down.isDown ||
+      this.cursors.left.isDown || this.cursors.right.isDown || this.cursors.up.isDown || this.cursors.down.isDown
+
+    // 🧊 Level 1 Freeze-and-Resume on movement
+    if (this.speciesCardFrozen) {
+      const now = (this.time && this.time.now) ? this.time.now : Date.now()
+      const elapsed = now - (this.cardFreezeTimestamp || 0)
+      if (movedInput && elapsed > 280) {
+        this.dismissWildlifeCard()
+      } else {
+        this.player.body.setVelocity(0, 0)
+        this.player.body.setAcceleration(0, 0)
+        return
+      }
+    }
+
     this.checkTunnels()
-    this.checkExitPortal()
-    if (this.transitioning) return
+    if (this.transitioning || this.reportShown) return
 
     this.updateWildlife()
+    this.updateHazards(delta)
     this.updateNets()
     this.updateMiniMap()
     this.updateOxygen(delta)
 
-    const movedInput =
-      this.wasd.left.isDown || this.wasd.right.isDown || this.wasd.up.isDown || this.wasd.down.isDown ||
-      this.cursors.left.isDown || this.cursors.right.isDown || this.cursors.up.isDown || this.cursors.down.isDown
+    if (this.sonarCooldown > 0) {
+      this.sonarCooldown = Math.max(0, this.sonarCooldown - delta)
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+      this.fireSonarPulse()
+    }
+
     this.updateSnare(delta, movedInput)
 
     // 🕸️ Snagged in a net: still movable, just badly slowed — not a
@@ -1328,13 +2387,20 @@ export class GameScene3 extends Phaser.Scene {
     const maxRiseSpeed = 220
 
     let vx = 0
+    const birdKey = (this.chosenBird || 'ember').toLowerCase()
 
     if (this.wasd.left.isDown || this.cursors.left.isDown) {
       vx = -horizontalSpeed
       this.facing = -1
+      if (this.textures.exists(`${birdKey}_left`)) {
+        this.player.setTexture(`${birdKey}_left`)
+      }
     } else if (this.wasd.right.isDown || this.cursors.right.isDown) {
       vx = horizontalSpeed
       this.facing = 1
+      if (this.textures.exists(`${birdKey}_right`)) {
+        this.player.setTexture(`${birdKey}_right`)
+      }
     }
 
     this.player.body.setVelocityX(vx)
@@ -1347,20 +2413,457 @@ export class GameScene3 extends Phaser.Scene {
       this.player.body.setVelocityY(0)
     } else if (this.wasd.up.isDown || this.cursors.up.isDown) {
       this.player.body.setAccelerationY(-swimThrust)
+      if (this.textures.exists(`${birdKey}_back`)) {
+        this.player.setTexture(`${birdKey}_back`)
+      }
     } else if (this.wasd.down.isDown || this.cursors.down.isDown) {
       this.player.body.setAccelerationY(diveAssist)
+      if (this.textures.exists(`${birdKey}_front`)) {
+        this.player.setTexture(`${birdKey}_front`)
+      }
     } else {
       this.player.body.setAccelerationY(0)
+      if (!this.wasd.left.isDown && !this.wasd.right.isDown && !this.cursors.left.isDown && !this.cursors.right.isDown) {
+        if (this.textures.exists(`${birdKey}_front`)) {
+          this.player.setTexture(`${birdKey}_front`)
+        }
+      }
     }
 
     if (this.player.body.velocity.y < -maxRiseSpeed) {
       this.player.body.setVelocityY(-maxRiseSpeed)
     }
 
-    this.player.setFlipX(this.facing < 0)
+    this.player.setFlipX(false)
 
     const vy = this.player.body.velocity.y
-    const targetTilt = Phaser.Math.Clamp(vy / 260, -1, 1) * 0.22
+    const targetTilt = Phaser.Math.Clamp(vy / 260, -1, 1) * 0.18
     this.player.rotation = Phaser.Math.Linear(this.player.rotation, targetTilt, 0.12)
+
+    this.drawPlayerBubble(this.player.x, this.player.y)
+
+    // Trailing swimming bubbles
+    if (Math.abs(vx) > 30 || Math.abs(vy) > 30) {
+      if (Phaser.Math.Between(0, 100) < 14) {
+        this.spawnTrailBubble(this.player.x - (this.facing * 10), this.player.y + 12)
+      }
+    }
+  }
+
+  // ================================================================
+  // 📡 BIOLUMINESCENT SONAR PULSE
+  // ================================================================
+
+  playSonarSound() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext
+      if (!AudioCtx) return
+      if (!this.sonarAudioCtx) this.sonarAudioCtx = new AudioCtx()
+      if (this.sonarAudioCtx.state === 'suspended') {
+        this.sonarAudioCtx.resume()
+      }
+      const ctx = this.sonarAudioCtx
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+
+      osc.type = 'sine'
+      const now = ctx.currentTime
+      osc.frequency.setValueAtTime(740, now)
+      osc.frequency.exponentialRampToValueAtTime(1280, now + 0.12)
+      osc.frequency.exponentialRampToValueAtTime(380, now + 0.5)
+
+      gain.gain.setValueAtTime(0.001, now)
+      gain.gain.linearRampToValueAtTime(0.24, now + 0.04)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+
+      osc.start(now)
+      osc.stop(now + 0.58)
+    } catch (e) {
+      // Audio context might be restricted before user interaction; ignore gracefully
+    }
+  }
+
+  createSonarPingBeacon(x, y, label, colorHex) {
+    const beacon = this.add.graphics().setDepth(220)
+    beacon.fillStyle(colorHex, 0.35)
+    beacon.fillCircle(x, y, 26)
+    beacon.lineStyle(2.5, colorHex, 0.95)
+    beacon.strokeCircle(x, y, 30)
+
+    const text = this.add.text(x, y - 42, label, {
+      fontSize: '11px', fontFamily: 'Arial Black', color: '#ffffff',
+      stroke: '#000000', strokeThickness: 3
+    }).setOrigin(0.5).setDepth(221)
+
+    this.tweens.add({
+      targets: beacon,
+      scaleX: 1.35,
+      scaleY: 1.35,
+      alpha: 0.15,
+      duration: 600,
+      yoyo: true,
+      repeat: 3,
+      onComplete: () => {
+        beacon.destroy()
+        text.destroy()
+      }
+    })
+  }
+
+  fireSonarPulse() {
+    if (this.sonarCooldown > 0) return
+    this.sonarCooldown = this.SONAR_COOLDOWN_MS
+
+    this.playSonarSound()
+
+    const px = this.player.x
+    const py = this.player.y
+    const maxRadius = 560
+
+    // Concentric expanding bioluminescent echolocation rings
+    for (let i = 0; i < 3; i++) {
+      const ring = this.add.circle(px, py, 18, 0x00ffff, 0)
+        .setStrokeStyle(3 - i * 0.7, 0x55ffff, 0.9 - i * 0.2)
+        .setDepth(200)
+
+      this.tweens.add({
+        targets: ring,
+        radius: maxRadius + i * 40,
+        alpha: 0,
+        duration: 900 + i * 140,
+        ease: 'Cubic.easeOut',
+        onComplete: () => ring.destroy()
+      })
+    }
+
+    // Light illumination flash in the dark Abyssal Cave
+    if (this.currentZone === 'cave') {
+      this.cameras.main.flash(400, 0, 45, 80, true)
+    }
+
+    // ⚡ Disentangle immediately if snared in a net!
+    if (this.snareTimer > 0) {
+      this.snareTimer = 0
+      this.showFloatingText(px, py - 35, '⚡ Sonar Pulse shattered net!', '#00ffff')
+    }
+
+    // Reveal trapped animals (nets)
+    if (this.netList) {
+      this.netList.forEach(n => {
+        if (n.rescued) return
+        const dist = Phaser.Math.Distance.Between(px, py, n.x, n.y)
+        if (dist <= maxRadius) {
+          this.createSonarPingBeacon(n.x, n.y, `⚠️ ${n.species}`, 0xff6644)
+        }
+      })
+    }
+
+    // Reveal and STUN mobile hazards (jellyfishes & eels)
+    if (this.hazardList) {
+      this.hazardList.forEach(h => {
+        const dist = Phaser.Math.Distance.Between(px, py, h.x, h.y)
+        if (dist <= maxRadius) {
+          h.stunTimer = 2800
+          h.sprite.setTint(0x00ffff)
+          const tag = h.type === 'poison' ? `☣️ ${h.name} [STUNNED]` : `⚡ ${h.name} [STUNNED]`
+          const col = h.type === 'poison' ? 0x39ff14 : 0xffea00
+          this.createSonarPingBeacon(h.x, h.y, tag, col)
+        }
+      })
+    }
+
+    // Reveal air pockets
+    if (this.airPockets) {
+      this.airPockets.forEach(p => {
+        const dist = Phaser.Math.Distance.Between(px, py, p.x, p.y)
+        if (dist <= maxRadius) {
+          this.createSonarPingBeacon(p.x, p.y, '💨 Air Pocket', 0x44ddff)
+        }
+      })
+    }
+
+    // Reveal exit portal (in Cave zone)
+    if (this.currentZone === 'cave' && this.exitPortal) {
+      const dist = Phaser.Math.Distance.Between(px, py, this.exitPortal.x, this.exitPortal.y)
+      if (dist <= maxRadius) {
+        this.createSonarPingBeacon(this.exitPortal.x, this.exitPortal.y, '✨ Exit Portal', 0x66ffcc)
+      }
+    }
+  }
+
+  // ================================================================
+  // ☣️ HAZARDS (JELLYFISH & ELECTRIC EEL)
+  //
+  // Jellyfish 1 & 2 deliver venomous poisonous stings that inflict
+  // damage and burn away oxygen.
+  // Eel delivers high-voltage electric shocks that paralyze and damage.
+  // Both can be avoided or stunned with Sonar Pulse ([SPACE]).
+  // ================================================================
+
+  createHazards() {
+    this.hazardList = []
+
+    const W = this.zoneWidth
+    const H = this.zoneHeight
+
+    const hazardDefs = [
+      // Zone 1: Coral Reef (Moon Jellyfish)
+      {
+        key: 'jellyfish_1', type: 'poison', name: 'Toxic Jellyfish',
+        x: 880, y: 380, scale: 0.5,
+        movement: 'vertical', minY: 260, maxY: 520, speed: 42,
+        auraColor: 0x39ff14
+      },
+      // Zone 2: Sunken Ruins (Electric Moray)
+      {
+        key: 'eel_1', type: 'electric', name: 'Electric Eel',
+        x: W + 820, y: 560, scale: 0.52,
+        movement: 'horizontal', minX: W + 620, maxX: W + 1040, speed: 65,
+        auraColor: 0xffea00
+      },
+      // Zone 3: Kelp Forest (Venomous Sea Wasp Jelly & Electric Moray)
+      {
+        key: 'jellyfish_2', type: 'poison', name: 'Venomous Box Jelly',
+        x: 960, y: H + 340, scale: 0.5,
+        movement: 'vertical', minY: H + 200, maxY: H + 480, speed: 45,
+        auraColor: 0x00ff88
+      },
+      {
+        key: 'eel_1', type: 'electric', name: 'Electric Eel',
+        x: 600, y: H + 680, scale: 0.52,
+        movement: 'horizontal', minX: 420, maxX: 880, speed: 60,
+        auraColor: 0xffea00
+      },
+      // Zone 4: Abyssal Cave (Abyssal Jellies & Deep Electric Eel)
+      {
+        key: 'jellyfish_1', type: 'poison', name: 'Abyssal Toxic Jelly',
+        x: W + 680, y: H + 260, scale: 0.5,
+        movement: 'vertical', minY: H + 160, maxY: H + 420, speed: 42,
+        auraColor: 0x39ff14
+      },
+      {
+        key: 'jellyfish_2', type: 'poison', name: 'Abyssal Box Jelly',
+        x: W + 1040, y: H + 520, scale: 0.5,
+        movement: 'vertical', minY: H + 380, maxY: H + 680, speed: 48,
+        auraColor: 0x00ff88
+      },
+      {
+        key: 'eel_1', type: 'electric', name: 'Abyssal Electric Eel',
+        x: W + 860, y: H + 760, scale: 0.52,
+        movement: 'horizontal', minX: W + 680, maxX: W + 1100, speed: 70,
+        auraColor: 0xffea00
+      }
+    ]
+
+    hazardDefs.forEach(def => {
+      const sprite = this.add.image(def.x, def.y, def.key)
+        .setScale(def.scale)
+        .setDepth(26)
+
+      // Bioluminescent danger aura
+      const aura = this.add.circle(def.x, def.y, 28, def.auraColor, 0.22)
+        .setStrokeStyle(2, def.auraColor, 0.75)
+        .setDepth(25)
+
+      this.tweens.add({
+        targets: aura,
+        scaleX: 1.25,
+        scaleY: 1.25,
+        alpha: 0.12,
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      })
+
+      this.hazardList.push({
+        sprite,
+        aura,
+        key: def.key,
+        type: def.type,
+        name: def.name,
+        x: def.x,
+        y: def.y,
+        dir: 1,
+        movement: def.movement,
+        minX: def.minX,
+        maxX: def.maxX,
+        minY: def.minY,
+        maxY: def.maxY,
+        speed: def.speed,
+        baseScale: def.scale,
+        stunTimer: 0
+      })
+    })
+  }
+
+  updateHazards(delta) {
+    if (!this.hazardList || !this.player || !this.player.active) return
+    const dt = delta / 1000
+
+    this.hazardList.forEach(h => {
+      // Stun handling
+      if (h.stunTimer > 0) {
+        h.stunTimer = Math.max(0, h.stunTimer - delta)
+        if (h.stunTimer <= 0) {
+          h.sprite.clearTint()
+          h.aura.setVisible(true)
+        } else {
+          h.sprite.setTint(0x00ffff)
+          h.aura.setVisible(false)
+          return
+        }
+      }
+
+      // Patrol movement
+      if (h.movement === 'vertical') {
+        h.y += h.dir * h.speed * dt
+        if (h.y > h.maxY) {
+          h.y = h.maxY
+          h.dir = -1
+        } else if (h.y < h.minY) {
+          h.y = h.minY
+          h.dir = 1
+        }
+        // Undulating jellyfish swimming pulse
+        const pulse = 1 + 0.12 * Math.sin(this.time.now * 0.005)
+        h.sprite.setScale(h.baseScale * (2 - pulse), h.baseScale * pulse)
+      } else if (h.movement === 'horizontal') {
+        h.x += h.dir * h.speed * dt
+        if (h.x > h.maxX) {
+          h.x = h.maxX
+          h.dir = -1
+          h.sprite.setFlipX(true)
+        } else if (h.x < h.minX) {
+          h.x = h.minX
+          h.dir = 1
+          h.sprite.setFlipX(false)
+        }
+        h.sprite.setAngle(Math.sin(this.time.now * 0.006) * 8)
+      }
+
+      h.sprite.setPosition(h.x, h.y)
+      h.aura.setPosition(h.x, h.y)
+
+      // Collision check with player
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, h.x, h.y)
+      if (dist < 44) {
+        this.triggerHazardHit(h)
+      }
+    })
+  }
+
+  triggerHazardHit(h) {
+    if (this.reportShown || this.transitioning) return
+    if (this.time.now < this.invulnerableUntil) return
+    this.invulnerableUntil = this.time.now + 1600
+
+    this.playerHP = Math.max(0, this.playerHP - 1)
+    this.updateOxygenHUD()
+
+    // Knockback
+    const angle = Phaser.Math.Angle.Between(h.x, h.y, this.player.x, this.player.y)
+    const pushForce = 340
+    this.player.body.setVelocity(Math.cos(angle) * pushForce, Math.sin(angle) * pushForce)
+
+    if (this.sound) {
+      try {
+        if (this.hazardHitAudio && this.hazardHitAudio.isPlaying) {
+          this.hazardHitAudio.stop()
+        }
+        this.hazardHitAudio = this.sound.add('electrofied_poisoned_sound', { volume: 0.85 })
+        this.hazardHitAudio.play()
+      } catch (e) {
+        if (this.sound.play) this.sound.play('electrofied_poisoned_sound', { volume: 0.85 })
+      }
+    }
+
+    if (h.type === 'poison') {
+      this.cameras.main.flash(350, 40, 200, 50)
+      this.playPoisonSound()
+      this.oxygen = Math.max(0, this.oxygen - 15)
+      this.player.setTint(0x39ff14)
+      this.showFloatingText(this.player.x, this.player.y - 35, '☣️ Toxic Sting! -1 Heart', '#39ff14')
+    } else {
+      this.cameras.main.flash(350, 255, 235, 60)
+      this.playElectricSound()
+      this.player.setTint(0xffff44)
+      this.showFloatingText(this.player.x, this.player.y - 35, '⚡ Electric Shock! -1 Heart', '#ffe600')
+    }
+
+    // Invulnerability blink tween
+    this.tweens.add({
+      targets: this.player,
+      alpha: 0.3,
+      duration: 110,
+      yoyo: true,
+      repeat: 7,
+      onComplete: () => {
+        if (this.player && this.player.active) {
+          this.player.setAlpha(1)
+          this.player.clearTint()
+        }
+      }
+    })
+
+    if (this.playerHP <= 0) {
+      this.triggerDefeat()
+    }
+  }
+
+  playPoisonSound() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext
+      if (!AudioCtx) return
+      if (!this.poisonAudioCtx) this.poisonAudioCtx = new AudioCtx()
+      if (this.poisonAudioCtx.state === 'suspended') this.poisonAudioCtx.resume()
+
+      const ctx = this.poisonAudioCtx
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sawtooth'
+      const now = ctx.currentTime
+      osc.frequency.setValueAtTime(420, now)
+      osc.frequency.exponentialRampToValueAtTime(110, now + 0.35)
+
+      gain.gain.setValueAtTime(0.001, now)
+      gain.gain.linearRampToValueAtTime(0.22, now + 0.03)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(now)
+      osc.stop(now + 0.4)
+    } catch (e) {}
+  }
+
+  playElectricSound() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext
+      if (!AudioCtx) return
+      if (!this.electricAudioCtx) this.electricAudioCtx = new AudioCtx()
+      if (this.electricAudioCtx.state === 'suspended') this.electricAudioCtx.resume()
+
+      const ctx = this.electricAudioCtx
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'square'
+      const now = ctx.currentTime
+      osc.frequency.setValueAtTime(260, now)
+      osc.frequency.linearRampToValueAtTime(580, now + 0.08)
+      osc.frequency.linearRampToValueAtTime(140, now + 0.28)
+
+      gain.gain.setValueAtTime(0.001, now)
+      gain.gain.linearRampToValueAtTime(0.25, now + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(now)
+      osc.stop(now + 0.35)
+    } catch (e) {}
   }
 }
