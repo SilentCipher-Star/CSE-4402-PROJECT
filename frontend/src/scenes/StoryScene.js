@@ -40,6 +40,7 @@ export class StoryScene extends Phaser.Scene {
       console.warn('Story BGM notice:', e)
     }
 
+
     this.currentPanel = 0
 
     this.panels = [

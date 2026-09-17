@@ -128,6 +128,7 @@ export class MenuScene extends Phaser.Scene {
       console.warn('Menu BGM play notice:', e)
     }
 
+
     // ── Mute/Unmute toggle button (top-left) ──────────────────────
     const isMuted = () => localStorage.getItem('menuBgmMuted') === 'true'
 
