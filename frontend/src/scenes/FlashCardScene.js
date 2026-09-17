@@ -5,214 +5,423 @@ export class FlashCardScene extends Phaser.Scene {
     super('FlashCardScene')
   }
 
-  init(data) {
-    this.cards = data.cards || []
-    this.reportData = data.reportData || null
-    this.cardIndex = 0
-    this.isClosing = false
+  preload() {
+    const cards = [
+      'flashCard_1',
+      'flashCard_2',
+      'flashCard_3'
+    ]
+
+    cards.forEach(key => {
+      if (!this.textures.exists(key)) {
+        const fileKey = key.toLowerCase()
+        this.load.image(key, `resource/flashcards/${fileKey}.png`)
+      }
+    })
+
+    this.load.audio('select_sound', 'resource/audio/select_sound.mp3')
   }
 
-  create() {
-    const { width, height } = this.scale
+  create(data) {
+    // ---------------------------------------------------------
+    // RECEIVE DATA FROM GAME SCENE
+    // ---------------------------------------------------------
+    this.flashCards = Array.isArray(data?.flashCards)
+      ? [...data.flashCards]
+      : (Array.isArray(data?.cards) ? [...data.cards] : [])
 
-    this.input.keyboard.enableGlobalCapture()
-    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
-      document.activeElement.blur()
-    }
-    if (this.game.canvas) {
+    this.reportData = data?.reportData || {}
+    this.fromReport = Boolean(data?.fromReport)
+
+    this.currentIndex = 0
+    this.closing = false
+
+    this.input.keyboard.enabled = true
+    if (this.game.canvas && this.game.canvas.focus) {
       this.game.canvas.focus()
     }
 
-    // Overlay backdrop - clicking outside the panel closes the flashcard viewer
-    const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.72)
-      .setOrigin(0)
+    const { width, height } = this.scale
+
+    // ---------------------------------------------------------
+    // NO CARDS COLLECTED
+    // ---------------------------------------------------------
+    if (this.flashCards.length === 0) {
+      this.goToReport()
+      return
+    }
+
+    // ---------------------------------------------------------
+    // BACKGROUND OVERLAY (Level 2 pattern)
+    // ---------------------------------------------------------
+    this.overlay = this.add.rectangle(
+      width / 2,
+      height / 2,
+      width,
+      height,
+      0x000000,
+      0.90
+    )
+      .setScrollFactor(0)
+      .setDepth(0)
       .setInteractive()
-    overlay.on('pointerdown', () => this.closeScene())
 
-    // Card panel container bounds
-    const panelX = width * 0.18
-    const panelY = height * 0.08
-    const panelW = width * 0.64
-    const panelH = height * 0.82
+    // ---------------------------------------------------------
+    // PANEL CONTAINER (Forest Nature color coordination)
+    // Proportioned comfortably within 720p (640px height)
+    // ---------------------------------------------------------
+    this.panelW = Math.min(760, width - 40)
+    this.panelH = Math.min(640, height - 40)
 
-    const panel = this.add.graphics()
-    panel.fillStyle(0x102719, 0.96)
-    panel.fillRoundedRect(panelX, panelY, panelW, panelH, 18)
-    panel.lineStyle(4, 0x66ff99, 1)
-    panel.strokeRoundedRect(panelX, panelY, panelW, panelH, 18)
+    const panelX = width / 2
+    const panelY = height / 2
 
-    // Panel hit area prevents clicks inside the panel from triggering the overlay's close
-    this.add.rectangle(panelX + panelW / 2, panelY + panelH / 2, panelW, panelH, 0x000000, 0)
-      .setInteractive()
+    this.panel = this.add.graphics()
+      .setScrollFactor(0)
+      .setDepth(1)
 
-    // Title
-    this.add.text(width / 2, panelY + 36, '🌱 Saved Sapling Flash Cards', {
-      fontSize: '26px',
-      fontFamily: 'Arial Black',
-      color: '#aaffcc',
-      stroke: '#000000',
-      strokeThickness: 4
-    }).setOrigin(0.5)
+    // Deep forest green base
+    this.panel.fillStyle(0x0c1e14, 1)
+    this.panel.fillRoundedRect(
+      panelX - this.panelW / 2,
+      panelY - this.panelH / 2,
+      this.panelW,
+      this.panelH,
+      22
+    )
 
-    // Close '✖' button in top-right corner of the panel
-    const closeBtn = this.add.text(panelX + panelW - 30, panelY + 30, '✖', {
-      fontSize: '22px',
-      fontFamily: 'Arial',
-      color: '#91ffb5'
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true })
+    // Emerald nature border
+    this.panel.lineStyle(3, 0x00e676, 1)
+    this.panel.strokeRoundedRect(
+      panelX - this.panelW / 2,
+      panelY - this.panelH / 2,
+      this.panelW,
+      this.panelH,
+      22
+    )
 
-    closeBtn.on('pointerover', () => {
-      closeBtn.setColor('#ff6b6b')
-      closeBtn.setScale(1.2)
-    })
-    closeBtn.on('pointerout', () => {
-      closeBtn.setColor('#91ffb5')
-      closeBtn.setScale(1)
-    })
-    closeBtn.on('pointerdown', () => this.closeScene())
+    // Subtle inner trim
+    this.panel.lineStyle(1, 0x66ff99, 0.25)
+    this.panel.strokeRoundedRect(
+      panelX - this.panelW / 2 + 6,
+      panelY - this.panelH / 2 + 6,
+      this.panelW - 12,
+      this.panelH - 12,
+      18
+    )
 
-    if (this.cards.length === 0) {
-      this.add.text(width / 2, height / 2, 'No flash cards unlocked yet.', {
-        fontSize: '24px',
+    // ---------------------------------------------------------
+    // TITLE (High contrast, crisp stroke)
+    // ---------------------------------------------------------
+    this.title = this.add.text(
+      panelX,
+      panelY - this.panelH / 2 + 34,
+      '🌱 SPECIES FLASHCARDS',
+      {
+        fontSize: '26px',
         fontFamily: 'Arial Black',
-        color: '#ffffff'
-      }).setOrigin(0.5)
-    } else {
-      this.cardImage = this.add.image(width / 2, height / 2 - 8, this.cards[this.cardIndex])
-      this.fitCard()
+        color: '#66ff99',
+        stroke: '#000000',
+        strokeThickness: 4
+      }
+    )
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2)
 
-      this.counterText = this.add.text(width / 2, panelY + panelH - 85, '', {
-        fontSize: '18px',
+    // ---------------------------------------------------------
+    // COUNTER
+    // ---------------------------------------------------------
+    this.counter = this.add.text(
+      panelX,
+      panelY - this.panelH / 2 + 68,
+      '',
+      {
+        fontSize: '16px',
         fontFamily: 'Arial Black',
         color: '#ffffff',
         stroke: '#000000',
         strokeThickness: 3
-      }).setOrigin(0.5)
-
-      this.refreshCard()
-
-      // Arrow navigation buttons if more than 1 card
-      if (this.cards.length > 1) {
-        this.makeArrowButton(panelX + 45, height / 2 - 8, '◀', () => this.prevCard())
-        this.makeArrowButton(panelX + panelW - 45, height / 2 - 8, '▶', () => this.nextCard())
       }
+    )
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2)
+
+    // ---------------------------------------------------------
+    // CARD IMAGE
+    // ---------------------------------------------------------
+    this.cardImage = this.add.image(
+      panelX,
+      panelY + 4,
+      ''
+    )
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2)
+
+    this.cardImage.setVisible(false)
+
+    // ---------------------------------------------------------
+    // NAVIGATION BUTTONS
+    // ---------------------------------------------------------
+    this.previousButton = this.makeButton(
+      panelX - 155,
+      panelY + this.panelH / 2 - 50,
+      '← PREVIOUS',
+      () => {
+        this.showCard(this.currentIndex - 1)
+      }
+    )
+
+    this.nextButton = this.makeButton(
+      panelX + 155,
+      panelY + this.panelH / 2 - 50,
+      'NEXT →',
+      () => {
+        this.showCard(this.currentIndex + 1)
+      }
+    )
+
+    // Controls hint text below buttons
+    this.add.text(
+      panelX,
+      panelY + this.panelH / 2 - 16,
+      'Use  ← / →  Arrow Keys or Click Buttons • [ENTER / ESC] to Continue',
+      {
+        fontSize: '11px',
+        fontFamily: 'Arial Black',
+        color: '#88cca8',
+        stroke: '#000000',
+        strokeThickness: 2
+      }
+    )
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(3)
+
+    // ---------------------------------------------------------
+    // KEYBOARD CONTROLS
+    // ---------------------------------------------------------
+    this.input.keyboard.on('keydown-LEFT', () => {
+      if (!this.closing) {
+        if (this.sound && this.sound.play) {
+          this.sound.play('select_sound', { volume: 0.85 })
+        }
+        this.showCard(this.currentIndex - 1)
+      }
+    })
+
+    this.input.keyboard.on('keydown-RIGHT', () => {
+      if (!this.closing) {
+        if (this.sound && this.sound.play) {
+          this.sound.play('select_sound', { volume: 0.85 })
+        }
+        this.showCard(this.currentIndex + 1)
+      }
+    })
+
+    this.input.keyboard.on('keydown-ENTER', () => {
+      if (!this.closing) {
+        if (this.sound && this.sound.play) {
+          this.sound.play('select_sound', { volume: 0.85 })
+        }
+        if (this.currentIndex === this.flashCards.length - 1) {
+          this.goToReport()
+        } else {
+          this.showCard(this.currentIndex + 1)
+        }
+      }
+    })
+
+    this.input.keyboard.on('keydown-SPACE', () => {
+      if (!this.closing) {
+        if (this.sound && this.sound.play) {
+          this.sound.play('select_sound', { volume: 0.85 })
+        }
+        if (this.currentIndex === this.flashCards.length - 1) {
+          this.goToReport()
+        } else {
+          this.showCard(this.currentIndex + 1)
+        }
+      }
+    })
+
+    this.input.keyboard.once('keydown-ESC', () => {
+      if (this.sound && this.sound.play) {
+        this.sound.play('select_sound', { volume: 0.85 })
+      }
+      this.goToReport()
+    })
+
+    // ---------------------------------------------------------
+    // SHOW FIRST CARD
+    // ---------------------------------------------------------
+    this.showCard(0)
+  }
+
+  // ===========================================================
+  // CREATE BUTTON (Forest Nature emerald palette)
+  // ===========================================================
+  makeButton(x, y, label, callback) {
+    const button = this.add.text(
+      x,
+      y,
+      `  ${label}  `,
+      {
+        fontSize: '15px',
+        fontFamily: 'Arial Black',
+        color: '#041c0e',
+        backgroundColor: '#00e676',
+        padding: {
+          x: 18,
+          y: 10
+        }
+      }
+    )
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(3)
+      .setInteractive({
+        useHandCursor: true
+      })
+
+    button.on('pointerover', () => {
+      button.setStyle({
+        backgroundColor: '#66ff99'
+      })
+      button.setScale(1.03)
+    })
+
+    button.on('pointerout', () => {
+      button.setStyle({
+        backgroundColor: '#00e676'
+      })
+      button.setScale(1.0)
+    })
+
+    button.on('pointerdown', () => {
+      if (this.sound && this.sound.play) {
+        this.sound.play('select_sound', { volume: 0.85 })
+      }
+      callback()
+    })
+
+    return button
+  }
+
+  // ===========================================================
+  // SHOW CARD
+  // ===========================================================
+  showCard(index) {
+    if (!this.flashCards.length) return
+    if (this.closing) return
+
+    this.currentIndex = Phaser.Math.Clamp(
+      index,
+      0,
+      this.flashCards.length - 1
+    )
+
+    const cardKey = this.flashCards[this.currentIndex]
+
+    this.counter.setText(
+      `Card ${this.currentIndex + 1} of ${this.flashCards.length}`
+    )
+
+    if (this.textures.exists(cardKey)) {
+      if (this.missingText) {
+        this.missingText.destroy()
+        this.missingText = null
+      }
+
+      this.cardImage.setTexture(cardKey)
+      this.cardImage.setVisible(true)
+
+      const maxW = this.panelW - 80
+      const maxH = this.panelH - 165
+
+      const scale = Math.min(
+        maxW / this.cardImage.width,
+        maxH / this.cardImage.height
+      )
+
+      this.cardImage.setScale(scale)
+    } else {
+      this.cardImage.setVisible(false)
+
+      if (this.missingText) {
+        this.missingText.destroy()
+      }
+
+      this.missingText = this.add.text(
+        this.scale.width / 2,
+        this.scale.height / 2,
+        `Flashcard image not found:\n${cardKey}`,
+        {
+          fontSize: '18px',
+          fontFamily: 'Arial Black',
+          color: '#ff6677',
+          align: 'center',
+          stroke: '#000000',
+          strokeThickness: 3
+        }
+      )
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(3)
     }
 
-    // Clickable Back Button at bottom
-    const backBtnY = panelY + panelH - 42
-    this.makeBackButton(width / 2, backBtnY, '← BACK (ESC)', () => this.closeScene())
+    // Previous button visibility
+    this.previousButton.setVisible(this.currentIndex > 0)
 
-    if (this.cards.length > 1) {
-      this.add.text(width / 2, panelY + panelH - 108, 'Use  ← / →  or click arrows to change card', {
-        fontSize: '13px',
-        fontFamily: 'Arial',
-        color: '#a3d9b5'
-      }).setOrigin(0.5)
+    // Next / Report button
+    const lastCard = this.currentIndex === this.flashCards.length - 1
+
+    this.nextButton.removeAllListeners('pointerdown')
+
+    if (lastCard) {
+      this.nextButton.setText(
+        this.fromReport ? '  CLOSE (ESC)  ' : '  VIEW REPORT →  '
+      )
+      this.nextButton.setStyle({
+        backgroundColor: '#00e676'
+      })
+      this.nextButton.on('pointerdown', () => {
+        if (this.sound && this.sound.play) {
+          this.sound.play('select_sound', { volume: 0.85 })
+        }
+        this.goToReport()
+      })
+    } else {
+      this.nextButton.setText('  NEXT →  ')
+      this.nextButton.setStyle({
+        backgroundColor: '#00e676'
+      })
+      this.nextButton.on('pointerdown', () => {
+        if (this.sound && this.sound.play) {
+          this.sound.play('select_sound', { volume: 0.85 })
+        }
+        this.showCard(this.currentIndex + 1)
+      })
     }
-
-    this.cursors = this.input.keyboard.createCursorKeys()
-    this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
-
-    this.input.keyboard.on('keydown-ESC', () => this.closeScene())
-    this.input.keyboard.on('keydown-LEFT', () => this.prevCard())
-    this.input.keyboard.on('keydown-RIGHT', () => this.nextCard())
   }
 
-  update() {}
+  // ===========================================================
+  // GO TO REPORT
+  // ===========================================================
+  goToReport() {
+    if (this.closing) return
+    this.closing = true
 
-  makeBackButton(x, y, label, onClick) {
-    const btnW = 190
-    const btnH = 38
-
-    const box = this.add.rectangle(x, y, btnW, btnH, 0x1d5c36)
-      .setStrokeStyle(2, 0x92ffb5)
-      .setInteractive({ useHandCursor: true })
-
-    const text = this.add.text(x, y, label, {
-      fontSize: '15px',
-      fontFamily: 'Arial Black',
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 2
-    }).setOrigin(0.5)
-
-    box.on('pointerover', () => {
-      box.setFillStyle(0x2e8a52)
-      text.setScale(1.05)
-    })
-
-    box.on('pointerout', () => {
-      box.setFillStyle(0x1d5c36)
-      text.setScale(1)
-    })
-
-    box.on('pointerdown', onClick)
-    text.setInteractive({ useHandCursor: true })
-    text.on('pointerdown', onClick)
-  }
-
-  makeArrowButton(x, y, label, onClick) {
-    const circle = this.add.circle(x, y, 24, 0x183c27, 0.9)
-      .setStrokeStyle(2, 0x66ff99)
-      .setInteractive({ useHandCursor: true })
-
-    const text = this.add.text(x, y, label, {
-      fontSize: '20px',
-      fontFamily: 'Arial Black',
-      color: '#c8ff7a'
-    }).setOrigin(0.5)
-
-    circle.on('pointerover', () => {
-      circle.setFillStyle(0x2d6b45, 1)
-      text.setScale(1.15)
-    })
-    circle.on('pointerout', () => {
-      circle.setFillStyle(0x183c27, 0.9)
-      text.setScale(1)
-    })
-    circle.on('pointerdown', onClick)
-    text.setInteractive({ useHandCursor: true })
-    text.on('pointerdown', onClick)
-  }
-
-  prevCard() {
-    if (this.cards.length <= 1) return
-    this.cardIndex = (this.cardIndex - 1 + this.cards.length) % this.cards.length
-    this.refreshCard()
-  }
-
-  nextCard() {
-    if (this.cards.length <= 1) return
-    this.cardIndex = (this.cardIndex + 1) % this.cards.length
-    this.refreshCard()
-  }
-
-  closeScene() {
-    if (this.isClosing) return
-    this.isClosing = true
     this.scene.stop('FlashCardScene')
-    this.scene.resume('ReportScene')
-  }
 
-  fitCard() {
-    const { width, height } = this.scale
-    const maxW = width * 0.48
-    const maxH = height * 0.54
-
-    const scaleX = maxW / this.cardImage.width
-    const scaleY = maxH / this.cardImage.height
-    const scale = Math.min(scaleX, scaleY)
-
-    this.cardImage.setScale(scale)
-  }
-
-  refreshCard() {
-    if (!this.cardImage || this.cards.length === 0) return
-    this.cardImage.setTexture(this.cards[this.cardIndex])
-    this.fitCard()
-
-    if (this.counterText) {
-      this.counterText.setText(`Card ${this.cardIndex + 1} / ${this.cards.length}`)
+    if (this.fromReport) {
+      if (this.scene.isPaused('ReportScene')) {
+        this.scene.resume('ReportScene')
+      }
+    } else {
+      this.scene.launch('ReportScene', this.reportData)
     }
   }
 }

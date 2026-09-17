@@ -21,6 +21,9 @@ export class ShowcaseScene extends Phaser.Scene {
     if (!this.textures.exists('lightning_strike')) {
       this.load.image('lightning_strike', 'resource/effects/lightning_strike.png')
     }
+    this.load.audio('select_sound', 'resource/audio/select_sound.mp3')
+    this.load.audio('attacking_the_monsters_sound', 'resource/audio/attacking_the_monsters.mp3')
+    this.load.audio('showcase_sound', 'resource/audio/showcase.mp3')
   }
 
   create() {
@@ -376,7 +379,12 @@ export class ShowcaseScene extends Phaser.Scene {
       this.input.setDefaultCursor('default')
     })
 
-    hitArea.on('pointerdown', () => this.selectBird(bird.id))
+    hitArea.on('pointerdown', () => {
+      if (this.sound && this.sound.play) {
+        this.sound.play('select_sound', { volume: 0.85 })
+      }
+      this.selectBird(bird.id)
+    })
 
     container.add([bg, hitArea, text])
     container.birdId = bird.id
@@ -445,6 +453,8 @@ export class ShowcaseScene extends Phaser.Scene {
     const enemyTextureKey = this.textures.exists('dumy_monster') ? 'dumy_monster' : 'hunter_left'
     const sprite = this.add.sprite(this.enemySpawnX, this.enemySpawnY, enemyTextureKey)
     this.applyUniformScale(sprite, 115)
+    sprite.setInteractive({ useHandCursor: true })
+    sprite.on('pointerdown', () => this.triggerAttack())
 
     this.tweens.add({
       targets: sprite,
@@ -561,6 +571,10 @@ export class ShowcaseScene extends Phaser.Scene {
 
   executeWeaponAttack() {
     this.isAttacking = true
+
+    if (this.sound && this.sound.play) {
+      this.sound.play('attacking_the_monsters_sound', { volume: 0.85 })
+    }
 
     this.time.delayedCall(500, () => {
       this.isAttacking = false
@@ -831,6 +845,12 @@ export class ShowcaseScene extends Phaser.Scene {
 
   hitEnemyDummy(color, onFinish) {
     if (!this.enemy || !this.enemy.alive || !this.enemy.sprite) return
+
+    try {
+      if (this.sound && this.sound.play) {
+        this.sound.play('attacking_the_monsters_sound', { volume: 0.85 })
+      }
+    } catch (e) {}
 
     const m = this.enemy
 
@@ -1147,7 +1167,12 @@ export class ShowcaseScene extends Phaser.Scene {
       text.setScale(1)
       this.input.setDefaultCursor('default')
     })
-    box.on('pointerdown', onClick)
+    box.on('pointerdown', () => {
+      if (this.sound && this.sound.play) {
+        this.sound.play('select_sound', { volume: 0.85 })
+      }
+      onClick()
+    })
 
     return { box, text }
   }
@@ -1156,6 +1181,9 @@ export class ShowcaseScene extends Phaser.Scene {
     if (this.isLeaving) return
     this.isLeaving = true
 
+    if (this.sound && this.sound.play) {
+      this.sound.play('select_sound', { volume: 0.85 })
+    }
     this.scene.stop('ShowcaseScene')
     this.scene.start('MenuScene')
   }

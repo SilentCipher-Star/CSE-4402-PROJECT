@@ -97,6 +97,9 @@ export class MenuScene extends Phaser.Scene {
     this.load.image('space_hint', 'resource/ui/space_attack.png')
     this.load.image('portal_hint', 'resource/ui/reach_the_portal_to_escape.png')
     this.load.image('heart', 'resource/heart.png')
+    this.load.audio('select_sound', 'resource/audio/select_sound.mp3')
+    this.load.audio('menu_bg_music', 'resource/audio/menu_bg_scenes.mp3')
+    this.load.audio('showcase_sound', 'resource/audio/showcase.mp3')
   }
 
   create() {
@@ -104,6 +107,19 @@ export class MenuScene extends Phaser.Scene {
     const fitWidth = (image, displayWidth) => {
       image.setDisplaySize(displayWidth, displayWidth * (image.height / image.width))
       return image
+    }
+
+    // Play Background Scenes / Menu music if not already playing
+    try {
+      let bgm = this.sound.get('menu_bg_music')
+      if (!bgm) {
+        bgm = this.sound.add('menu_bg_music', { loop: true, volume: 0.55 })
+        bgm.play()
+      } else if (!bgm.isPlaying) {
+        bgm.play({ loop: true, volume: 0.55 })
+      }
+    } catch (e) {
+      console.warn('Menu BGM play notice:', e)
     }
 
     // 1. Background Image
@@ -137,6 +153,13 @@ export class MenuScene extends Phaser.Scene {
       this.input.setDefaultCursor('default')
     })
     trialBtn.on('pointerdown', () => {
+      try {
+        if (this.sound && this.sound.play) this.sound.play('showcase_sound', { volume: 0.9 })
+      } catch (e) {}
+      try {
+        const bgm = this.sound.get('menu_bg_music')
+        if (bgm && bgm.isPlaying) bgm.stop()
+      } catch (e) {}
       this.cleanupNameInput()
       this.scene.start('ShowcaseScene', { chosenBird: this.selectedBird || 'Ember' })
     })
@@ -214,6 +237,7 @@ export class MenuScene extends Phaser.Scene {
       })
       
       card.on('pointerdown', () => {
+        if (this.sound && this.sound.play) this.sound.play('select_sound', { volume: 0.7 })
         this.selectedBird = bird
         this.birdBoxes.forEach(b => b.updateState()) // Update all cards
       })
@@ -294,6 +318,7 @@ export class MenuScene extends Phaser.Scene {
           return;
       }
         
+      if (this.sound && this.sound.play) this.sound.play('select_sound', { volume: 0.85 })
       const name = this.nameInput.value.trim() || 'Adventurer'
       this.cleanupNameInput()
       this.scene.start('StoryScene', { playerName: name, chosenBird: this.selectedBird })

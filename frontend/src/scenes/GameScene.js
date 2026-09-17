@@ -57,6 +57,13 @@ export class GameScene extends Phaser.Scene {
     if (!this.textures.exists('heart')) {
       this.load.image('heart', 'resource/heart.png')
     }
+    this.load.audio('select_sound', 'resource/audio/select_sound.mp3')
+    this.load.audio('final_portal_sound', 'resource/audio/reaching_final_portal.mp3')
+    this.load.audio('game_over_sound', 'resource/audio/game_over.mp3')
+    this.load.audio('attacking_the_monsters_sound', 'resource/audio/attacking_the_monsters.mp3')
+    this.load.audio('esc_sound', 'resource/audio/esc.mp3')
+    this.load.audio('horror_sound', 'resource/audio/horror_sound.mp3')
+    this.load.audio('notification_popup', 'resource/audio/notification_popup.mp3')
   }
 
   create() {
@@ -179,6 +186,33 @@ export class GameScene extends Phaser.Scene {
 
     this.heartNotificationContainer.add([notifBg, notifText])
 
+    // 🐾 Eye-catching notification banner for Animal Rescue
+    const rescueNotifW = 500
+    const rescueNotifH = 38
+    const rescueNotifX = this.scale.width / 2
+    const rescueNotifY = 72
+
+    this.animalRescueNotificationContainer = this.add.container(0, 0).setScrollFactor(0).setDepth(600).setVisible(false)
+    const rescueNotifBg = this.add.graphics()
+    rescueNotifBg.fillStyle(0x061e12, 0.92)
+    rescueNotifBg.fillRoundedRect(rescueNotifX - rescueNotifW / 2, rescueNotifY - rescueNotifH / 2, rescueNotifW, rescueNotifH, 10)
+    rescueNotifBg.lineStyle(2, 0x00e676, 0.9)
+    rescueNotifBg.strokeRoundedRect(rescueNotifX - rescueNotifW / 2, rescueNotifY - rescueNotifH / 2, rescueNotifW, rescueNotifH, 10)
+
+    this.animalRescueNotificationText = this.add.text(
+      rescueNotifX, rescueNotifY,
+      '🐾 CAGED ANIMAL NEARBY! Press [E] to Break Cage & Rescue',
+      {
+        fontSize: '13px',
+        fontFamily: 'Arial Black',
+        color: '#aaffaa',
+        stroke: '#000000',
+        strokeThickness: 3
+      }
+    ).setOrigin(0.5)
+
+    this.animalRescueNotificationContainer.add([rescueNotifBg, this.animalRescueNotificationText])
+
     this.activeWildlifeCard = null
     this.time.addEvent({
       delay: 1000,
@@ -203,6 +237,10 @@ export class GameScene extends Phaser.Scene {
       if (this.heartNotificationContainer) {
         this.heartNotificationContainer.destroy()
         this.heartNotificationContainer = null
+      }
+      if (this.animalRescueNotificationContainer) {
+        this.animalRescueNotificationContainer.destroy()
+        this.animalRescueNotificationContainer = null
       }
     })
   }
@@ -475,33 +513,49 @@ export class GameScene extends Phaser.Scene {
     })
   }
   spawnMonsters() {
-    const positions = [
-      // Main patrol hunters
-      { col: 6, row: 1 },
-      { col: 5, row: 9 },
-      { col: 11, row: 9 },
-      { col: 19, row: 12 },
-      { col: 29, row: 15 },
-      { col: 37, row: 18 },
-      { col: 33, row: 21 },
-      { col: 25, row: 28 },
-      { col: 18, row: 32 },
+    // 1. Gather all walkable candidate tiles across the map
+    const candidateTiles = []
+    const portalCol = this.portalCol || 1
+    const portalRow = this.portalRow || 47
 
-      // Den 1: North-East Outpost (Guarding Heart at 40, 8)
-      { col: 38, row: 6 },
-      { col: 42, row: 8 },
-      { col: 40, row: 10 },
+    for (let r = 2; r < this.mapRows - 1; r++) {
+      for (let c = 2; c < this.mapCols - 1; c++) {
+        if (!this.isWall(c, r)) {
+          const distToSpawn = Phaser.Math.Distance.Between(c, r, 1, 1)
+          const distToPortal = Phaser.Math.Distance.Between(c, r, portalCol, portalRow)
+          // Keep safe clearance from player spawn (1, 1) and portal
+          if (distToSpawn > 6 && distToPortal > 3) {
+            candidateTiles.push({ col: c, row: r })
+          }
+        }
+      }
+    }
 
-      // Den 2: Central Marshlands (Guarding Heart at 41, 28)
-      { col: 38, row: 26 },
-      { col: 43, row: 26 },
-      { col: 41, row: 31 },
+    // 2. Shuffle candidates randomly each game session
+    Phaser.Utils.Array.Shuffle(candidateTiles)
 
-      // Den 3: South-Central Shadow Grotto (Guarding Heart at 25, 41)
-      { col: 20, row: 39 },
-      { col: 25, row: 43 },
-      { col: 26, row: 40 },
-    ]
+    // 3. Select 16 well-distributed hunter positions across the forest
+    const targetCount = 16
+    const positions = []
+
+    for (const tile of candidateTiles) {
+      if (positions.length >= targetCount) break
+      // Ensure spacing between hunters so they don't overlap on start
+      const tooClose = positions.some(p => Phaser.Math.Distance.Between(p.col, p.row, tile.col, tile.row) < 3.2)
+      if (!tooClose) {
+        positions.push(tile)
+      }
+    }
+
+    // Fallback if sparse
+    if (positions.length < targetCount) {
+      for (const tile of candidateTiles) {
+        if (positions.length >= targetCount) break
+        if (!positions.some(p => p.col === tile.col && p.row === tile.row)) {
+          positions.push(tile)
+        }
+      }
+    }
 
     positions.forEach((m) => {
       if (this.isWall(m.col, m.row)) return
@@ -587,13 +641,25 @@ export class GameScene extends Phaser.Scene {
       cage.lineStyle(2, 0xffcc66, 0.75)
       cage.strokeCircle(x, y, 25)
 
-      const prompt = this.add.text(x, y - (a.type === 'rhino' ? 44 : 36), 'Press E', {
-        fontSize: '10px',
+      const prompt = this.add.container(x, y - (a.type === 'rhino' ? 52 : 44))
+        .setDepth(30)
+        .setVisible(false)
+
+      const promptBg = this.add.graphics()
+      promptBg.fillStyle(0x061e12, 0.94)
+      promptBg.fillRoundedRect(-80, -14, 160, 28, 8)
+      promptBg.lineStyle(1.5, 0x00e676, 0.9)
+      promptBg.strokeRoundedRect(-80, -14, 160, 28, 8)
+
+      const promptText = this.add.text(0, 0, '🐾 Press [E] to Rescue', {
+        fontSize: '11px',
         fontFamily: 'Arial Black',
-        color: '#FFD700',
+        color: '#ffffff',
         stroke: '#000000',
-        strokeThickness: 3
-      }).setOrigin(0.5).setDepth(15).setVisible(false)
+        strokeThickness: 2
+      }).setOrigin(0.5)
+
+      prompt.add([promptBg, promptText])
 
       this.animalList.push({
         type: a.type,
@@ -752,6 +818,10 @@ export class GameScene extends Phaser.Scene {
   checkAnimalRescue() {
     if (!this.animalList) return
 
+    let nearAnyAnimal = false
+    let targetSpecies = null
+    const bob = Math.sin((this.time ? this.time.now : Date.now()) / 220) * 2.5
+
     this.animalList.forEach(animal => {
       if (animal.rescued || animal.leaving) {
         if (animal.prompt && animal.prompt.visible) animal.prompt.setVisible(false)
@@ -769,20 +839,47 @@ export class GameScene extends Phaser.Scene {
         animal.body.y
       )
 
-      const canSave = dist < 55
+      const canSave = dist < 68
+
+      if (canSave) {
+        nearAnyAnimal = true
+        if (!targetSpecies) {
+          targetSpecies = animal.species || (animal.type === 'rhino' ? 'Javan Rhinoceros' : 'Spotted Deer')
+        }
+      }
 
       if (animal.prompt) {
         animal.prompt.setVisible(canSave)
-        animal.prompt.setPosition(
-          animal.body.x,
-          animal.body.y - (animal.type === 'rhino' ? 44 : 36)
-        )
+        if (canSave) {
+          animal.prompt.setPosition(
+            animal.body.x,
+            animal.body.y - (animal.type === 'rhino' ? 52 : 44) + bob
+          )
+        }
       }
 
       if (canSave && Phaser.Input.Keyboard.JustDown(this.collectKey)) {
         this.releaseAnimal(animal)
       }
     })
+
+    // Update screen-level rescue notification banner
+    if (this.animalRescueNotificationContainer) {
+      if (nearAnyAnimal && !this.gameEnding && !this.isPaused && !this.animalNotificationFrozen) {
+        const hasHeartBanner = this.heartNotificationContainer && this.heartNotificationContainer.visible
+        this.animalRescueNotificationContainer.setY(hasHeartBanner ? 42 : 0)
+        if (targetSpecies && this.animalRescueNotificationText) {
+          this.animalRescueNotificationText.setText(`🐾 CAGED ${targetSpecies.toUpperCase()} NEARBY! Press [E] to Rescue`)
+        }
+        if (!this.animalRescueNotificationContainer.visible) {
+          this.animalRescueNotificationContainer.setVisible(true)
+        }
+      } else {
+        if (this.animalRescueNotificationContainer.visible) {
+          this.animalRescueNotificationContainer.setVisible(false)
+        }
+      }
+    }
   }
 
   showWildlifeCard(species, fact) {
@@ -795,6 +892,9 @@ export class GameScene extends Phaser.Scene {
 
     // Freeze the screen
     this.animalNotificationFrozen = true
+    if (this.animalRescueNotificationContainer) {
+      this.animalRescueNotificationContainer.setVisible(false)
+    }
     this.cardFreezeTimestamp = this.time ? this.time.now : Date.now()
     this.player.setVelocity(0, 0)
     this.monsterList.forEach(m => {
@@ -846,6 +946,14 @@ export class GameScene extends Phaser.Scene {
       })
       this.activeWildlifeCard = null
     }
+    // Wake up monsters immediately so they don't remain stopped
+    if (this.monsterList) {
+      this.monsterList.forEach(m => {
+        if (m.alive && m.body && m.body.active && !m.frozen && !m.stunnedUntil) {
+          m.patrolTimer = 150
+        }
+      })
+    }
   }
 
   releaseAnimal(animal) {
@@ -857,6 +965,10 @@ export class GameScene extends Phaser.Scene {
     if (animal.prompt) {
       animal.prompt.destroy()
       animal.prompt = null
+    }
+
+    if (this.animalRescueNotificationContainer) {
+      this.animalRescueNotificationContainer.setVisible(false)
     }
 
     this.animalsSaved++
@@ -967,32 +1079,43 @@ export class GameScene extends Phaser.Scene {
     )
   }
   spawnShields() {
-    const candidateShieldSpots = [
-      { col: 5, row: 6 },
-      { col: 30, row: 18 },
-      { col: 11, row: 37 },
-      { col: 5, row: 9 },
-      { col: 21, row: 15 },
-      { col: 37, row: 18 },
-      { col: 33, row: 21 },
-      { col: 18, row: 30 },
-      { col: 8, row: 37 },
-      { col: 5, row: 40 },
-      { col: 23, row: 47 },
-      { col: 11, row: 34 },
-      { col: 44, row: 24 },
-      { col: 30, row: 10 },
-      { col: 29, row: 15 },
-      { col: 25, row: 26 },
-      { col: 15, row: 32 }
-    ]
-
-    const chosenHeartKeys = new Set(this.chosenHeartLocations || [])
-    const validSpots = candidateShieldSpots.filter(s => !this.isWall(s.col, s.row) && !chosenHeartKeys.has(`${s.col},${s.row}`))
-    Phaser.Utils.Array.Shuffle(validSpots)
-    const selectedSpots = validSpots.slice(0, 3)
-
     this.shieldList = []
+    const chosenHeartKeys = new Set(this.chosenHeartLocations || [])
+
+    // Find walkable tiles strictly near active monster territory/dens, avoiding empty corridors
+    const monsterZoneTiles = []
+    if (this.monsterList && this.monsterList.length > 0) {
+      this.monsterList.forEach(m => {
+        if (!m.spawnX || !m.spawnY) return
+        const mc = Math.floor(m.spawnX / this.TILE)
+        const mr = Math.floor(m.spawnY / this.TILE)
+        for (let dc = -2; dc <= 2; dc++) {
+          for (let dr = -2; dr <= 2; dr++) {
+            if (dc === 0 && dr === 0) continue
+            const c = mc + dc
+            const r = mr + dr
+            if (c >= 2 && c < this.mapCols - 2 && r >= 2 && r < this.mapRows - 2) {
+              if (!this.isWall(c, r) && !chosenHeartKeys.has(`${c},${r}`)) {
+                const distToSpawn = Phaser.Math.Distance.Between(c, r, 1, 1)
+                if (distToSpawn > 8) {
+                  monsterZoneTiles.push({ col: c, row: r })
+                }
+              }
+            }
+          }
+        }
+      })
+    }
+
+    let targetSpot = null
+    if (monsterZoneTiles.length > 0) {
+      Phaser.Utils.Array.Shuffle(monsterZoneTiles)
+      targetSpot = monsterZoneTiles[0]
+    } else {
+      targetSpot = { col: 29, row: 15 }
+    }
+
+    const selectedSpots = [targetSpot]
 
     selectedSpots.forEach(s => {
       const x = s.col * this.TILE + this.TILE / 2
@@ -1411,6 +1534,9 @@ export class GameScene extends Phaser.Scene {
       Phaser.Geom.Rectangle.Contains
     )
     overlay.on('pointerdown', () => {
+      if (this.sound && this.sound.play) {
+        this.sound.play('select_sound', { volume: 0.85 })
+      }
       this.reviveHeart()
     })
 
@@ -1442,6 +1568,10 @@ export class GameScene extends Phaser.Scene {
     if (this.isAttacking) return
 
     this.isAttacking = true
+
+    if (this.sound && this.sound.play) {
+      this.sound.play('attacking_the_monsters_sound', { volume: 0.85 })
+    }
 
     // Safe reset. Even if a power does nothing, attack will unlock.
     this.time.delayedCall(500, () => {
@@ -2276,6 +2406,10 @@ export class GameScene extends Phaser.Scene {
       this.heartNotificationContainer.destroy()
       this.heartNotificationContainer = null
     }
+    if (this.animalRescueNotificationContainer) {
+      this.animalRescueNotificationContainer.destroy()
+      this.animalRescueNotificationContainer = null
+    }
     this.cleanupPauseAndListeners()
 
     this.saveScore()
@@ -2288,26 +2422,120 @@ export class GameScene extends Phaser.Scene {
 
       totalScore: this.score,
       saplingsCollected: this.eggsCollected,
+      totalSaplings: (this.eggList && this.eggList.length > 0) ? this.eggList.length : 12,
 
       // IMPORTANT: use animalsSaved because that is what your animal rescue system increases
       animalsRescued: this.animalsSaved || 0,
 
       // IMPORTANT: use monstersKilled because your killMonster() should increase this
       monstersKilled: this.monstersKilled || 0,
+      totalMonsters: (this.monsterList && this.monsterList.length > 0) ? this.monsterList.length : 8,
+
+      forestHealth: Math.max(0, Math.min(100, Math.round((this.eggsCollected || 0) / Math.max(1, (this.eggList && this.eggList.length) || 12) * 100))),
 
       co2Absorbed: this.getCo2Absorbed ? this.getCo2Absorbed() : 0,
 
-      timeTaken: 180 - this.timeLeft,
+      timeTaken: Math.max(0, 180 - (this.timeLeft || 0)),
 
       // IMPORTANT: ReportScene expects flashCards
-      flashCards: this.collectedFlashCards || [],
+      flashCards: [...(this.collectedFlashCards || [])],
 
       escaped
     }
 
-    this.time.delayedCall(300, () => {
-      this.scene.launch('ReportScene', reportData)
+    const launchNextScene = () => {
       this.scene.pause('GameScene')
+      if (reportData.flashCards && reportData.flashCards.length > 0) {
+        this.scene.launch('FlashCardScene', {
+          flashCards: reportData.flashCards,
+          cards: reportData.flashCards,
+          reportData: reportData
+        })
+      } else {
+        this.scene.launch('ReportScene', reportData)
+      }
+    }
+
+    if (escaped) {
+      if (this.sound && this.sound.play) {
+        this.sound.play('final_portal_sound', { volume: 0.9 })
+      }
+      this.playPortalGlam(() => {
+        launchNextScene()
+      })
+    } else {
+      if (this.sound && this.sound.play) {
+        this.sound.play('game_over_sound', { volume: 0.9 })
+      }
+      this.time.delayedCall(1200, () => {
+        launchNextScene()
+      })
+    }
+  }
+
+  playPortalGlam(onComplete) {
+    const { width, height } = this.scale
+    const duration = 6430 // Length of reaching_final_portal.mp3 (6.43s)
+
+    // Full-screen radiant glam overlay
+    const glam = this.add.rectangle(width / 2, height / 2, width, height, 0xffffff, 0)
+      .setScrollFactor(0)
+      .setDepth(999998)
+
+    // Radiant colored aura (celestial cyan/gold bloom)
+    const bloom = this.add.graphics()
+      .setScrollFactor(0)
+      .setDepth(999999)
+    bloom.fillStyle(0x88ffff, 0.3)
+    bloom.fillCircle(width / 2, height / 2, Math.max(width, height) * 0.7)
+
+    // Radiant expanding rings
+    const rings = []
+    for (let i = 0; i < 3; i++) {
+      const ring = this.add.circle(width / 2, height / 2, 40 + i * 35, 0xffffff, 0)
+        .setStrokeStyle(4, 0x88ffff, 0.8)
+        .setScrollFactor(0)
+        .setDepth(1000000)
+      rings.push(ring)
+      this.tweens.add({
+        targets: ring,
+        scaleX: 3.5,
+        scaleY: 3.5,
+        alpha: 0,
+        delay: i * 350,
+        duration: 1800,
+        repeat: -1,
+        ease: 'Cubic.easeOut'
+      })
+    }
+
+    if (this.cameras && this.cameras.main) {
+      this.cameras.main.flash(600, 255, 255, 255)
+    }
+
+    // Glam brightness tween across the duration of the audio
+    this.tweens.add({
+      targets: glam,
+      fillAlpha: { from: 0.1, to: 0.85 },
+      duration: 500,
+      onComplete: () => {
+        this.tweens.add({
+          targets: glam,
+          fillAlpha: 0.95,
+          duration: 900,
+          yoyo: true,
+          repeat: 5,
+          ease: 'Sine.easeInOut'
+        })
+      }
+    })
+
+    this.time.delayedCall(duration, () => {
+      this.tweens.killTweensOf([glam, bloom, ...rings])
+      glam.destroy()
+      bloom.destroy()
+      rings.forEach(r => r.destroy())
+      if (onComplete) onComplete()
     })
   }
 
@@ -2330,6 +2558,11 @@ export class GameScene extends Phaser.Scene {
   pauseGame() {
     if (this.isPaused || this.gameEnding) return
     this.isPaused = true
+    try {
+      if (this.sound && this.sound.play) {
+        this.sound.play('esc_sound', { volume: 0.85 })
+      }
+    } catch (e) {}
     this.physics.pause()
     if (this.player && this.player.setVelocity) {
       this.player.setVelocity(0, 0)
@@ -2410,13 +2643,20 @@ export class GameScene extends Phaser.Scene {
         btnLabel.setScale(1)
       }
 
+      const onClick = () => {
+        if (this.sound && this.sound.play) {
+          this.sound.play('select_sound', { volume: 0.85 })
+        }
+        callback()
+      }
+
       btnBg.on('pointerover', onOver)
       btnBg.on('pointerout', onOut)
-      btnBg.on('pointerdown', callback)
+      btnBg.on('pointerdown', onClick)
 
       btnLabel.on('pointerover', onOver)
       btnLabel.on('pointerout', onOut)
-      btnLabel.on('pointerdown', callback)
+      btnLabel.on('pointerdown', onClick)
 
       this.pauseMenuElements.push(btnBg, btnLabel)
     }
@@ -2442,6 +2682,10 @@ export class GameScene extends Phaser.Scene {
   resumeGame() {
     if (!this.isPaused) return
     this.isPaused = false
+    try {
+      const escSnd = this.sound.get('esc_sound')
+      if (escSnd && escSnd.isPlaying) escSnd.stop()
+    } catch (e) {}
     if (this.pauseMenuElements && this.pauseMenuElements.length > 0) {
       this.pauseMenuElements.forEach(el => {
         if (el && el.destroy) el.destroy()
@@ -2449,6 +2693,13 @@ export class GameScene extends Phaser.Scene {
       this.pauseMenuElements = null
     }
     this.physics.resume()
+    if (this.monsterList) {
+      this.monsterList.forEach(m => {
+        if (m.alive && m.body && m.body.active && !m.frozen && !m.stunnedUntil) {
+          m.patrolTimer = 150
+        }
+      })
+    }
     if (this.scene.isActive('UIScene')) {
       this.scene.bringToTop('UIScene')
     }
@@ -2456,10 +2707,18 @@ export class GameScene extends Phaser.Scene {
 
   playAgain() {
     this.isPaused = false
+    try {
+      const escSnd = this.sound.get('esc_sound')
+      if (escSnd && escSnd.isPlaying) escSnd.stop()
+    } catch (e) {}
     this.cleanupPauseAndListeners()
     if (this.heartNotificationContainer) {
       this.heartNotificationContainer.destroy()
       this.heartNotificationContainer = null
+    }
+    if (this.animalRescueNotificationContainer) {
+      this.animalRescueNotificationContainer.destroy()
+      this.animalRescueNotificationContainer = null
     }
     this.scene.stop('UIScene')
     this.scene.start('GameScene', {
@@ -2470,16 +2729,28 @@ export class GameScene extends Phaser.Scene {
 
   goToMain() {
     this.isPaused = false
+    try {
+      const escSnd = this.sound.get('esc_sound')
+      if (escSnd && escSnd.isPlaying) escSnd.stop()
+    } catch (e) {}
     this.cleanupPauseAndListeners()
     if (this.heartNotificationContainer) {
       this.heartNotificationContainer.destroy()
       this.heartNotificationContainer = null
+    }
+    if (this.animalRescueNotificationContainer) {
+      this.animalRescueNotificationContainer.destroy()
+      this.animalRescueNotificationContainer = null
     }
     this.scene.stop('UIScene')
     this.scene.start('MenuScene')
   }
 
   cleanupPauseAndListeners() {
+    try {
+      const escSnd = this.sound.get('esc_sound')
+      if (escSnd && escSnd.isPlaying) escSnd.stop()
+    } catch (e) {}
     if (this.onEscKeyDown) {
       window.removeEventListener('keydown', this.onEscKeyDown)
       this.onEscKeyDown = null
@@ -2653,17 +2924,26 @@ export class GameScene extends Phaser.Scene {
         return
       }
 
-      // If stuck in a wall — teleport home immediately
+      // Unstuck if clipped into a solid tile: shift smoothly to center of nearest open tile
       const curMc = Math.floor(m.body.x / this.TILE)
       const curMr = Math.floor(m.body.y / this.TILE)
       if (this.isWall(curMc, curMr)) {
-        m.body.setPosition(m.spawnX, m.spawnY)
-        m.body.setVelocity(0, 0)
-        m.patrolTimer = 0
-
-        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
-        return
+        let placed = false
+        const offsets = [{ dc: 1, dr: 0 }, { dc: -1, dr: 0 }, { dc: 0, dr: 1 }, { dc: 0, dr: -1 }]
+        for (const off of offsets) {
+          if (!this.isWall(curMc + off.dc, curMr + off.dr)) {
+            m.body.setPosition((curMc + off.dc) * this.TILE + this.TILE / 2, (curMr + off.dr) * this.TILE + this.TILE / 2)
+            placed = true
+            break
+          }
+        }
+        if (!placed) {
+          m.body.setPosition(m.spawnX, m.spawnY)
+        }
       }
+
+      const mc = Math.floor(m.body.x / this.TILE)
+      const mr = Math.floor(m.body.y / this.TILE)
 
       const distToPlayer = Phaser.Math.Distance.Between(
         this.player.x, this.player.y, m.body.x, m.body.y
@@ -2674,24 +2954,96 @@ export class GameScene extends Phaser.Scene {
           (this.evolutionStage >= 2 ? 190 : 240))
       const attackRange = 30
 
+      // ── Helper to check if moving along (dx, dy) would hit a wall ──
+      const isBlocked = (dx, dy, dist = 22) => {
+        if (dx === 0 && dy === 0) return false
+        const cx = m.body.x + dx * dist
+        const cy = m.body.y + dy * dist
+        return this.isWall(Math.floor(cx / this.TILE), Math.floor(cy / this.TILE))
+      }
+
       if (!this.shieldActive && !this.stealthMode && distToPlayer < chaseRange) {
         m.chasing = true
         m.alert.setVisible(true)
         m.alert.setPosition(m.body.x, m.body.y - 42)
 
-        const angle = Phaser.Math.Angle.Between(
-          m.body.x, m.body.y, this.player.x, this.player.y
-        )
         const ms = 100
-        const mvx = Math.cos(angle) * ms
-        const mvy = Math.sin(angle) * ms
-        const nextCol = Math.floor((m.body.x + mvx * 0.05) / this.TILE)
-        const nextRow = Math.floor((m.body.y + mvy * 0.05) / this.TILE)
-        const mc = Math.floor(m.body.x / this.TILE)
-        const mr = Math.floor(m.body.y / this.TILE)
+        const diffX = this.player.x - m.body.x
+        const diffY = this.player.y - m.body.y
+        const signX = diffX !== 0 ? Math.sign(diffX) : 0
+        const signY = diffY !== 0 ? Math.sign(diffY) : 0
 
-        const finalVx = this.isWall(nextCol, mr) ? 0 : mvx
-        const finalVy = this.isWall(mc, nextRow) ? 0 : mvy
+        const canDirectX = signX !== 0 && !isBlocked(signX, 0, 20)
+        const canDirectY = signY !== 0 && !isBlocked(0, signY, 20)
+
+        m.chaseCooldown = Math.max(0, (m.chaseCooldown || 0) - 1)
+
+        let finalVx = 0
+        let finalVy = 0
+
+        // If direct diagonal is clear, move directly
+        if (canDirectX && canDirectY) {
+          const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, this.player.x, this.player.y)
+          finalVx = Math.cos(angle) * ms
+          finalVy = Math.sin(angle) * ms
+          m.chaseBypass = null
+        } else if (canDirectX && Math.abs(diffX) >= Math.abs(diffY) * 0.5) {
+          // Slide along X towards player
+          finalVx = signX * ms
+          finalVy = 0
+          m.chaseBypass = null
+        } else if (canDirectY && Math.abs(diffY) >= Math.abs(diffX) * 0.5) {
+          // Slide along Y towards player
+          finalVx = 0
+          finalVy = signY * ms
+          m.chaseBypass = null
+        } else if (canDirectX) {
+          finalVx = signX * ms
+          finalVy = 0
+          m.chaseBypass = null
+        } else if (canDirectY) {
+          finalVx = 0
+          finalVy = signY * ms
+          m.chaseBypass = null
+        } else {
+          // Direct path is blocked by a wall/corner — need a bypass around obstacle
+          // Stick to current bypass direction if still valid and cooldown active (prevents twitching/glitching)
+          if (m.chaseBypass && m.chaseCooldown > 0 && !isBlocked(m.chaseBypass.dx, m.chaseBypass.dy, 18)) {
+            finalVx = m.chaseBypass.dx * ms
+            finalVy = m.chaseBypass.dy * ms
+          } else {
+            // Evaluate alternative open directions and choose the best one
+            const altDirs = [
+              { dx: 0, dy: 1 },
+              { dx: 0, dy: -1 },
+              { dx: 1, dy: 0 },
+              { dx: -1, dy: 0 }
+            ].filter(d => !isBlocked(d.dx, d.dy, 20))
+
+            if (altDirs.length > 0) {
+              altDirs.sort((a, b) => {
+                const distA = Phaser.Math.Distance.Between(
+                  m.body.x + a.dx * this.TILE,
+                  m.body.y + a.dy * this.TILE,
+                  this.player.x, this.player.y
+                )
+                const distB = Phaser.Math.Distance.Between(
+                  m.body.x + b.dx * this.TILE,
+                  m.body.y + b.dy * this.TILE,
+                  this.player.x, this.player.y
+                )
+                return distA - distB
+              })
+              m.chaseBypass = altDirs[0]
+              m.chaseCooldown = 20 // commit for 20 frames (~330ms) to avoid glitchy flipping
+              finalVx = altDirs[0].dx * ms
+              finalVy = altDirs[0].dy * ms
+            } else {
+              finalVx = signX * ms
+              finalVy = signY * ms
+            }
+          }
+        }
 
         m.body.setVelocity(finalVx, finalVy)
         this.setHunterDirection(m, finalVx, finalVy)
@@ -2710,7 +3062,6 @@ export class GameScene extends Phaser.Scene {
 
           this.time.delayedCall(400, () => {
             this.player.clearTint()
-
             this.playerHitCooldown = false
           })
 
@@ -2726,28 +3077,68 @@ export class GameScene extends Phaser.Scene {
         }
 
       } else {
+        // Patrol Mode
         m.chasing = false
         m.alert.setVisible(false)
+        m.chaseBypass = null
+
+        // Initialize patrol direction if not set or stopped
+        if (!m.patrolDir || (m.body.body.velocity.x === 0 && m.body.body.velocity.y === 0)) {
+          const startDirs = [
+            { dx: 1, dy: 0 },
+            { dx: -1, dy: 0 },
+            { dx: 0, dy: 1 },
+            { dx: 0, dy: -1 }
+          ].filter(d => !isBlocked(d.dx, d.dy, 22))
+          m.patrolDir = startDirs.length > 0 ? startDirs[Phaser.Math.Between(0, startDirs.length - 1)] : { dx: 1, dy: 0 }
+          m.patrolCooldown = 20
+          m.patrolTimer = 0
+        }
+
+        m.patrolCooldown = Math.max(0, (m.patrolCooldown || 0) - 1)
         m.patrolTimer = (m.patrolTimer || 0) + 1
 
-        if (m.patrolTimer > 120) {
+        // Check strictly in current movement direction (never checks side walls!)
+        const wallAhead = isBlocked(m.patrolDir.dx, m.patrolDir.dy, 20)
+        const isStopped = Math.abs(m.body.body.velocity.x) + Math.abs(m.body.body.velocity.y) < 5
+
+        // Change direction ONLY if facing a wall, stopped, or timer expired after long walk
+        if (wallAhead || isStopped || (m.patrolTimer > 200 && m.patrolCooldown === 0)) {
           m.patrolTimer = 0
-          const mc = Math.floor(m.body.x / this.TILE)
-          const mr = Math.floor(m.body.y / this.TILE)
-          const allDirs = [
-            { vx: 55, vy: 0, dc: 1, dr: 0 },
-            { vx: -55, vy: 0, dc: -1, dr: 0 },
-            { vx: 0, vy: 55, dc: 0, dr: 1 },
-            { vx: 0, vy: -55, dc: 0, dr: -1 },
-          ]
-          const safeDirs = allDirs.filter(d =>
-            !this.isWall(mc + d.dc, mr + d.dr)
-          )
-          const dirs = safeDirs.length > 0 ? safeDirs : allDirs
-          const d = dirs[Phaser.Math.Between(0, dirs.length - 1)]
-          m.body.setVelocity(d.vx, d.vy)
-          this.setHunterDirection(m, d.vx, d.vy)
+
+          // Perpendicular open turns
+          let perpDirs = []
+          if (m.patrolDir.dx !== 0) {
+            perpDirs = [{ dx: 0, dy: 1 }, { dx: 0, dy: -1 }].filter(d => !isBlocked(d.dx, d.dy, 22))
+          } else {
+            perpDirs = [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }].filter(d => !isBlocked(d.dx, d.dy, 22))
+          }
+
+          let newDir = null
+          if (perpDirs.length > 0) {
+            newDir = perpDirs[Phaser.Math.Between(0, perpDirs.length - 1)]
+            // Align center of tile on the axis we were moving so we don't scrape the corner
+            if (m.patrolDir.dx !== 0) {
+              m.body.x = mc * this.TILE + this.TILE / 2
+            } else {
+              m.body.y = mr * this.TILE + this.TILE / 2
+            }
+          } else if (!wallAhead && m.patrolTimer > 200) {
+            // Keep going forward if clear
+            newDir = m.patrolDir
+          } else {
+            // Dead end: reverse 180 degrees
+            newDir = { dx: -m.patrolDir.dx, dy: -m.patrolDir.dy }
+          }
+
+          m.patrolDir = newDir
+          m.patrolCooldown = 25 // 25 frames (~400ms) cooldown before next turn decision
         }
+
+        const pvx = m.patrolDir.dx * 60
+        const pvy = m.patrolDir.dy * 60
+        m.body.setVelocity(pvx, pvy)
+        this.setHunterDirection(m, pvx, pvy)
       }
 
       this.animateHunterWalk(m, delta)

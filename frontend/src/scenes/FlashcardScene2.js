@@ -22,6 +22,8 @@ export class FlashcardScene2 extends Phaser.Scene {
         )
       }
     })
+
+    this.load.audio('select_sound', 'resource/audio/select_sound.mp3')
   }
 
   create(data) {
@@ -203,6 +205,9 @@ export class FlashcardScene2 extends Phaser.Scene {
       'keydown-LEFT',
       () => {
         if (!this.closing) {
+          if (this.sound && this.sound.play) {
+            this.sound.play('select_sound', { volume: 0.85 })
+          }
           this.showCard(
             this.currentIndex - 1
           )
@@ -214,6 +219,9 @@ export class FlashcardScene2 extends Phaser.Scene {
       'keydown-RIGHT',
       () => {
         if (!this.closing) {
+          if (this.sound && this.sound.play) {
+            this.sound.play('select_sound', { volume: 0.85 })
+          }
           this.showCard(
             this.currentIndex + 1
           )
@@ -225,6 +233,9 @@ export class FlashcardScene2 extends Phaser.Scene {
       'keydown-ENTER',
       () => {
         if (!this.closing) {
+          if (this.sound && this.sound.play) {
+            this.sound.play('select_sound', { volume: 0.85 })
+          }
           if (this.currentIndex === this.flashCards.length - 1) {
             this.goToReport()
           } else {
@@ -238,6 +249,9 @@ export class FlashcardScene2 extends Phaser.Scene {
       'keydown-SPACE',
       () => {
         if (!this.closing) {
+          if (this.sound && this.sound.play) {
+            this.sound.play('select_sound', { volume: 0.85 })
+          }
           if (this.currentIndex === this.flashCards.length - 1) {
             this.goToReport()
           } else {
@@ -250,6 +264,9 @@ export class FlashcardScene2 extends Phaser.Scene {
     this.input.keyboard.once(
       'keydown-ESC',
       () => {
+        if (this.sound && this.sound.play) {
+          this.sound.play('select_sound', { volume: 0.85 })
+        }
         this.goToReport()
       }
     )
@@ -308,7 +325,12 @@ export class FlashcardScene2 extends Phaser.Scene {
 
     button.on(
       'pointerdown',
-      callback
+      () => {
+        if (this.sound && this.sound.play) {
+          this.sound.play('select_sound', { volume: 0.85 })
+        }
+        callback()
+      }
     )
 
     return button
@@ -422,6 +444,9 @@ export class FlashcardScene2 extends Phaser.Scene {
       this.nextButton.on(
         'pointerdown',
         () => {
+          if (this.sound && this.sound.play) {
+            this.sound.play('select_sound', { volume: 0.85 })
+          }
           this.goToReport()
         }
       )
@@ -439,6 +464,9 @@ export class FlashcardScene2 extends Phaser.Scene {
       this.nextButton.on(
         'pointerdown',
         () => {
+          if (this.sound && this.sound.play) {
+            this.sound.play('select_sound', { volume: 0.85 })
+          }
           this.showCard(
             this.currentIndex + 1
           )

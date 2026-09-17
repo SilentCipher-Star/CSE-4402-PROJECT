@@ -8,6 +8,9 @@ export class StoryScene extends Phaser.Scene {
     this.load.image('story_bg_2', 'resource/story/story_bg_2.png')
     this.load.image('story_bg_3', 'resource/story/story_bg_3.png')
     this.load.image('story_bg_4', 'resource/story/story_bg_4.png')
+    this.load.image('next_btn', 'resource/next.png')
+    this.load.audio('select_sound', 'resource/audio/select_sound.mp3')
+    this.load.audio('menu_bg_music', 'resource/audio/menu_bg_scenes.mp3')
   }
 
   init(data) {
@@ -17,6 +20,20 @@ export class StoryScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale
+
+    // Keep background music running smoothly through the story scenes
+    try {
+      let bgm = this.sound.get('menu_bg_music')
+      if (!bgm) {
+        bgm = this.sound.add('menu_bg_music', { loop: true, volume: 0.55 })
+        bgm.play()
+      } else if (!bgm.isPlaying) {
+        bgm.play({ loop: true, volume: 0.55 })
+      }
+    } catch (e) {
+      console.warn('Story BGM notice:', e)
+    }
+
     this.currentPanel = 0
 
     this.panels = [
@@ -243,18 +260,20 @@ export class StoryScene extends Phaser.Scene {
       .setDisplaySize(width, height)
       .setVisible(false)
     this.sceneGraphic = this.add.graphics()
-    this.textBg = this.add.rectangle(0, height * 0.72, width, height * 0.28, 0x000000, 0.75).setOrigin(0)
-
-    this.titleText = this.add.text(width / 2, height * 0.74, '', {
-      fontSize: '24px', fontFamily: 'Arial Black',
-      color: '#FFD700', stroke: '#000000', strokeThickness: 4
+    this.titleText = this.add.text(width / 2, height * 0.73, '', {
+      fontSize: '26px', fontFamily: 'Arial Black, Impact, sans-serif',
+      fontStyle: 'bold',
+      color: '#FFD700', stroke: '#000000', strokeThickness: 5,
+      shadow: { offsetX: 2, offsetY: 2, color: '#000000', blur: 4, stroke: true, fill: true }
     }).setOrigin(0.5, 0)
 
-    this.storyText = this.add.text(width / 2, height * 0.81, '', {
-      fontSize: '15px', fontFamily: 'Arial',
+    this.storyText = this.add.text(width / 2, height * 0.80, '', {
+      fontSize: '18px', fontFamily: 'Arial, sans-serif',
+      fontStyle: 'bold',
       color: '#ffffff', align: 'center',
-      lineSpacing: 7, stroke: '#000000', strokeThickness: 2,
-      wordWrap: { width: width * 0.85 }
+      lineSpacing: 8, stroke: '#000000', strokeThickness: 4,
+      shadow: { offsetX: 1, offsetY: 2, color: '#000000', blur: 3, fill: true },
+      wordWrap: { width: width * 0.86 }
     }).setOrigin(0.5, 0)
 
     this.dots = []
@@ -262,29 +281,55 @@ export class StoryScene extends Phaser.Scene {
       const dot = this.add.circle(
         width / 2 - (this.panels.length - 1) * 14 + i * 28,
         height * 0.975, 5, 0x444444
-      )
+      ).setStrokeStyle(1.5, 0x000000, 0.8)
       this.dots.push(dot)
     }
 
-    this.nextBtn = this.add.text(width - 24, height - 20, 'NEXT  ▶', {
-      fontSize: '16px', fontFamily: 'Arial Black',
-      color: '#ffffff', backgroundColor: '#1a5c1a',
-      padding: { x: 18, y: 10 }
-    }).setOrigin(1, 1).setInteractive()
+    // Custom NEXT button from next.png
+    const nextBtnW = 145
+    const nextBtnH = Math.round(nextBtnW * (96 / 289)) // ~48px
+    const nextBtnX = width - 24 - nextBtnW / 2
+    const nextBtnY = height - 20 - nextBtnH / 2
+
+    this.nextBtn = this.add.image(nextBtnX, nextBtnY, 'next_btn')
+      .setOrigin(0.5)
+      .setDisplaySize(nextBtnW, nextBtnH)
+      .setDepth(10)
+      .setInteractive({ useHandCursor: true })
+
+    this.baseNextScaleX = this.nextBtn.scaleX
+    this.baseNextScaleY = this.nextBtn.scaleY
+
+    this.tweens.add({
+      targets: this.nextBtn,
+      scaleX: this.baseNextScaleX * 1.06,
+      scaleY: this.baseNextScaleY * 1.06,
+      duration: 750,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    })
 
     this.nextBtn.on('pointerover', () => {
-      this.nextBtn.setStyle({ backgroundColor: '#2d8a2d' })
+      this.nextBtn.setTint(0xe6ffd0)
       this.input.setDefaultCursor('pointer')
     })
     this.nextBtn.on('pointerout', () => {
-      this.nextBtn.setStyle({ backgroundColor: '#1a5c1a' })
+      this.nextBtn.clearTint()
       this.input.setDefaultCursor('default')
     })
     this.nextBtn.on('pointerdown', () => this.nextPanel())
 
+    if (this.input && this.input.keyboard) {
+      this.input.keyboard.on('keydown-SPACE', () => this.nextPanel())
+      this.input.keyboard.on('keydown-ENTER', () => this.nextPanel())
+      this.input.keyboard.on('keydown-RIGHT', () => this.nextPanel())
+    }
+
     const skipBtn = this.add.text(24, height - 20, 'SKIP  ✕', {
-      fontSize: '14px', fontFamily: 'Arial',
-      color: '#888888', padding: { x: 10, y: 8 }
+      fontSize: '14px', fontFamily: 'Arial Black',
+      color: '#e0e0e0', stroke: '#000000', strokeThickness: 3,
+      padding: { x: 10, y: 8 }
     }).setOrigin(0, 1).setInteractive()
 
     skipBtn.on('pointerover', () => {
@@ -347,14 +392,26 @@ export class StoryScene extends Phaser.Scene {
     })
 
     const isLast = index === this.panels.length - 1
-    this.nextBtn.setText(isLast ? '  START GAME  ▶' : 'NEXT  ▶')
-    this.nextBtn.setStyle({
-      backgroundColor: isLast ? '#8B1A00' : '#1a5c1a',
-      color: '#ffffff'
-    })
+    if (isLast) {
+      if (!this.startHintText) {
+        this.startHintText = this.add.text(this.nextBtn.x, this.nextBtn.y - 32, 'START GAME ▶', {
+          fontSize: '12px',
+          fontFamily: 'Arial Black',
+          color: '#FFD700',
+          stroke: '#000000',
+          strokeThickness: 3
+        }).setOrigin(0.5).setDepth(10)
+      }
+      this.startHintText.setVisible(true)
+    } else if (this.startHintText) {
+      this.startHintText.setVisible(false)
+    }
   }
 
   nextPanel() {
+    if (this.sound && this.sound.play) {
+      this.sound.play('select_sound', { volume: 0.8 })
+    }
     if (this.currentPanel < this.panels.length - 1) {
       this.currentPanel++
       this.cameras.main.fadeOut(200)
@@ -365,7 +422,19 @@ export class StoryScene extends Phaser.Scene {
   }
 
   startGame() {
+    if (this.sound && this.sound.play) {
+      this.sound.play('select_sound', { volume: 0.8 })
+    }
+    try {
+      const bgm = this.sound.get('menu_bg_music')
+      if (bgm && bgm.isPlaying) {
+        bgm.stop()
+      }
+    } catch (e) {}
     if (this.typeTimer) this.typeTimer.remove()
+    if (this.input && this.input.keyboard) {
+      this.input.keyboard.removeAllListeners()
+    }
     this.cameras.main.fadeOut(600)
     this.time.delayedCall(650, () => {
       this.scene.start('GameScene', {

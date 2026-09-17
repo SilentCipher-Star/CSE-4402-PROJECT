@@ -18,6 +18,8 @@ export class Terminal {
       clear:   () => this.cmdClear(),
       heal:    () => this.cmdHeal(),
       fact: () => this.cmdFact(),
+      level:   (args) => this.cmdLevel(args),
+      goto:    (args) => this.cmdLevel(args),
     }
 
     this.build()
@@ -180,7 +182,7 @@ export class Terminal {
   cmdHelp() {
     this.print('Commands: help, scan, status, stealth [on/off],', '#FFD700')
     this.print('          hack [id], weather [storm/clear], evolve,', '#FFD700')
-    this.print('          locate, heal, clear', '#FFD700')
+    this.print('          locate, heal, level [1|2|3], clear', '#FFD700')
   }
 
   cmdScan() {
@@ -368,6 +370,29 @@ export class Terminal {
   cmdClear() {
     this.commandLog = []
     this.logTexts.forEach(t => t.setText(''))
+  }
+
+  cmdLevel(args) {
+    const lvl = args && args[0]
+    const pName = this.scene.playerName || 'Adventurer'
+    const bird = this.scene.chosenBird || 'Ember'
+    const sc = this.scene.score || 0
+
+    if (lvl === '1') {
+      this.close()
+      if (this.scene.scene.isActive('UIScene')) this.scene.scene.stop('UIScene')
+      this.scene.scene.start('GameScene', { playerName: pName, chosenBird: bird, score: sc })
+    } else if (lvl === '2') {
+      this.close()
+      if (this.scene.scene.isActive('UIScene')) this.scene.scene.stop('UIScene')
+      this.scene.scene.start('GameScene2', { playerName: pName, chosenBird: bird, score: sc })
+    } else if (lvl === '3') {
+      this.close()
+      if (this.scene.scene.isActive('UIScene')) this.scene.scene.stop('UIScene')
+      this.scene.scene.start('GameScene3', { playerName: pName, chosenBird: bird, score: sc })
+    } else {
+      this.print('Usage: level <1|2|3> (e.g. level 3)', '#ffaa00')
+    }
   }
 
   destroy() {
