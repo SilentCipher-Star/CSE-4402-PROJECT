@@ -22,13 +22,19 @@ export class StoryScene extends Phaser.Scene {
     const { width, height } = this.scale
 
     // Keep background music running smoothly through the story scenes
+    // (respect the mute toggle set on the menu screen)
     try {
+      const menuMuted = localStorage.getItem('menuBgmMuted') === 'true'
       let bgm = this.sound.get('menu_bg_music')
-      if (!bgm) {
-        bgm = this.sound.add('menu_bg_music', { loop: true, volume: 0.38 })
-        bgm.play()
-      } else if (!bgm.isPlaying) {
-        bgm.play({ loop: true, volume: 0.38 })
+      if (!menuMuted) {
+        if (!bgm) {
+          bgm = this.sound.add('menu_bg_music', { loop: true, volume: 0.38 })
+          bgm.play()
+        } else if (!bgm.isPlaying) {
+          bgm.play({ loop: true, volume: 0.38 })
+        }
+      } else {
+        if (bgm && bgm.isPlaying) bgm.stop()
       }
     } catch (e) {
       console.warn('Story BGM notice:', e)

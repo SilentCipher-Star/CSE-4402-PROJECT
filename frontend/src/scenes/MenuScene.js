@@ -110,17 +110,76 @@ export class MenuScene extends Phaser.Scene {
     }
 
     // Play Background Scenes / Menu music if not already playing
+    const menuMuted = localStorage.getItem('menuBgmMuted') === 'true'
     try {
       let bgm = this.sound.get('menu_bg_music')
-      if (!bgm) {
-        bgm = this.sound.add('menu_bg_music', { loop: true, volume: 0.38 })
-        bgm.play()
-      } else if (!bgm.isPlaying) {
-        bgm.play({ loop: true, volume: 0.38 })
+      if (!menuMuted) {
+        if (!bgm) {
+          bgm = this.sound.add('menu_bg_music', { loop: true, volume: 0.38 })
+          bgm.play()
+        } else if (!bgm.isPlaying) {
+          bgm.play({ loop: true, volume: 0.38 })
+        }
+      } else {
+        // Muted: make sure BGM is stopped
+        if (bgm && bgm.isPlaying) bgm.stop()
       }
     } catch (e) {
       console.warn('Menu BGM play notice:', e)
     }
+
+    // ── Mute/Unmute toggle button (top-left) ──────────────────────
+    const isMuted = () => localStorage.getItem('menuBgmMuted') === 'true'
+
+    const muteBtn = this.add.text(18, 14, isMuted() ? '🔇' : '🔊', {
+      fontSize: '26px',
+      backgroundColor: 'rgba(0,0,0,0.45)',
+      padding: { x: 8, y: 4 },
+      borderRadius: 8
+    })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(9999)
+      .setInteractive({ useHandCursor: true })
+
+    muteBtn.on('pointerover', () => {
+      muteBtn.setAlpha(0.75)
+      this.input.setDefaultCursor('pointer')
+    })
+    muteBtn.on('pointerout', () => {
+      muteBtn.setAlpha(1)
+      this.input.setDefaultCursor('default')
+    })
+    muteBtn.on('pointerdown', () => {
+      try { this.sound.play('select_sound', { volume: 0.6 }) } catch (_e) {}
+      const nowMuted = !isMuted()
+      localStorage.setItem('menuBgmMuted', String(nowMuted))
+      muteBtn.setText(nowMuted ? '🔇' : '🔊')
+
+      try {
+        const bgm = this.sound.get('menu_bg_music')
+        if (nowMuted) {
+          if (bgm && bgm.isPlaying) bgm.stop()
+        } else {
+          if (!bgm) {
+            const newBgm = this.sound.add('menu_bg_music', { loop: true, volume: 0.38 })
+            newBgm.play()
+          } else if (!bgm.isPlaying) {
+            bgm.play({ loop: true, volume: 0.38 })
+          }
+        }
+      } catch (_e) {}
+
+      // Pop animation
+      this.tweens.add({
+        targets: muteBtn,
+        scaleX: 1.35,
+        scaleY: 1.35,
+        duration: 100,
+        yoyo: true,
+        ease: 'Sine.easeOut'
+      })
+    })
 
     // 1. Background Image
     this.add.image(0, 0, 'menu_bg').setOrigin(0).setDisplaySize(width, height)
