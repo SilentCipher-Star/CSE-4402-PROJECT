@@ -57,6 +57,54 @@ export class GameScene extends Phaser.Scene {
     if (!this.textures.exists('heart')) {
       this.load.image('heart', 'resource/heart.png')
     }
+
+    // Comprehensive animal textures and direction fallbacks
+    const animalTextures = [
+      ['deer_front_1', 'resource/animals/Deer/deer_front_1.png'],
+      ['deer_front_2', 'resource/animals/Deer/deer_front_2.png'],
+      ['deer_back_1', 'resource/animals/Deer/deer_back_1.png'],
+      ['deer_back_2', 'resource/animals/Deer/deer_back_2.png'],
+      ['deer_left_1', 'resource/animals/Deer/deer_left_1.png'],
+      ['deer_right_1', 'resource/animals/Deer/deer_right_1.png'],
+      ['deer_left', 'resource/animals/Deer/deer_left_1.png'],
+      ['deer_right', 'resource/animals/Deer/deer_right_1.png'],
+      ['deer_left_2', 'resource/animals/Deer/deer_left_1.png'],
+      ['deer_right_2', 'resource/animals/Deer/deer_right_1.png'],
+      ['deer_front', 'resource/animals/Deer/deer_front_1.png'],
+      ['deer_back', 'resource/animals/Deer/deer_back_1.png'],
+
+      ['rhino_front_1', 'resource/animals/rhino/rhino_front_1.png'],
+      ['rhino_front_2', 'resource/animals/rhino/rhino_front_2.png'],
+      ['rhino_back_1', 'resource/animals/rhino/rhino_back_1.png'],
+      ['rhino_back_2', 'resource/animals/rhino/rhino_back_2.png'],
+      ['rhino_left_1', 'resource/animals/rhino/rhino_left_1.png'],
+      ['rhino_left_2', 'resource/animals/rhino/rhino_left_2.png'],
+      ['rhino_right_1', 'resource/animals/rhino/rhino_right_1.png'],
+      ['rhino_right_2', 'resource/animals/rhino/rhino_right_2.png'],
+      ['rhino_front', 'resource/animals/rhino/rhino_front_1.png'],
+      ['rhino_back', 'resource/animals/rhino/rhino_back_1.png'],
+      ['rhino_left', 'resource/animals/rhino/rhino_left_1.png'],
+      ['rhino_right', 'resource/animals/rhino/rhino_right_1.png'],
+    ]
+    animalTextures.forEach(([key, path]) => {
+      if (!this.textures.exists(key)) {
+        this.load.image(key, path)
+      }
+    })
+
+    // Hunter textures
+    const hunterTextures = [
+      ['hunter_front', 'resource/Hunter_Level1/hunter_front.png'],
+      ['hunter_back', 'resource/Hunter_Level1/hunter_back.png'],
+      ['hunter_left', 'resource/Hunter_Level1/hunter_left.png'],
+      ['hunter_right', 'resource/Hunter_Level1/hunter_right.png'],
+    ]
+    hunterTextures.forEach(([key, path]) => {
+      if (!this.textures.exists(key)) {
+        this.load.image(key, path)
+      }
+    })
+
     this.load.audio('select_sound', 'resource/audio/select_sound.mp3')
     this.load.audio('final_portal_sound', 'resource/audio/reaching_final_portal.mp3')
     this.load.audio('game_over_sound', 'resource/audio/game_over.mp3')
@@ -628,7 +676,9 @@ export class GameScene extends Phaser.Scene {
       const x = a.col * this.TILE + this.TILE / 2
       const y = a.row * this.TILE + this.TILE / 2
 
-      const startKey = a.type === 'deer' ? 'deer_front_1' : 'rhino_front_1'
+      const startKey = a.type === 'deer'
+        ? (this.textures.exists('deer_front_1') ? 'deer_front_1' : (this.textures.exists('deer_front') ? 'deer_front' : 'deer_left_1'))
+        : (this.textures.exists('rhino_front_1') ? 'rhino_front_1' : (this.textures.exists('rhino_front') ? 'rhino_front' : 'rhino_left_1'))
 
       const body = this.physics.add.sprite(x, y, startKey)
         .setOrigin(0.5)
@@ -700,10 +750,18 @@ export class GameScene extends Phaser.Scene {
 
     animal.dir = dir
 
+    const safeSet = (key, fallbackKey) => {
+      if (this.textures && this.textures.exists(key)) {
+        animal.body.setTexture(key)
+      } else if (fallbackKey && this.textures && this.textures.exists(fallbackKey)) {
+        animal.body.setTexture(fallbackKey)
+      }
+    }
+
     if (animal.type === 'deer') {
-      // Deer has front_1/2 and back_1/2, but left/right is single frame
+      // Deer has front_1/2 and back_1/2, while left/right uses deer_left_1 / deer_right_1
       if (dir === 'left' || dir === 'right') {
-        animal.body.setTexture(`deer_${dir}`)
+        safeSet(`deer_${dir}_1`, `deer_${dir}`)
         return
       }
 
@@ -712,7 +770,7 @@ export class GameScene extends Phaser.Scene {
         animal.frameTimer = 0
         animal.frameIndex = animal.frameIndex === 1 ? 2 : 1
       }
-      animal.body.setTexture(`deer_${dir}_${animal.frameIndex}`)
+      safeSet(`deer_${dir}_${animal.frameIndex || 1}`, 'deer_front_1')
     } else {
       // Rhino has 1/2 for all directions
       animal.frameTimer = (animal.frameTimer || 0) + delta
@@ -720,7 +778,7 @@ export class GameScene extends Phaser.Scene {
         animal.frameTimer = 0
         animal.frameIndex = animal.frameIndex === 1 ? 2 : 1
       }
-      animal.body.setTexture(`rhino_${dir}_${animal.frameIndex}`)
+      safeSet(`rhino_${dir}_${animal.frameIndex || 1}`, 'rhino_front_1')
     }
   }
   animateAnimalWalk(animal) {

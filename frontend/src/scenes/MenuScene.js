@@ -72,6 +72,12 @@ export class MenuScene extends Phaser.Scene {
     this.load.image('deer_back_2', 'resource/animals/Deer/deer_back_2.png')
     this.load.image('deer_left_1', 'resource/animals/Deer/deer_left_1.png')
     this.load.image('deer_right_1', 'resource/animals/Deer/deer_right_1.png')
+    this.load.image('deer_left', 'resource/animals/Deer/deer_left_1.png')
+    this.load.image('deer_right', 'resource/animals/Deer/deer_right_1.png')
+    this.load.image('deer_left_2', 'resource/animals/Deer/deer_left_1.png')
+    this.load.image('deer_right_2', 'resource/animals/Deer/deer_right_1.png')
+    this.load.image('deer_front', 'resource/animals/Deer/deer_front_1.png')
+    this.load.image('deer_back', 'resource/animals/Deer/deer_back_1.png')
 
     this.load.image('rhino_front_1', 'resource/animals/rhino/rhino_front_1.png')
     this.load.image('rhino_front_2', 'resource/animals/rhino/rhino_front_2.png')
@@ -81,6 +87,10 @@ export class MenuScene extends Phaser.Scene {
     this.load.image('rhino_left_2', 'resource/animals/rhino/rhino_left_2.png')
     this.load.image('rhino_right_1', 'resource/animals/rhino/rhino_right_1.png')
     this.load.image('rhino_right_2', 'resource/animals/rhino/rhino_right_2.png')
+    this.load.image('rhino_front', 'resource/animals/rhino/rhino_front_1.png')
+    this.load.image('rhino_back', 'resource/animals/rhino/rhino_back_1.png')
+    this.load.image('rhino_left', 'resource/animals/rhino/rhino_left_1.png')
+    this.load.image('rhino_right', 'resource/animals/rhino/rhino_right_1.png')
 
     // --- Custom UI Elements ---
     this.load.image('lightning_strike', 'resource/effects/lightning_strike.png')
