@@ -374,6 +374,10 @@ export class GameScene extends Phaser.Scene {
       // shields & weapons
       [7, 7], [30, 18], [12, 38], [15, 9], [21, 15], [37, 18],
 
+      // Animal rescue locations
+      [3, 4], [13, 9], [17, 12], [34, 21], [16, 32], [10, 37],
+      [27, 15], [36, 18], [29, 24], [24, 28], [42, 44],
+
       // portal
       [1, 47]
     ]
@@ -604,11 +608,11 @@ export class GameScene extends Phaser.Scene {
 
   spawnAnimals() {
     const animals = [
-      { col: 4, row: 4, type: 'deer', species: 'Spotted Deer', fact: 'Spotted deer form close-knit herds and alert other forest wildlife to predators.' },
+      { col: 3, row: 4, type: 'deer', species: 'Spotted Deer', fact: 'Spotted deer form close-knit herds and alert other forest wildlife to predators.' },
       { col: 13, row: 9, type: 'deer', species: 'Hog Deer', fact: 'Hog deer run through brush with heads held low, vital for forest undergrowth seed dispersal.' },
-      { col: 20, row: 12, type: 'deer', species: 'Sambar Deer', fact: 'Sambar deer are the largest deer species in tropical Asia and strong swimmers.' },
+      { col: 17, row: 12, type: 'deer', species: 'Sambar Deer', fact: 'Sambar deer are the largest deer species in tropical Asia and strong swimmers.' },
       { col: 34, row: 21, type: 'deer', species: 'Barking Deer', fact: 'Also called Muntjacs, their distinctive bark warns the canopy of approaching danger.' },
-      { col: 18, row: 32, type: 'deer', species: 'Spotted Deer', fact: 'Their spotted coats remain into adulthood, providing dappled woodland camouflage.' },
+      { col: 16, row: 32, type: 'deer', species: 'Spotted Deer', fact: 'Their spotted coats remain into adulthood, providing dappled woodland camouflage.' },
       { col: 10, row: 37, type: 'deer', species: 'Musk Deer', fact: 'Solitary forest dwellers that play a crucial role in sub-alpine plant pollination.' },
 
       { col: 27, row: 15, type: 'rhino', species: 'Javan Rhinoceros', fact: 'One of the rarest large mammals on Earth, with fewer than 80 individuals surviving.' },
@@ -677,7 +681,9 @@ export class GameScene extends Phaser.Scene {
         roamTimer: 0,
         frameTimer: 0,
         frameIndex: 1,
-        dir: 'front'
+        dir: 'front',
+        spawnX: x,
+        spawnY: y
       })
     })
   }
@@ -738,8 +744,8 @@ export class GameScene extends Phaser.Scene {
   animateAnimalWalk(animal) {
     if (!animal || !animal.body || !animal.body.active) return
 
-    const vx = animal.body.body.velocity.x
-    const vy = animal.body.body.velocity.y
+    const vx = (animal.body.body && animal.body.body.velocity) ? animal.body.body.velocity.x : 0
+    const vy = (animal.body.body && animal.body.body.velocity) ? animal.body.body.velocity.y : 0
     const speed = Math.abs(vx) + Math.abs(vy)
 
     const baseSize = animal.type === 'rhino'
@@ -753,68 +759,50 @@ export class GameScene extends Phaser.Scene {
       return
     }
 
-    animal.walkTimer = (animal.walkTimer || 0) + 0.22
-
+    animal.walkTimer = (animal.walkTimer || 0) + 0.18
     const step = Math.sin(animal.walkTimer)
-    const bounce = Math.abs(step)
 
-    // Deer left/right has only 1 PNG, so wobble makes it feel alive.
-    // Rhino also gets a tiny body bounce so it does not look like sliding.
     animal.body.setAngle(step * 2.5)
-    animal.body.setDisplaySize(
-      baseSize + bounce * 2,
-      baseSize - bounce * 2
-    )
+    animal.body.setDisplaySize(baseSize, baseSize)
   }
   updateAnimals(delta) {
     if (!this.animalList) return
 
     this.animalList.forEach(animal => {
-      if (!animal.body || !animal.body.active) return
+      if (!animal || !animal.body || !animal.body.active) return
 
       if (animal.leaving) {
-        this.setAnimalTexture(
-          animal,
-          animal.body.body.velocity.x,
-          animal.body.body.velocity.y,
-          delta
-        )
+        const velX = (animal.body.body && animal.body.body.velocity) ? animal.body.body.velocity.x : 0
+        const velY = (animal.body.body && animal.body.body.velocity) ? animal.body.body.velocity.y : 0
+        this.setAnimalTexture(animal, velX, velY, delta)
         this.animateAnimalWalk(animal)
         return
       }
 
       if (animal.rescued) return
 
-      // Keep cage around animal
-      if (animal.cage) {
+      // Keep cage aligned around animal's spawn location
+      if (animal.cage && animal.body) {
         animal.cage.clear()
         animal.cage.lineStyle(2, 0xffcc66, 0.75)
-        animal.cage.strokeCircle(animal.body.x, animal.body.y, 25)
+        animal.cage.strokeCircle(animal.spawnX || animal.body.x, animal.spawnY || animal.body.y, 25)
       }
 
-      animal.roamTimer++
-
-      if (animal.roamTimer > 60) {
+      // Caged animals stay safely positioned at spawn and gently look around
+      animal.roamTimer = (animal.roamTimer || 0) + 1
+      if (animal.roamTimer > 80) {
         animal.roamTimer = 0
 
-        const col = Math.floor(animal.body.x / this.TILE)
-        const row = Math.floor(animal.body.y / this.TILE)
-
-        const possibleDirs = [
-          { vx: 45, vy: 0, dc: 1, dr: 0 },
-          { vx: -45, vy: 0, dc: -1, dr: 0 },
-          { vx: 0, vy: 45, dc: 0, dr: 1 },
-          { vx: 0, vy: -45, dc: 0, dr: -1 },
+        const directions = [
+          { vx: 0, vy: 1, dir: 'front' },
+          { vx: 0, vy: -1, dir: 'back' },
+          { vx: -1, vy: 0, dir: 'left' },
+          { vx: 1, vy: 0, dir: 'right' }
         ]
-
-        const safeDirs = possibleDirs.filter(d =>
-          !this.isWall(col + d.dc, row + d.dr)
-        )
-
-        const dir = safeDirs[Phaser.Math.Between(0, safeDirs.length - 1)]
-
-        animal.body.setVelocity(dir.vx, dir.vy)
-        this.setAnimalTexture(animal, dir.vx, dir.vy)
+        const choice = directions[Phaser.Math.Between(0, directions.length - 1)]
+        if (animal.body.setVelocity) animal.body.setVelocity(0, 0)
+        animal.dir = choice.dir
+        this.setAnimalTexture(animal, choice.vx, choice.vy, delta)
       }
     })
   }
@@ -890,9 +878,13 @@ export class GameScene extends Phaser.Scene {
   showWildlifeCard(species, fact) {
     try { this.sound.play('notification_popup', { volume: 0.75 }) } catch (e) {}
     if (this.activeWildlifeCard) {
-      this.activeWildlifeCard.forEach(el => {
-        if (el && el.destroy) el.destroy()
-      })
+      if (Array.isArray(this.activeWildlifeCard)) {
+        this.activeWildlifeCard.forEach(el => {
+          if (el && el.destroy) el.destroy()
+        })
+      } else if (this.activeWildlifeCard.destroy) {
+        this.activeWildlifeCard.destroy()
+      }
       this.activeWildlifeCard = null
     }
 
@@ -902,13 +894,26 @@ export class GameScene extends Phaser.Scene {
       this.animalRescueNotificationContainer.setVisible(false)
     }
     this.cardFreezeTimestamp = this.time ? this.time.now : Date.now()
-    this.player.setVelocity(0, 0)
-    this.monsterList.forEach(m => {
-      if (m.body && m.body.active) m.body.setVelocity(0, 0)
-      m.chasing = false
-    })
+    if (this.player && this.player.setVelocity) this.player.setVelocity(0, 0)
+    if (this.monsterList) {
+      this.monsterList.forEach(m => {
+        if (m.body && m.body.active && m.body.setVelocity) m.body.setVelocity(0, 0)
+        m.chasing = false
+      })
+    }
 
     const { width, height } = this.scale
+
+    const dismissZone = this.add.zone(width / 2, height / 2, width, height)
+      .setScrollFactor(0)
+      .setDepth(399)
+      .setInteractive()
+    dismissZone.on('pointerdown', () => {
+      const now = (this.time && this.time.now) ? this.time.now : Date.now()
+      if (now - (this.cardFreezeTimestamp || 0) > 200) {
+        this.dismissWildlifeCard()
+      }
+    })
 
     const card = this.add.graphics().setScrollFactor(0).setDepth(400)
     card.fillStyle(0x0a1420, 0.97)
@@ -934,22 +939,26 @@ export class GameScene extends Phaser.Scene {
       fontSize: '11px', fontFamily: 'Arial Black', color: '#00d4ff'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const resumeHint = this.add.text(width / 2, height / 2 + 72, '👉 Move in any direction (W,A,S,D / Arrows) to resume', {
+    const resumeHint = this.add.text(width / 2, height / 2 + 72, '👉 Move (WASD / Arrows) or Click anywhere to resume', {
       fontSize: '10px', fontFamily: 'Arial Black', color: '#ffdd77'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(401)
 
-    const elements = [card, title, name, factText, counter, resumeHint]
+    const elements = [dismissZone, card, title, name, factText, counter, resumeHint]
     this.activeWildlifeCard = elements
-    elements.forEach(el => { el.setAlpha(1) })
+    elements.forEach(el => { if (el && el.setAlpha) el.setAlpha(1) })
   }
 
   dismissWildlifeCard() {
     if (!this.animalNotificationFrozen && !this.activeWildlifeCard) return
     this.animalNotificationFrozen = false
     if (this.activeWildlifeCard) {
-      this.activeWildlifeCard.forEach(el => {
-        if (el && el.destroy) el.destroy()
-      })
+      if (Array.isArray(this.activeWildlifeCard)) {
+        this.activeWildlifeCard.forEach(el => {
+          if (el && el.destroy) el.destroy()
+        })
+      } else if (this.activeWildlifeCard.destroy) {
+        this.activeWildlifeCard.destroy()
+      }
       this.activeWildlifeCard = null
     }
     // Wake up monsters immediately so they don't remain stopped
@@ -1008,19 +1017,14 @@ export class GameScene extends Phaser.Scene {
     )
 
     const leaveSpeed = animal.type === 'rhino' ? 120 : 150
+    const vx = Math.cos(angle) * leaveSpeed
+    const vy = Math.sin(angle) * leaveSpeed
 
-    animal.body.setVelocity(
-      Math.cos(angle) * leaveSpeed,
-      Math.sin(angle) * leaveSpeed
-    )
-
-    animal.body.setDepth(12)
-
-    this.setAnimalTexture(
-      animal,
-      animal.body.body.velocity.x,
-      animal.body.body.velocity.y
-    )
+    if (animal.body && animal.body.setVelocity) {
+      animal.body.setVelocity(vx, vy)
+      animal.body.setDepth(12)
+      this.setAnimalTexture(animal, vx, vy)
+    }
 
     this.tweens.add({
       targets: animal.body,
@@ -2353,6 +2357,7 @@ export class GameScene extends Phaser.Scene {
       this.showDeathSkull(x, y);
     })
 
+    this.monstersKilled = (this.monstersKilled || 0) + 1
     this.score += 200
     this.showFloatingText(
       x,
@@ -2432,7 +2437,13 @@ export class GameScene extends Phaser.Scene {
       this.emergencyReviveTimer = null
     }
     if (this.activeWildlifeCard) {
-      this.activeWildlifeCard.destroy()
+      if (Array.isArray(this.activeWildlifeCard)) {
+        this.activeWildlifeCard.forEach(el => {
+          if (el && el.destroy) el.destroy()
+        })
+      } else if (this.activeWildlifeCard.destroy) {
+        this.activeWildlifeCard.destroy()
+      }
       this.activeWildlifeCard = null
     }
     this.animalNotificationFrozen = false
@@ -2743,12 +2754,12 @@ export class GameScene extends Phaser.Scene {
       if (escSnd && escSnd.isPlaying) escSnd.stop()
     } catch (e) {}
     this.cleanupPauseAndListeners()
-    if (this.heartNotificationContainer) {
-      this.heartNotificationContainer.destroy()
+    if (this.heartNotificationContainer && this.heartNotificationContainer.destroy) {
+      try { this.heartNotificationContainer.destroy() } catch (e) {}
       this.heartNotificationContainer = null
     }
-    if (this.animalRescueNotificationContainer) {
-      this.animalRescueNotificationContainer.destroy()
+    if (this.animalRescueNotificationContainer && this.animalRescueNotificationContainer.destroy) {
+      try { this.animalRescueNotificationContainer.destroy() } catch (e) {}
       this.animalRescueNotificationContainer = null
     }
     this.scene.stop('UIScene')
@@ -2765,12 +2776,12 @@ export class GameScene extends Phaser.Scene {
       if (escSnd && escSnd.isPlaying) escSnd.stop()
     } catch (e) {}
     this.cleanupPauseAndListeners()
-    if (this.heartNotificationContainer) {
-      this.heartNotificationContainer.destroy()
+    if (this.heartNotificationContainer && this.heartNotificationContainer.destroy) {
+      try { this.heartNotificationContainer.destroy() } catch (e) {}
       this.heartNotificationContainer = null
     }
-    if (this.animalRescueNotificationContainer) {
-      this.animalRescueNotificationContainer.destroy()
+    if (this.animalRescueNotificationContainer && this.animalRescueNotificationContainer.destroy) {
+      try { this.animalRescueNotificationContainer.destroy() } catch (e) {}
       this.animalRescueNotificationContainer = null
     }
     this.scene.stop('UIScene')
@@ -2807,22 +2818,27 @@ export class GameScene extends Phaser.Scene {
       return
     }
 
+    try {
+
     // Check if player pressed any movement key to unfreeze animal notification
-    const moveInput = this.wasd.left.isDown || this.wasd.right.isDown ||
-                      this.wasd.up.isDown || this.wasd.down.isDown ||
-                      this.cursors.left.isDown || this.cursors.right.isDown ||
-                      this.cursors.up.isDown || this.cursors.down.isDown
+    const moveInput = Boolean(
+      (this.wasd && (this.wasd.left?.isDown || this.wasd.right?.isDown || this.wasd.up?.isDown || this.wasd.down?.isDown)) ||
+      (this.cursors && (this.cursors.left?.isDown || this.cursors.right?.isDown || this.cursors.up?.isDown || this.cursors.down?.isDown))
+    )
+    const anyInput = moveInput || Boolean(this.spaceKey?.isDown) || Boolean(this.collectKey?.isDown)
 
     if (this.animalNotificationFrozen) {
       const now = (this.time && this.time.now) ? this.time.now : Date.now()
       const elapsed = now - (this.cardFreezeTimestamp || 0)
-      if (moveInput && elapsed > 250) {
+      if (anyInput && elapsed > 250) {
         this.dismissWildlifeCard()
       } else {
-        this.player.setVelocity(0, 0)
-        this.monsterList.forEach(m => {
-          if (m.body && m.body.active) m.body.setVelocity(0, 0)
-        })
+        if (this.player && this.player.setVelocity) this.player.setVelocity(0, 0)
+        if (this.monsterList) {
+          this.monsterList.forEach(m => {
+            if (m.body && m.body.active && m.body.setVelocity) m.body.setVelocity(0, 0)
+          })
+        }
         return
       }
     }
@@ -2850,24 +2866,24 @@ export class GameScene extends Phaser.Scene {
       return
     }
 
-    if (this.wasd.left.isDown || this.cursors.left.isDown) {
+    if (this.wasd?.left?.isDown || this.cursors?.left?.isDown) {
       vx = -speed
       this.playerDir = 'left'
       this.player.setTexture(`${this.playerSpriteKey}_left`)
       this.isMoving = true
-    } else if (this.wasd.right.isDown || this.cursors.right.isDown) {
+    } else if (this.wasd?.right?.isDown || this.cursors?.right?.isDown) {
       vx = speed
       this.playerDir = 'right'
       this.player.setTexture(`${this.playerSpriteKey}_right`)
       this.isMoving = true
     }
 
-    if (this.wasd.up.isDown || this.cursors.up.isDown) {
+    if (this.wasd?.up?.isDown || this.cursors?.up?.isDown) {
       vy = -speed
       this.playerDir = 'up'
       this.player.setTexture(`${this.playerSpriteKey}_back`)
       this.isMoving = true
-    } else if (this.wasd.down.isDown || this.cursors.down.isDown) {
+    } else if (this.wasd?.down?.isDown || this.cursors?.down?.isDown) {
       vy = speed
       this.playerDir = 'down'
       this.player.setTexture(`${this.playerSpriteKey}_front`)
@@ -3354,6 +3370,9 @@ export class GameScene extends Phaser.Scene {
       if (this.bobTimer > 15) this.bobTimer = 0
     } else {
       this.player.setDisplaySize(baseSize, baseSize)
+    }
+    } catch (err) {
+      console.error('GameScene update error caught safely:', err)
     }
   }
 }
