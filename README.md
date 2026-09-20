@@ -1,29 +1,31 @@
-# 🐦 Bird Adventure
+# 🐦 Avian: The silent Groove
 
-A top-down 2D adventure game built with **Phaser.js** (frontend) and **Spring Boot** (backend).
-Choose your bird, explore a dense forest world, collect eggs, evolve into an overpowered bird,
-defeat monsters with unique weapons, and escape through the portal!
+A top-down 2D conservation adventure built with **Phaser.js** (frontend) and **Spring Boot** (backend).
+Choose your bird, journey through three biomes — forest, frozen tundra, and the deep ocean —
+rescue stolen saplings and trapped wildlife, evolve into an overpowered bird, defeat hunters,
+and escape through the portal!
 
 ---
 
 ## 🎮 Story
 
-Deep in the forest, the birds lived peacefully — their eggs were their most precious treasure.
-One stormy night, shadowy monsters crept through the forest and stole every last egg.
-But the monsters were careless. They left behind broken shells, footprints, and glowing feathers.
-And so the brave bird set out alone into the deep dark forest.
-**Find the eggs. Defeat the monsters. Bring them home.**
+Deep in the forest, the birds lived peacefully — the saplings were their most precious treasure.
+One stormy night, shadowy hunters crept through the forest and stole every last sapling,
+leaving traps and caged animals in their wake.
+And so the brave bird set out alone — from the forest, across the tundra, and down into the abyss.
+**Find the saplings. Free the animals. Bring them home.**
 
 ---
 
 ## 🕹️ How to Play
 
-- **WASD** — Move your bird through the forest
-- **SPACE** — Attack with your current weapon
-- **Walk over weapons** — Pick them up automatically
-- **Collect eggs** — Earn points and evolve your bird
-- **Reach the glowing portal** — Escape to complete the level
-- **Avoid monsters** — They patrol and chase you on sight
+- **WASD / Arrow Keys** — Move your bird
+- **SPACE** — Attack with your current weapon (sonar pulse in Level 3)
+- **E** — Interact: rescue caged / trapped animals, cut fishing nets, light campfires
+- **H** — Revive a heart at a Heart Shrine (-100 score)
+- **ESC** — Pause menu (resume / play again / main menu)
+- **Walk over pickups** — Collect weapons, shields, and saplings automatically
+- **Reach the glowing portal** — Complete the level
 
 ---
 
@@ -33,11 +35,13 @@ And so the brave bird set out alone into the deep dark forest.
 
 - **Story cutscene** — 4-panel comic intro with typewriter effect, skip button, and fade transitions
 - **Character select menu** — 5 playable birds with wooden plank UI, sky background and pixel trees
-- **Top-down tile world** — Dense forest map with real pixel art sprites (grass, trees, sand paths)
-- **Camera system** — Smooth follow camera with world bounds
-- **Massive explorable map** — 50×80 tile world, only sand paths are walkable
+- **Three handcrafted levels** — Forest of Lumina, Tundra Frontier, and Abyssal Depths
+- **Camera system** — Smooth follow camera with world bounds; per-zone camera locking in Level 3
 - **Bird animations** — Squash and stretch while moving, idle bob when standing still
 - **Directional sprites** — Bird changes sprite based on movement direction
+- **Species flashcards** — real facts about every sapling and animal you rescue
+- **Conservation Report** — after every level: stats, CO₂ absorbed per year, grade S–D, species spotlight
+- **Pause menu** — ESC to resume, play again, or return to main menu
 
 #### 🐦 5 Playable Birds
 | Bird | Ability |
@@ -45,68 +49,72 @@ And so the brave bird set out alone into the deep dark forest.
 | 🔥 Ember | Fire burst |
 | ❄️ Frost | Freeze enemies |
 | ⚡ Volt | Chain lightning |
-| 🌑 Shade | Shadow dash |
-| 🌿 Gale | Wind force |
+| 🌑 Shade | Bomb blast |
+| 🌿 Gale | Boomerang (double hit) |
 
-#### 🥚 Egg System — 4 Types
-| Egg | Points |
+---
+
+### 🌱 Level 1 — Forest of Lumina
+
+- **16 saplings from 8 real endangered tree species** — Pennantia, Bois, Wollemi, Chestnut, Dragon, Baobab, Torreya, and Monkey Puzzle; each species is tied to a collectible flashcard
+- **Caged wildlife rescue** — deer and rhino species held in cages; press E to free them, each unlocks a journal fact card
+- **16 patrolling hunters** with wall-aware chase AI, HP bars, hit flash, and death effects
+- **Heart Shrines** hidden inside monster dens — press H to revive a heart (-100 score)
+- **Emergency revive** — a fatal hit near a shrine gives you a 3-second last chance to press H
+- **Shield pickup** — 10 seconds of invisibility plus stealth-kill attacks
+- **Live minimap** — player, hunters, pickups, and exit portal
+
+#### 🥚 Sapling System — 4 Types
+| Sapling | Points |
 |---|---|
-| 🥚 Normal | +100 |
-| 🔥 Fire Egg | +200 |
-| ⚡ Thunder Egg | +300 |
-| 🌟 Golden Egg | +500 + triggers evolution |
+| 🌱 Normal | +100 |
+| 🔥 Fire | +200 |
+| ⚡ Thunder | +300 |
+| 🌟 Golden | +500 + triggers evolution |
 
 #### 📈 Evolution System — 3 Stages
 - **Stage 1** — Normal bird, standard speed and range
-- **Stage 2** — Faster movement, bigger attack range (unlocked with 1 Golden Egg)
-- **Stage 3** — Overpowered, bonus heart, golden aura (unlocked with 3 Golden Eggs)
+- **Stage 2** — Faster movement, bigger attack range (unlocked with 1 Golden Sapling)
+- **Stage 3** — Overpowered, bonus heart, golden aura (unlocked with 3 Golden Saplings)
 
 #### ⚔️ 5 Weapons — All triggered with SPACE
 | Weapon | Effect |
 |---|---|
 | 🔫 Normal | Shockwave hits all enemies in range |
 | 💣 Bomb | Huge area explosion + screen shake + 2 damage |
-| ❄️ Ice | Freezes all enemies in range for 3 seconds |
+| ❄️ Ice | Instant freeze-kill on enemies in range |
 | ⚡ Lightning | Chains between 3 closest enemies |
 | 🪃 Boomerang | Hits twice — out and back |
 
-#### 👹 Monster AI
-- Patrol mode when player is out of range
-- Chase mode with ❗ alert when player is detected
-- Wall-aware movement
-- HP bars above each monster
-- Hit flash on damage
-- Death particle burst on kill
-- Damage player on contact — triggers screen shake and HP loss
+---
 
-#### ❤️ HP Hearts System
-- Bird starts with 3 hearts (4 hearts at Stage 3)
-- Lose 1 heart per monster contact
-- Hearts flash rapidly when at 1 HP
-- Screen shake on every hit
-- Game over when hearts reach 0
+### ❄️ Level 2 — Tundra Frontier
 
-#### 🗺️ Live Minimap
-- Bottom left corner — always visible
-- Shows full world layout with tile colours
-- White dot = player position with direction indicator
-- Red dots = monsters (bright red when chasing)
-- Coloured dots = eggs and weapon pickups
-- Purple dot = exit portal
-- White rectangle = current camera viewport
+- **Warmth system** — drains constantly in the open, drains slower when sheltered beside trees and cliffs, and burns 2.5× faster during blizzards; campfires and lit hunter camps refill it; zero warmth = frostbite damage
+- **Dynamic blizzard events** — warning banner, heavy snow, and a darkened screen
+- **Wildlife rescue** — penguins and polar bears wander the tundra; trapped animals must be freed (hold E) before a countdown expires while a hunter closes in
+- **Footprints** — follow animal tracks and hunter boot prints in the snow to discover traps and camps
+- **Hidden alarm traps** — stepping on one alerts every hunter in the area
+- **Abandoned hunter camps** — discover them and light the dead fire for warmth + score
 
-#### 🖥️ HUD
-- Score, egg count, evolution stage
-- Countdown timer (turns red at 30s)
-- Current weapon display
-- Hearts display
-- Golden egg progress bar
+---
+
+### 🌊 Level 3 — Abyssal Depths
+
+- **Four underwater zones** — Coral Reef, Sunken Ruins, Kelp Forest, and Abyssal Cave — connected by fade-transition tunnels
+- **Oxygen system** — drains constantly, and drains faster the deeper you swim; air pockets refill it; running out blacks you out and washes you up at the nearest air pocket
+- **Bioluminescent sonar pulse (SPACE)** — reveals air pockets, trapped animals, and the exit portal; stuns jellyfish and electric eels; shatters nets you're snagged in
+- **Hazards** — toxic jellyfish (sting burns extra oxygen) and electric eels; both can be stunned with sonar
+- **Ghost fishing nets** — one per zone holds a real animal (sea turtle, seahorse, manta ray, stingray); hold E to cut it free and learn a bycatch fact
+- **Combined zone minimap** — always shows which room you're in and where the exit portal sits
+
+---
 
 ### ☕ Backend — Spring Boot + H2 Database
 
 - REST API for player and score management
 - Player profile saved on game start (name + chosen bird)
-- Score saved after every level (score, eggs saved, time taken)
+- Score saved after every level (score, saplings saved, time taken)
 - Top 10 leaderboard endpoint
 - Evolution stage tracking per player
 - H2 in-memory database — no setup required
@@ -125,11 +133,7 @@ And so the brave bird set out alone into the deep dark forest.
 
 ## 🚧 Coming Soon
 
-- 🏆 Win / Lose screen with score breakdown and play again
-- 🔊 Sound effects — egg collect, attack, monster death, portal hum, music
-- 🗺️ Level 2 — new map (Volcano / Cave theme), faster monsters
 - 👹 Boss monster — unique enemy with special attack pattern
-- 🌍 Multiple worlds — Forest → Volcano → Storm Sky
 - 📊 In-game leaderboard screen
 - 💾 Persistent scores with MySQL
 
@@ -139,9 +143,9 @@ And so the brave bird set out alone into the deep dark forest.
 
 | Layer | Technology |
 |---|---|
-| Game Engine | Phaser.js v4 |
+| Game Engine | Phaser 3 |
 | Build Tool | Vite |
-| Backend | Spring Boot 4 |
+| Backend | Spring Boot |
 | Database | H2 (in-memory) |
 | Frontend Language | JavaScript |
 | Backend Language | Java 21 |
