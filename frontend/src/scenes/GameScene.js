@@ -762,29 +762,94 @@ export class GameScene extends Phaser.Scene {
 
       if (animal.rescued) return
 
-      // Keep cage aligned around animal's spawn location
+      // Cage stays centered on the animal as it moves
       if (animal.cage && animal.body) {
         animal.cage.clear()
         animal.cage.lineStyle(2, 0xffcc66, 0.75)
-        animal.cage.strokeCircle(animal.spawnX || animal.body.x, animal.spawnY || animal.body.y, 25)
+        animal.cage.strokeCircle(animal.body.x, animal.body.y, 25)
       }
 
-      // Caged animals stay calmly at spawn and gently look around
-      if (animal.body.setVelocity) animal.body.setVelocity(0, 0)
-      animal.roamTimer = (animal.roamTimer || 0) + 1
-      if (animal.roamTimer > 90) {
-        animal.roamTimer = 0
-        const turns = ['front', 'left', 'front', 'right']
-        const nextDir = turns[Phaser.Math.Between(0, turns.length - 1)]
-        animal.dir = nextDir
-        const dirVel = {
-          front: { vx: 0, vy: 1 },
-          left: { vx: -1, vy: 0 },
-          right: { vx: 1, vy: 0 },
-          back: { vx: 0, vy: -1 }
-        }[nextDir]
-        this.setAnimalTexture(animal, dirVel.vx, dirVel.vy, delta)
+      const curC = Math.floor(animal.body.x / this.TILE)
+      const curR = Math.floor(animal.body.y / this.TILE)
+      const spawnX = animal.spawnX || animal.body.x
+      const spawnY = animal.spawnY || animal.body.y
+      const distFromSpawn = Phaser.Math.Distance.Between(animal.body.x, animal.body.y, spawnX, spawnY)
+
+      const velX = animal.body.body ? animal.body.body.velocity.x : 0
+      const velY = animal.body.body ? animal.body.body.velocity.y : 0
+
+      // Wall boundary clamping: prevent entering solid tiles
+      if (velX > 0 && this.isWall(curC + 1, curR) && animal.body.x >= (curC + 1) * this.TILE - 18) {
+        animal.body.setVelocity(0, velY)
+        animal.roamTimer = 100
+      } else if (velX < 0 && this.isWall(curC - 1, curR) && animal.body.x <= curC * this.TILE + 18) {
+        animal.body.setVelocity(0, velY)
+        animal.roamTimer = 100
       }
+      if (velY > 0 && this.isWall(curC, curR + 1) && animal.body.y >= (curR + 1) * this.TILE - 18) {
+        animal.body.setVelocity(velX, 0)
+        animal.roamTimer = 100
+      } else if (velY < 0 && this.isWall(curC, curR - 1) && animal.body.y <= curR * this.TILE + 18) {
+        animal.body.setVelocity(velX, 0)
+        animal.roamTimer = 100
+      }
+
+      animal.roamTimer = (animal.roamTimer || 0) + 1
+
+      // Decide next roam action every ~60-80 frames (~1-1.3 seconds)
+      if (animal.roamTimer > 70) {
+        animal.roamTimer = 0
+
+        // 30% chance to pause/idle in place if close to spawn
+        if (Phaser.Math.Between(0, 100) < 30 && distFromSpawn < 50) {
+          animal.body.setVelocity(0, 0)
+          const turns = ['front', 'left', 'front', 'right']
+          const nextDir = turns[Phaser.Math.Between(0, turns.length - 1)]
+          animal.dir = nextDir
+          const dirVel = {
+            front: { vx: 0, vy: 1 },
+            left: { vx: -1, vy: 0 },
+            right: { vx: 1, vy: 0 },
+            back: { vx: 0, vy: -1 }
+          }[nextDir]
+          this.setAnimalTexture(animal, dirVel.vx, dirVel.vy, delta)
+        } else {
+          // Walk along an open path
+          const baseSpeed = animal.type === 'rhino' ? 32 : 38
+          const candidateDirs = [
+            { vx: baseSpeed, vy: 0, dc: 1, dr: 0 },
+            { vx: -baseSpeed, vy: 0, dc: -1, dr: 0 },
+            { vx: 0, vy: baseSpeed, dc: 0, dr: 1 },
+            { vx: 0, vy: -baseSpeed, dc: 0, dr: -1 }
+          ]
+
+          // Only open, non-wall tiles
+          let safeDirs = candidateDirs.filter(d => !this.isWall(curC + d.dc, curR + d.dr))
+
+          // Tether to spawn area: if drifting > 60px away, steer back
+          if (distFromSpawn > 55) {
+            const returning = safeDirs.filter(d => {
+              const testX = animal.body.x + d.vx
+              const testY = animal.body.y + d.vy
+              return Phaser.Math.Distance.Between(testX, testY, spawnX, spawnY) < distFromSpawn
+            })
+            if (returning.length > 0) {
+              safeDirs = returning
+            }
+          }
+
+          if (safeDirs.length > 0) {
+            const chosen = safeDirs[Phaser.Math.Between(0, safeDirs.length - 1)]
+            animal.body.setVelocity(chosen.vx, chosen.vy)
+            this.setAnimalTexture(animal, chosen.vx, chosen.vy, delta)
+          } else {
+            // Dead end or trapped: safely idle
+            animal.body.setVelocity(0, 0)
+          }
+        }
+      }
+
+      this.animateAnimalWalk(animal)
     })
   }
 
@@ -1351,7 +1416,7 @@ export class GameScene extends Phaser.Scene {
   reviveHeart() {
     if (this.gameEnding || this.animalNotificationFrozen || this.isPaused) return
 
-    const targetShrine = this.getNearestHeartShrine(65)
+    const targetShrine = this.getNearestHeartShrine(95)
 
     if (!targetShrine) {
       this.showFloatingText(
@@ -2004,6 +2069,7 @@ export class GameScene extends Phaser.Scene {
     if (!m || !m.alive || !m.body) return
 
     m.alive = false
+    this.monstersKilled = (this.monstersKilled || 0) + 1
 
     const x = m.body.x
     const y = m.body.y

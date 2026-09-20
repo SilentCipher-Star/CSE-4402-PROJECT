@@ -284,6 +284,17 @@ export class UIScene extends Phaser.Scene {
       })
     }
 
+    // Animals (unrescued caged species appear as amber dots on minimap)
+    if (gs.animalList) {
+      gs.animalList.forEach(a => {
+        if (a.rescued || a.leaving || !a.body || !a.body.active || a.body.x === undefined) return
+        const ax = ox + (a.body.x / (cols * gs.TILE)) * this.MM_W
+        const ay = oy + (a.body.y / (rows * gs.TILE)) * this.MM_H
+        g.fillStyle(0xffaa33, 1)
+        g.fillCircle(ax, ay, 2)
+      })
+    }
+
     // Portal
     if (gs.portalCol !== undefined && gs.portalRow !== undefined) {
       const portalX = ox + ((gs.portalCol * gs.TILE + gs.TILE / 2) / (cols * gs.TILE)) * this.MM_W
