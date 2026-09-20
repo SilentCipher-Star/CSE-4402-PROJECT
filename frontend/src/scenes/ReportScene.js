@@ -10,9 +10,15 @@ export class ReportScene extends Phaser.Scene {
   }
 
   create(data) {
+    this.scene.bringToTop()
     if (this.game.canvas && this.game.canvas.focus) {
       this.game.canvas.focus()
     }
+    this.input.on('pointerdown', () => {
+      if (this.game.canvas && this.game.canvas.focus) {
+        this.game.canvas.focus()
+      }
+    })
     this.input.enabled = true
     this.input.keyboard.enabled = true
     this.input.setDefaultCursor('default')

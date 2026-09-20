@@ -36,10 +36,17 @@ export class FlashCardScene extends Phaser.Scene {
     this.currentIndex = 0
     this.closing = false
 
+    this.scene.bringToTop()
+    this.input.enabled = true
     this.input.keyboard.enabled = true
     if (this.game.canvas && this.game.canvas.focus) {
       this.game.canvas.focus()
     }
+    this.input.on('pointerdown', () => {
+      if (this.game.canvas && this.game.canvas.focus) {
+        this.game.canvas.focus()
+      }
+    })
 
     const { width, height } = this.scale
 

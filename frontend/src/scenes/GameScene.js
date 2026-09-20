@@ -431,9 +431,13 @@ export class GameScene extends Phaser.Scene {
     }
   }
   isWall(col, row) {
-    if (row < 0 || row >= this.mapRows) return true
-    if (col < 0 || col >= this.mapCols) return true
-    const t = this.mapData[row][col]
+    const c = Math.floor(Number(col))
+    const r = Math.floor(Number(row))
+    if (isNaN(c) || isNaN(r)) return true
+    if (r < 0 || r >= this.mapRows) return true
+    if (c < 0 || c >= this.mapCols) return true
+    if (!this.mapData || !this.mapData[r]) return true
+    const t = this.mapData[r][c]
     return t === 1 || t === 2 || t === 6
   }
   spawnEggs() {
@@ -1033,23 +1037,31 @@ export class GameScene extends Phaser.Scene {
   }
   setHunterDirection(m, vx, vy) {
     if (!m || !m.body || !m.body.active) return
+    if (Math.abs(vx) < 5 && Math.abs(vy) < 5) return
 
+    let nextTexture = null
     if (Math.abs(vx) > Math.abs(vy)) {
       if (vx > 0) {
-        m.body.setTexture('hunter_right')
+        nextTexture = 'hunter_right'
       } else if (vx < 0) {
-        m.body.setTexture('hunter_left')
+        nextTexture = 'hunter_left'
       }
     } else {
       if (vy > 0) {
-        m.body.setTexture('hunter_front')
+        nextTexture = 'hunter_front'
       } else if (vy < 0) {
-        m.body.setTexture('hunter_back')
+        nextTexture = 'hunter_back'
       }
+    }
+
+    if (nextTexture && m.body.texture && m.body.texture.key !== nextTexture) {
+      m.body.setTexture(nextTexture)
     }
 
     if (m.frozen) {
       m.body.setTint(0x88ccff)
+    } else if (m.stunnedUntil && this.time.now < m.stunnedUntil) {
+      m.body.setTint(0xffaaaa)
     } else {
       m.body.clearTint()
     }
@@ -1058,8 +1070,8 @@ export class GameScene extends Phaser.Scene {
     if (!m || !m.body || !m.body.active) return
 
     const baseSize = this.TILE * 1.25
-    const velocityX = m.body.body.velocity.x
-    const velocityY = m.body.body.velocity.y
+    const velocityX = m.body.body ? m.body.body.velocity.x : 0
+    const velocityY = m.body.body ? m.body.body.velocity.y : 0
     const speed = Math.abs(velocityX) + Math.abs(velocityY)
 
     if (m.frozen || (m.stunnedUntil && this.time.now < m.stunnedUntil) || speed < 5) {
@@ -1069,16 +1081,12 @@ export class GameScene extends Phaser.Scene {
       return
     }
 
-    m.walkTimer = (m.walkTimer || 0) + delta * 0.018
-
+    m.walkTimer = (m.walkTimer || 0) + (delta || 16) * 0.012
     const step = Math.sin(m.walkTimer)
-    const bounce = Math.abs(step)
 
-    m.body.setAngle(step * 3)
-    m.body.setDisplaySize(
-      baseSize + bounce * 3,
-      baseSize - bounce * 2
-    )
+    // Gentle stable rotation without distorting Arcade Physics displaySize
+    m.body.setAngle(step * 2.0)
+    m.body.setDisplaySize(baseSize, baseSize)
   }
   spawnShields() {
     this.shieldList = []
@@ -1209,12 +1217,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   drawHPBar(g, x, y, hp, maxHp) {
-    g.clear()
-    g.fillStyle(0x440000, 1)
-    g.fillRect(-16, 0, 32, 5)
-    g.fillStyle(hp > 1 ? 0xff4444 : 0xff0000, 1)
-    g.fillRect(-16, 0, (hp / maxHp) * 32, 5)
-    g.setPosition(x, y)
+    if (!g || typeof g.clear !== 'function' || !g.scene) return
+    try {
+      g.clear()
+      const safeMax = Math.max(1, Number(maxHp) || 1)
+      const safeHp = Math.max(0, Math.min(safeMax, Number(hp) || 0))
+      const ratio = safeHp / safeMax
+      g.fillStyle(0x440000, 1)
+      g.fillRect(-16, 0, 32, 5)
+      g.fillStyle(safeHp > 1 ? 0xff4444 : 0xff0000, 1)
+      g.fillRect(-16, 0, ratio * 32, 5)
+      if (typeof g.setPosition === 'function') {
+        g.setPosition(x, y)
+      }
+    } catch (e) {}
   }
   drawPortal() {
     this.portalGfx.clear()
@@ -1474,7 +1490,7 @@ export class GameScene extends Phaser.Scene {
 
     // Push nearby hunters away
     this.monsterList.forEach(m => {
-      if (m.active && m.body) {
+      if (m.alive && m.body && m.body.active) {
         const dx = m.body.x - this.player.x
         const dy = m.body.y - this.player.y
         const dist = Math.hypot(dx, dy) || 1
@@ -1772,7 +1788,9 @@ export class GameScene extends Phaser.Scene {
             return
           }
 
-          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+          if (m.hpBar) {
+            this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+          }
           this.showFloatingText(
             m.body.x,
             m.body.y - 20,
@@ -1837,7 +1855,9 @@ export class GameScene extends Phaser.Scene {
               return
             }
 
-            this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+            if (m.hpBar) {
+              this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+            }
             this.showFloatingText(
               m.body.x,
               m.body.y - 20,
@@ -2069,6 +2089,7 @@ export class GameScene extends Phaser.Scene {
       }
     })
 
+    this.monstersKilled = (this.monstersKilled || 0) + 1
     this.score += 200
 
     this.showFloatingText(
@@ -2375,9 +2396,26 @@ export class GameScene extends Phaser.Scene {
     if (this.gameEnding) return
     this.gameEnding = true
 
+    this.cleanupPauseAndListeners()
+    if (this.cameras && this.cameras.main) {
+      this.cameras.main.stopFollow()
+      this.cameras.main.resetFX()
+    }
+
     this.physics.pause()
-    if (this.player && this.player.setVelocity) {
-      this.player.setVelocity(0, 0)
+    if (this.player) {
+      if (this.player.setVelocity) this.player.setVelocity(0, 0)
+      if (this.player.body) this.player.body.enable = false
+    }
+
+    if (this.monsterList) {
+      this.monsterList.forEach(m => {
+        if (m.alive && m.body && m.body.active) {
+          if (m.body.setVelocity) m.body.setVelocity(0, 0)
+          if (m.body.body) m.body.body.enable = false
+        }
+        if (m.alert) m.alert.setVisible(false)
+      })
     }
 
     if (this.terminal) {
@@ -2399,20 +2437,19 @@ export class GameScene extends Phaser.Scene {
     }
     this.animalNotificationFrozen = false
     if (this.shieldActive) this.deactivateShield()
-    if (this.playerShieldGfx) {
-      this.playerShieldGfx.destroy()
+    if (this.playerShieldGfx && this.playerShieldGfx.destroy) {
+      try { this.playerShieldGfx.destroy() } catch (e) {}
       this.playerShieldGfx = null
     }
 
-    if (this.heartNotificationContainer) {
-      this.heartNotificationContainer.destroy()
+    if (this.heartNotificationContainer && this.heartNotificationContainer.destroy) {
+      try { this.heartNotificationContainer.destroy() } catch (e) {}
       this.heartNotificationContainer = null
     }
-    if (this.animalRescueNotificationContainer) {
-      this.animalRescueNotificationContainer.destroy()
+    if (this.animalRescueNotificationContainer && this.animalRescueNotificationContainer.destroy) {
+      try { this.animalRescueNotificationContainer.destroy() } catch (e) {}
       this.animalRescueNotificationContainer = null
     }
-    this.cleanupPauseAndListeners()
 
     this.saveScore()
     this.scene.stop('UIScene')
@@ -2431,7 +2468,7 @@ export class GameScene extends Phaser.Scene {
 
       // IMPORTANT: use monstersKilled because your killMonster() should increase this
       monstersKilled: this.monstersKilled || 0,
-      totalMonsters: (this.monsterList && this.monsterList.length > 0) ? this.monsterList.length : 8,
+      totalMonsters: (this.monsterList && this.monsterList.length > 0) ? this.monsterList.length : 16,
 
       forestHealth: Math.max(0, Math.min(100, Math.round((this.eggsCollected || 0) / Math.max(1, (this.eggList && this.eggList.length) || 12) * 100))),
 
@@ -2446,7 +2483,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     const launchNextScene = () => {
-      this.scene.pause('GameScene')
+      // NOTE: Do NOT call this.scene.pause('GameScene') because it deadlocks Phaser 3 input
       if (reportData.flashCards && reportData.flashCards.length > 0) {
         this.scene.launch('FlashCardScene', {
           flashCards: reportData.flashCards,
@@ -2477,25 +2514,25 @@ export class GameScene extends Phaser.Scene {
 
   playPortalGlam(onComplete) {
     const { width, height } = this.scale
-    const duration = 6430 // Length of reaching_final_portal.mp3 (6.43s)
+    const duration = 1200 // Crisp, smooth 1.2s radiant portal warp animation
 
     // Full-screen radiant glam overlay
     const glam = this.add.rectangle(width / 2, height / 2, width, height, 0xffffff, 0)
       .setScrollFactor(0)
       .setDepth(999998)
 
-    // Radiant colored aura (celestial cyan/gold bloom)
+    // Radiant colored aura (forest nature emerald/cyan bloom)
     const bloom = this.add.graphics()
       .setScrollFactor(0)
       .setDepth(999999)
-    bloom.fillStyle(0x88ffff, 0.3)
+    bloom.fillStyle(0x00ff88, 0.35)
     bloom.fillCircle(width / 2, height / 2, Math.max(width, height) * 0.7)
 
     // Radiant expanding rings
     const rings = []
     for (let i = 0; i < 3; i++) {
       const ring = this.add.circle(width / 2, height / 2, 40 + i * 35, 0xffffff, 0)
-        .setStrokeStyle(4, 0x88ffff, 0.8)
+        .setStrokeStyle(4, 0x00ff88, 0.85)
         .setScrollFactor(0)
         .setDepth(1000000)
       rings.push(ring)
@@ -2504,32 +2541,24 @@ export class GameScene extends Phaser.Scene {
         scaleX: 3.5,
         scaleY: 3.5,
         alpha: 0,
-        delay: i * 350,
-        duration: 1800,
-        repeat: -1,
+        delay: i * 200,
+        duration: 900,
         ease: 'Cubic.easeOut'
       })
     }
 
     if (this.cameras && this.cameras.main) {
-      this.cameras.main.flash(600, 255, 255, 255)
+      this.cameras.main.flash(400, 255, 255, 255)
     }
 
-    // Glam brightness tween across the duration of the audio
+    // Glam brightness pulse
     this.tweens.add({
       targets: glam,
-      fillAlpha: { from: 0.1, to: 0.85 },
-      duration: 500,
-      onComplete: () => {
-        this.tweens.add({
-          targets: glam,
-          fillAlpha: 0.95,
-          duration: 900,
-          yoyo: true,
-          repeat: 5,
-          ease: 'Sine.easeInOut'
-        })
-      }
+      fillAlpha: { from: 0.1, to: 0.8 },
+      duration: 350,
+      yoyo: true,
+      repeat: 1,
+      ease: 'Sine.easeInOut'
     })
 
     this.time.delayedCall(duration, () => {
@@ -2757,6 +2786,12 @@ export class GameScene extends Phaser.Scene {
       window.removeEventListener('keydown', this.onEscKeyDown)
       this.onEscKeyDown = null
     }
+    if (this.input && this.input.keyboard) {
+      try {
+        this.input.keyboard.removeCapture(Phaser.Input.Keyboard.KeyCodes.ESC)
+        this.input.keyboard.off('keydown-ESC')
+      } catch (e) {}
+    }
     if (this.pauseMenuElements && this.pauseMenuElements.length > 0) {
       this.pauseMenuElements.forEach(el => {
         if (el && el.destroy) el.destroy()
@@ -2910,7 +2945,9 @@ export class GameScene extends Phaser.Scene {
         m.body.setVelocity(0, 0)
         m.body.setAngle(0)
         m.body.setTint(0xffaaaa)
-        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+        if (m.hpBar) {
+          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+        }
         return
       }
 
@@ -2922,13 +2959,13 @@ export class GameScene extends Phaser.Scene {
       if (m.frozen) {
         m.body.setVelocity(0, 0)
         m.body.setTint(0x88ccff)
-        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+        if (m.hpBar) {
+          this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+        }
         return
       }
 
-      // Unstuck if monster centre is deeply inside a solid tile.
-      // Only fires when the centre pixel is inside a wall cell, with a
-      // per-monster cooldown so it cannot teleport every frame.
+      // Unstuck if monster centre is deeply inside a solid tile
       m._unstuckCooldown = Math.max(0, (m._unstuckCooldown || 0) - 1)
       if (m._unstuckCooldown === 0) {
         const curMc = Math.floor(m.body.x / this.TILE)
@@ -2949,7 +2986,7 @@ export class GameScene extends Phaser.Scene {
           if (!placed) {
             m.body.setPosition(m.spawnX, m.spawnY)
           }
-          m._unstuckCooldown = 30 // don't re-check for ~0.5 s
+          m._unstuckCooldown = 60
         }
       }
 
@@ -2965,92 +3002,90 @@ export class GameScene extends Phaser.Scene {
           (this.evolutionStage >= 2 ? 190 : 240))
       const attackRange = 30
 
-      // ── Helper to check if moving along (dx, dy) would hit a wall ──
-      const isBlocked = (dx, dy, dist = 22) => {
-        if (dx === 0 && dy === 0) return false
-        const cx = m.body.x + dx * dist
-        const cy = m.body.y + dy * dist
-        return this.isWall(Math.floor(cx / this.TILE), Math.floor(cy / this.TILE))
-      }
-
       if (!this.shieldActive && !this.stealthMode && distToPlayer < chaseRange) {
         m.chasing = true
         m.alert.setVisible(true)
         m.alert.setPosition(m.body.x, m.body.y - 42)
 
-        const ms = 100
+        const ms = 70
         const diffX = this.player.x - m.body.x
         const diffY = this.player.y - m.body.y
         const signX = diffX !== 0 ? Math.sign(diffX) : 0
         const signY = diffY !== 0 ? Math.sign(diffY) : 0
 
-        const canDirectX = signX !== 0 && !isBlocked(signX, 0, 20)
-        const canDirectY = signY !== 0 && !isBlocked(0, signY, 20)
+        const canStepX = signX !== 0 && !this.isWall(
+          Math.floor((m.body.x + signX * 20) / this.TILE),
+          mr
+        )
+        const canStepY = signY !== 0 && !this.isWall(
+          mc,
+          Math.floor((m.body.y + signY * 20) / this.TILE)
+        )
+        const canStepDiag = canStepX && canStepY && !this.isWall(
+          Math.floor((m.body.x + signX * 20) / this.TILE),
+          Math.floor((m.body.y + signY * 20) / this.TILE)
+        )
 
         m.chaseCooldown = Math.max(0, (m.chaseCooldown || 0) - 1)
-
         let finalVx = 0
         let finalVy = 0
 
-        // If direct diagonal is clear, move directly
-        if (canDirectX && canDirectY) {
+        if (canStepDiag && Math.abs(diffX) > 12 && Math.abs(diffY) > 12) {
           const angle = Phaser.Math.Angle.Between(m.body.x, m.body.y, this.player.x, this.player.y)
           finalVx = Math.cos(angle) * ms
           finalVy = Math.sin(angle) * ms
           m.chaseBypass = null
-        } else if (canDirectX && Math.abs(diffX) >= Math.abs(diffY) * 0.5) {
-          // Slide along X towards player
+        } else if (canStepX && Math.abs(diffX) >= Math.abs(diffY) * 0.45) {
           finalVx = signX * ms
           finalVy = 0
+          const targetY = mr * this.TILE + this.TILE / 2
+          const dy = targetY - m.body.y
+          if (Math.abs(dy) > 0.8) m.body.y += Math.sign(dy) * Math.min(Math.abs(dy), 1.0)
           m.chaseBypass = null
-        } else if (canDirectY && Math.abs(diffY) >= Math.abs(diffX) * 0.5) {
-          // Slide along Y towards player
+        } else if (canStepY && Math.abs(diffY) >= Math.abs(diffX) * 0.45) {
           finalVx = 0
           finalVy = signY * ms
+          const targetX = mc * this.TILE + this.TILE / 2
+          const dx = targetX - m.body.x
+          if (Math.abs(dx) > 0.8) m.body.x += Math.sign(dx) * Math.min(Math.abs(dx), 1.0)
           m.chaseBypass = null
-        } else if (canDirectX) {
+        } else if (canStepX) {
           finalVx = signX * ms
           finalVy = 0
           m.chaseBypass = null
-        } else if (canDirectY) {
+        } else if (canStepY) {
           finalVx = 0
           finalVy = signY * ms
           m.chaseBypass = null
         } else {
-          // Direct path is blocked by a wall/corner — need a bypass around obstacle
-          // Stick to current bypass direction if still valid and cooldown active (prevents twitching/glitching)
-          if (m.chaseBypass && m.chaseCooldown > 0 && !isBlocked(m.chaseBypass.dx, m.chaseBypass.dy, 18)) {
+          const bypassValid = m.chaseBypass && m.chaseCooldown > 0 && !this.isWall(mc + m.chaseBypass.dx, mr + m.chaseBypass.dy)
+          if (bypassValid) {
             finalVx = m.chaseBypass.dx * ms
             finalVy = m.chaseBypass.dy * ms
           } else {
-            // Evaluate alternative open directions and choose the best one
             const altDirs = [
-              { dx: 0, dy: 1 },
-              { dx: 0, dy: -1 },
-              { dx: 1, dy: 0 },
-              { dx: -1, dy: 0 }
-            ].filter(d => !isBlocked(d.dx, d.dy, 20))
+              { dx: 0, dy: 1 }, { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: -1, dy: 0 }
+            ].filter(d => !this.isWall(mc + d.dx, mr + d.dy))
 
             if (altDirs.length > 0) {
               altDirs.sort((a, b) => {
                 const distA = Phaser.Math.Distance.Between(
-                  m.body.x + a.dx * this.TILE,
-                  m.body.y + a.dy * this.TILE,
+                  (mc + a.dx) * this.TILE + 24,
+                  (mr + a.dy) * this.TILE + 24,
                   this.player.x, this.player.y
                 )
                 const distB = Phaser.Math.Distance.Between(
-                  m.body.x + b.dx * this.TILE,
-                  m.body.y + b.dy * this.TILE,
+                  (mc + b.dx) * this.TILE + 24,
+                  (mr + b.dy) * this.TILE + 24,
                   this.player.x, this.player.y
                 )
                 return distA - distB
               })
               m.chaseBypass = altDirs[0]
-              m.chaseCooldown = 20 // commit for 20 frames (~330ms) to avoid glitchy flipping
+              m.chaseCooldown = 18
               finalVx = altDirs[0].dx * ms
               finalVy = altDirs[0].dy * ms
             } else {
-              // Completely hemmed in — stop rather than ram the wall
               finalVx = 0
               finalVy = 0
             }
@@ -3074,7 +3109,9 @@ export class GameScene extends Phaser.Scene {
           }
 
           this.time.delayedCall(400, () => {
-            this.player.clearTint()
+            if (this.player && this.player.clearTint) {
+              this.player.clearTint()
+            }
             this.playerHitCooldown = false
           })
 
@@ -3085,6 +3122,7 @@ export class GameScene extends Phaser.Scene {
               this.triggerEmergencyRevive(nearbyHeart)
             } else {
               this.endGame(false)
+              return
             }
           }
         }
@@ -3094,62 +3132,86 @@ export class GameScene extends Phaser.Scene {
         m.chasing = false
         m.alert.setVisible(false)
         m.chaseBypass = null
-        m.chaseCooldown = 0  // reset so stale bypass doesn't re-activate on re-enter chase
-
-        // Initialize patrol direction if not set or stopped
-        const velX = m.body.body ? m.body.body.velocity.x : 0
-        const velY = m.body.body ? m.body.body.velocity.y : 0
-        if (!m.patrolDir || (velX === 0 && velY === 0)) {
-          const startDirs = [
-            { dx: 1, dy: 0 },
-            { dx: -1, dy: 0 },
-            { dx: 0, dy: 1 },
-            { dx: 0, dy: -1 }
-          ].filter(d => !isBlocked(d.dx, d.dy, 22))
-          m.patrolDir = startDirs.length > 0 ? startDirs[Phaser.Math.Between(0, startDirs.length - 1)] : { dx: 1, dy: 0 }
-          m.patrolCooldown = 20
-          m.patrolTimer = 0
-        }
+        m.chaseCooldown = 0
 
         m.patrolCooldown = Math.max(0, (m.patrolCooldown || 0) - 1)
         m.patrolTimer = (m.patrolTimer || 0) + 1
 
-        // Check strictly in current movement direction (never checks side walls!)
-        const wallAhead = isBlocked(m.patrolDir.dx, m.patrolDir.dy, 20)
-        const isStopped = Math.abs(velX) + Math.abs(velY) < 5
+        const velX = m.body.body ? m.body.body.velocity.x : 0
+        const velY = m.body.body ? m.body.body.velocity.y : 0
 
-        // Change direction ONLY if facing a wall, stopped, or timer expired after long walk
-        if (wallAhead || isStopped || (m.patrolTimer > 200 && m.patrolCooldown === 0)) {
+        // Initialize patrol direction if not set
+        if (!m.patrolDir) {
+          const openDirs = [
+            { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }
+          ].filter(d => !this.isWall(mc + d.dx, mr + d.dy))
+          m.patrolDir = openDirs.length > 0 ? openDirs[Phaser.Math.Between(0, openDirs.length - 1)] : { dx: 1, dy: 0 }
+          m.patrolCooldown = 20
+          m.patrolTimer = 0
+        }
+
+        // Active lane-centering: gently steer perpendicular coordinate toward corridor center
+        if (m.patrolDir.dx !== 0) {
+          const targetY = mr * this.TILE + this.TILE / 2
+          const diffY = targetY - m.body.y
+          if (Math.abs(diffY) > 0.8) {
+            m.body.y += Math.sign(diffY) * Math.min(Math.abs(diffY), 1.2)
+          }
+        } else if (m.patrolDir.dy !== 0) {
+          const targetX = mc * this.TILE + this.TILE / 2
+          const diffX = targetX - m.body.x
+          if (Math.abs(diffX) > 0.8) {
+            m.body.x += Math.sign(diffX) * Math.min(Math.abs(diffX), 1.2)
+          }
+        }
+
+        // Check if wall ahead in current direction
+        const nextC = mc + m.patrolDir.dx
+        const nextR = mr + m.patrolDir.dy
+        const wallAhead = this.isWall(nextC, nextR)
+
+        let nearWallAhead = false
+        if (wallAhead) {
+          if (m.patrolDir.dx > 0 && m.body.x >= (mc + 1) * this.TILE - 20) nearWallAhead = true
+          else if (m.patrolDir.dx < 0 && m.body.x <= mc * this.TILE + 20) nearWallAhead = true
+          else if (m.patrolDir.dy > 0 && m.body.y >= (mr + 1) * this.TILE - 20) nearWallAhead = true
+          else if (m.patrolDir.dy < 0 && m.body.y <= mr * this.TILE + 20) nearWallAhead = true
+        }
+
+        const isStuck = m.patrolTimer > 15 && (Math.abs(velX) + Math.abs(velY) < 5)
+        const periodicTurn = m.patrolTimer > 180
+
+        if (m.patrolCooldown === 0 && (nearWallAhead || isStuck || periodicTurn)) {
           m.patrolTimer = 0
 
-          // Perpendicular open turns
           let perpDirs = []
           if (m.patrolDir.dx !== 0) {
-            perpDirs = [{ dx: 0, dy: 1 }, { dx: 0, dy: -1 }].filter(d => !isBlocked(d.dx, d.dy, 22))
+            perpDirs = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }].filter(d => !this.isWall(mc, mr + d.dy))
           } else {
-            perpDirs = [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }].filter(d => !isBlocked(d.dx, d.dy, 22))
+            perpDirs = [{ dx: -1, dy: 0 }, { dx: 1, dy: 0 }].filter(d => !this.isWall(mc + d.dx, mr))
           }
 
-          let newDir = null
           if (perpDirs.length > 0) {
-            newDir = perpDirs[Phaser.Math.Between(0, perpDirs.length - 1)]
-            // Align centre of tile on the axis we were moving so we don't scrape the corner
-            // Use setPosition() to keep physics body in sync
-            if (m.patrolDir.dx !== 0) {
-              m.body.setPosition(m.body.x, mr * this.TILE + this.TILE / 2)
+            if (nearWallAhead || isStuck || Phaser.Math.Between(0, 100) < 60) {
+              m.patrolDir = perpDirs[Phaser.Math.Between(0, perpDirs.length - 1)]
+              if (m.patrolDir.dx !== 0) {
+                m.body.y = mr * this.TILE + this.TILE / 2
+              } else {
+                m.body.x = mc * this.TILE + this.TILE / 2
+              }
+              m.patrolCooldown = 22
             } else {
-              m.body.setPosition(mc * this.TILE + this.TILE / 2, m.body.y)
+              // Keep going forward if path is clear
+              m.patrolCooldown = 22
             }
-          } else if (!wallAhead && m.patrolTimer > 200) {
-            // Keep going forward if clear
-            newDir = m.patrolDir
+          } else if (!nearWallAhead && !isStuck) {
+            // Corridor continues ahead, keep moving
+            m.patrolCooldown = 22
           } else {
             // Dead end: reverse 180 degrees
-            newDir = { dx: -m.patrolDir.dx, dy: -m.patrolDir.dy }
+            m.patrolDir = { dx: -m.patrolDir.dx, dy: -m.patrolDir.dy }
+            m.patrolCooldown = 25
           }
-
-          m.patrolDir = newDir
-          m.patrolCooldown = 25 // 25 frames (~400ms) cooldown before next turn decision
         }
 
         const pvx = m.patrolDir.dx * 60
@@ -3159,7 +3221,9 @@ export class GameScene extends Phaser.Scene {
       }
 
       this.animateHunterWalk(m, delta)
-      this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+      if (m.hpBar) {
+        this.drawHPBar(m.hpBar, m.body.x, m.body.y - 28, m.hp, m.maxHp)
+      }
     })
 
     this.updateAnimals(delta)
@@ -3267,9 +3331,13 @@ export class GameScene extends Phaser.Scene {
     if (Phaser.Math.Distance.Between(
       this.player.x, this.player.y, px, py) < 38) {
       this.endGame(true)
+      return
     }
 
-    if (this.timeLeft < 0) this.endGame(false)
+    if (this.timeLeft < 0) {
+      this.endGame(false)
+      return
+    }
 
     this.portalAngle += 0.035
     this.drawPortal()
