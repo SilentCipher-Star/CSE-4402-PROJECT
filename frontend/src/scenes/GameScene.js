@@ -409,6 +409,27 @@ export class GameScene extends Phaser.Scene {
     carvePath([[15, 34], [15, 39], [12, 39]])
     carvePath([[5, 40], [2, 40], [2, 44]])
 
+    // Dedicated animal habitat clearings & glades (off main lane, no item overlap)
+    carvePath([[3, 4], [5, 4]])
+    carveCell(4, 5)
+    carveCell(13, 8)
+    carveCell(13, 10)
+    carvePath([[19, 12], [21, 12]])
+    carveCell(20, 11)
+    carveCell(34, 20)
+    carveCell(34, 22)
+    carvePath([[18, 32], [20, 32]])
+    carveCell(19, 31)
+    carveCell(10, 36)
+    carveCell(10, 38)
+    carveCell(27, 16)
+    carveCell(36, 17)
+    carveCell(29, 23)
+    carveCell(29, 25)
+    carveCell(24, 29)
+    carveCell(42, 43)
+    carveCell(42, 45)
+
     // Force important positions to stay sand, but only ONE tile each
     const importantSpots = [
       [1, 1], [3, 3], [5, 6], [5, 9], [11, 9],
@@ -422,8 +443,8 @@ export class GameScene extends Phaser.Scene {
       // shields & weapons
       [7, 7], [30, 18], [12, 38], [15, 9], [21, 15], [37, 18],
 
-      // Animal rescue locations
-      [3, 4], [13, 9], [19, 12], [34, 21], [18, 32], [10, 37],
+      // Animal rescue locations in habitat glades
+      [4, 4], [13, 9], [20, 12], [34, 21], [19, 32], [10, 37],
       [27, 15], [36, 18], [29, 24], [24, 28], [42, 44],
 
       // portal
@@ -656,11 +677,11 @@ export class GameScene extends Phaser.Scene {
 
   spawnAnimals() {
     const animals = [
-      { col: 3, row: 4, type: 'deer', species: 'Spotted Deer', fact: 'Spotted deer form close-knit herds and alert other forest wildlife to predators.' },
+      { col: 4, row: 4, type: 'deer', species: 'Spotted Deer', fact: 'Spotted deer form close-knit herds and alert other forest wildlife to predators.' },
       { col: 13, row: 9, type: 'deer', species: 'Hog Deer', fact: 'Hog deer run through brush with heads held low, vital for forest undergrowth seed dispersal.' },
-      { col: 19, row: 12, type: 'deer', species: 'Sambar Deer', fact: 'Sambar deer are the largest deer species in tropical Asia and strong swimmers.' },
+      { col: 20, row: 12, type: 'deer', species: 'Sambar Deer', fact: 'Sambar deer are the largest deer species in tropical Asia and strong swimmers.' },
       { col: 34, row: 21, type: 'deer', species: 'Barking Deer', fact: 'Also called Muntjacs, their distinctive bark warns the canopy of approaching danger.' },
-      { col: 18, row: 32, type: 'deer', species: 'Spotted Deer', fact: 'Their spotted coats remain into adulthood, providing dappled woodland camouflage.' },
+      { col: 19, row: 32, type: 'deer', species: 'Spotted Deer', fact: 'Their spotted coats remain into adulthood, providing dappled woodland camouflage.' },
       { col: 10, row: 37, type: 'deer', species: 'Musk Deer', fact: 'Solitary forest dwellers that play a crucial role in sub-alpine plant pollination.' },
 
       { col: 27, row: 15, type: 'rhino', species: 'Javan Rhinoceros', fact: 'One of the rarest large mammals on Earth, with fewer than 80 individuals surviving.' },
@@ -728,7 +749,9 @@ export class GameScene extends Phaser.Scene {
         prompt,
         rescued: false,
         leaving: false,
+        roamDir: { dx: 0, dy: 0 },
         roamTimer: 0,
+        pauseTimer: 0,
         frameTimer: 0,
         frameIndex: 1,
         dir: 'front',
@@ -833,80 +856,98 @@ export class GameScene extends Phaser.Scene {
       const spawnY = animal.spawnY || animal.body.y
       const distFromSpawn = Phaser.Math.Distance.Between(animal.body.x, animal.body.y, spawnX, spawnY)
 
-      const velX = animal.body.body ? animal.body.body.velocity.x : 0
-      const velY = animal.body.body ? animal.body.body.velocity.y : 0
+      const centerTileX = curC * this.TILE + this.TILE / 2
+      const centerTileY = curR * this.TILE + this.TILE / 2
+      const speed = animal.type === 'rhino' ? 30 : 36
 
-      // Wall boundary clamping: prevent entering solid tiles
-      if (velX > 0 && this.isWall(curC + 1, curR) && animal.body.x >= (curC + 1) * this.TILE - 18) {
-        animal.body.setVelocity(0, velY)
-        animal.roamTimer = 100
-      } else if (velX < 0 && this.isWall(curC - 1, curR) && animal.body.x <= curC * this.TILE + 18) {
-        animal.body.setVelocity(0, velY)
-        animal.roamTimer = 100
+      if (!animal.roamDir || (animal.roamDir.dx === 0 && animal.roamDir.dy === 0)) {
+        const openDirs = [
+          { dx: 1, dy: 0 }, { dx: -1, dy: 0 },
+          { dx: 0, dy: 1 }, { dx: 0, dy: -1 }
+        ].filter(d => !this.isWall(curC + d.dx, curR + d.dy))
+        animal.roamDir = openDirs.length > 0
+          ? openDirs[Phaser.Math.Between(0, openDirs.length - 1)]
+          : { dx: 0, dy: 0 }
+        animal.roamTimer = 0
+        animal.pauseTimer = 0
       }
-      if (velY > 0 && this.isWall(curC, curR + 1) && animal.body.y >= (curR + 1) * this.TILE - 18) {
-        animal.body.setVelocity(velX, 0)
-        animal.roamTimer = 100
-      } else if (velY < 0 && this.isWall(curC, curR - 1) && animal.body.y <= curR * this.TILE + 18) {
-        animal.body.setVelocity(velX, 0)
-        animal.roamTimer = 100
+
+      // Natural pause (grazing / resting)
+      if (animal.pauseTimer && animal.pauseTimer > 0) {
+        animal.pauseTimer--
+        animal.body.setVelocity(0, 0)
+        this.animateAnimalWalk(animal)
+        return
       }
 
       animal.roamTimer = (animal.roamTimer || 0) + 1
 
-      // Decide next roam action every ~60-80 frames (~1-1.3 seconds)
-      if (animal.roamTimer > 70) {
-        animal.roamTimer = 0
+      // Test if facing a solid wall ahead
+      let facingWall = false
+      if (animal.roamDir.dx > 0) {
+        if (this.isWall(curC + 1, curR) && animal.body.x >= centerTileX - 4) facingWall = true
+      } else if (animal.roamDir.dx < 0) {
+        if (this.isWall(curC - 1, curR) && animal.body.x <= centerTileX + 4) facingWall = true
+      } else if (animal.roamDir.dy > 0) {
+        if (this.isWall(curC, curR + 1) && animal.body.y >= centerTileY - 4) facingWall = true
+      } else if (animal.roamDir.dy < 0) {
+        if (this.isWall(curC, curR - 1) && animal.body.y <= centerTileY + 4) facingWall = true
+      }
 
-        // 30% chance to pause/idle in place if close to spawn
-        if (Phaser.Math.Between(0, 100) < 30 && distFromSpawn < 50) {
-          animal.body.setVelocity(0, 0)
-          const turns = ['front', 'left', 'front', 'right']
-          const nextDir = turns[Phaser.Math.Between(0, turns.length - 1)]
-          animal.dir = nextDir
-          const dirVel = {
-            front: { vx: 0, vy: 1 },
-            left: { vx: -1, vy: 0 },
-            right: { vx: 1, vy: 0 },
-            back: { vx: 0, vy: -1 }
-          }[nextDir]
-          this.setAnimalTexture(animal, dirVel.vx, dirVel.vy, delta)
-        } else {
-          // Walk along an open path
-          const baseSpeed = animal.type === 'rhino' ? 32 : 38
-          const candidateDirs = [
-            { vx: baseSpeed, vy: 0, dc: 1, dr: 0 },
-            { vx: -baseSpeed, vy: 0, dc: -1, dr: 0 },
-            { vx: 0, vy: baseSpeed, dc: 0, dr: 1 },
-            { vx: 0, vy: -baseSpeed, dc: 0, dr: -1 }
-          ]
+      const isLeashed = distFromSpawn > 55
+      const canTurn = facingWall || animal.roamTimer > 100 || isLeashed
 
-          // Only open, non-wall tiles
-          let safeDirs = candidateDirs.filter(d => !this.isWall(curC + d.dc, curR + d.dr))
+      if (canTurn) {
+        const candidateDirs = [
+          { dx: 1, dy: 0 }, { dx: -1, dy: 0 },
+          { dx: 0, dy: 1 }, { dx: 0, dy: -1 }
+        ].filter(d => !this.isWall(curC + d.dx, curR + d.dy))
 
-          // Tether to spawn area: if drifting > 60px away, steer back
-          if (distFromSpawn > 55) {
-            const returning = safeDirs.filter(d => {
-              const testX = animal.body.x + d.vx
-              const testY = animal.body.y + d.vy
-              return Phaser.Math.Distance.Between(testX, testY, spawnX, spawnY) < distFromSpawn
-            })
-            if (returning.length > 0) {
-              safeDirs = returning
-            }
+        let validDirs = candidateDirs
+        if (isLeashed) {
+          const homingDirs = candidateDirs.filter(d => {
+            const nextX = animal.body.x + d.dx * 16
+            const nextY = animal.body.y + d.dy * 16
+            return Phaser.Math.Distance.Between(nextX, nextY, spawnX, spawnY) < distFromSpawn
+          })
+          if (homingDirs.length > 0) validDirs = homingDirs
+        }
+
+        if (validDirs.length > 0) {
+          // Avoid immediately reversing unless dead end
+          const nonRev = validDirs.filter(d => !(d.dx === -animal.roamDir.dx && d.dy === -animal.roamDir.dy))
+          const pick = nonRev.length > 0 ? nonRev : validDirs
+          const nextDir = pick[Phaser.Math.Between(0, pick.length - 1)]
+
+          // Align to corridor center when turning perpendicular
+          if (nextDir.dx !== 0 && animal.roamDir.dy !== 0) {
+            animal.body.setPosition(animal.body.x, centerTileY)
+          } else if (nextDir.dy !== 0 && animal.roamDir.dx !== 0) {
+            animal.body.setPosition(centerTileX, animal.body.y)
           }
 
-          if (safeDirs.length > 0) {
-            const chosen = safeDirs[Phaser.Math.Between(0, safeDirs.length - 1)]
-            animal.body.setVelocity(chosen.vx, chosen.vy)
-            this.setAnimalTexture(animal, chosen.vx, chosen.vy, delta)
-          } else {
-            // Dead end or trapped: safely idle
+          animal.roamDir = nextDir
+          animal.roamTimer = 0
+
+          // 20% chance to pause/graze near spawn
+          if (Phaser.Math.Between(0, 100) < 20 && distFromSpawn < 30) {
+            animal.pauseTimer = Phaser.Math.Between(30, 50)
             animal.body.setVelocity(0, 0)
+            this.animateAnimalWalk(animal)
+            return
           }
+        } else {
+          // Reverse if completely enclosed
+          animal.roamDir = { dx: -animal.roamDir.dx, dy: -animal.roamDir.dy }
+          animal.roamTimer = 0
         }
       }
 
+      const finalVx = animal.roamDir.dx * speed
+      const finalVy = animal.roamDir.dy * speed
+
+      animal.body.setVelocity(finalVx, finalVy)
+      this.setAnimalTexture(animal, finalVx, finalVy, delta)
       this.animateAnimalWalk(animal)
     })
   }
