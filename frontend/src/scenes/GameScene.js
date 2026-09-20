@@ -409,27 +409,6 @@ export class GameScene extends Phaser.Scene {
     carvePath([[15, 34], [15, 39], [12, 39]])
     carvePath([[5, 40], [2, 40], [2, 44]])
 
-    // Dedicated animal habitat clearings & glades (off main lane, no item overlap)
-    carvePath([[3, 4], [5, 4]])
-    carveCell(4, 5)
-    carveCell(13, 8)
-    carveCell(13, 10)
-    carvePath([[19, 12], [21, 12]])
-    carveCell(20, 11)
-    carveCell(34, 20)
-    carveCell(34, 22)
-    carvePath([[18, 32], [20, 32]])
-    carveCell(19, 31)
-    carveCell(10, 36)
-    carveCell(10, 38)
-    carveCell(27, 16)
-    carveCell(36, 17)
-    carveCell(29, 23)
-    carveCell(29, 25)
-    carveCell(24, 29)
-    carveCell(42, 43)
-    carveCell(42, 45)
-
     // Force important positions to stay sand, but only ONE tile each
     const importantSpots = [
       [1, 1], [3, 3], [5, 6], [5, 9], [11, 9],
@@ -443,9 +422,9 @@ export class GameScene extends Phaser.Scene {
       // shields & weapons
       [7, 7], [30, 18], [12, 38], [15, 9], [21, 15], [37, 18],
 
-      // Animal rescue locations in habitat glades
-      [4, 4], [13, 9], [20, 12], [34, 21], [19, 32], [10, 37],
-      [27, 15], [36, 18], [29, 24], [24, 28], [42, 44],
+      // Animal rescue locations (narrow 1-tile corridor spots, no overlap)
+      [6, 2], [13, 9], [19, 14], [34, 21], [16, 32], [10, 37],
+      [27, 15], [36, 18], [29, 24], [23, 28], [42, 44],
 
       // portal
       [1, 47]
@@ -677,17 +656,17 @@ export class GameScene extends Phaser.Scene {
 
   spawnAnimals() {
     const animals = [
-      { col: 4, row: 4, type: 'deer', species: 'Spotted Deer', fact: 'Spotted deer form close-knit herds and alert other forest wildlife to predators.' },
+      { col: 6, row: 2, type: 'deer', species: 'Spotted Deer', fact: 'Spotted deer form close-knit herds and alert other forest wildlife to predators.' },
       { col: 13, row: 9, type: 'deer', species: 'Hog Deer', fact: 'Hog deer run through brush with heads held low, vital for forest undergrowth seed dispersal.' },
-      { col: 20, row: 12, type: 'deer', species: 'Sambar Deer', fact: 'Sambar deer are the largest deer species in tropical Asia and strong swimmers.' },
+      { col: 19, row: 14, type: 'deer', species: 'Sambar Deer', fact: 'Sambar deer are the largest deer species in tropical Asia and strong swimmers.' },
       { col: 34, row: 21, type: 'deer', species: 'Barking Deer', fact: 'Also called Muntjacs, their distinctive bark warns the canopy of approaching danger.' },
-      { col: 19, row: 32, type: 'deer', species: 'Spotted Deer', fact: 'Their spotted coats remain into adulthood, providing dappled woodland camouflage.' },
+      { col: 16, row: 32, type: 'deer', species: 'Spotted Deer', fact: 'Their spotted coats remain into adulthood, providing dappled woodland camouflage.' },
       { col: 10, row: 37, type: 'deer', species: 'Musk Deer', fact: 'Solitary forest dwellers that play a crucial role in sub-alpine plant pollination.' },
 
       { col: 27, row: 15, type: 'rhino', species: 'Javan Rhinoceros', fact: 'One of the rarest large mammals on Earth, with fewer than 80 individuals surviving.' },
       { col: 36, row: 18, type: 'rhino', species: 'Indian Rhinoceros', fact: 'Also known as the Greater One-Horned Rhino, their armor-like skin shields them in dense brush.' },
       { col: 29, row: 24, type: 'rhino', species: 'Sumatran Rhinoceros', fact: 'The smallest and hairiest living rhino species, critically endangered by habitat fragmentation.' },
-      { col: 24, row: 28, type: 'rhino', species: 'Black Rhinoceros', fact: 'Browsers with prehensile upper lips that shape thorny thicket ecosystems.' },
+      { col: 23, row: 28, type: 'rhino', species: 'Black Rhinoceros', fact: 'Browsers with prehensile upper lips that shape thorny thicket ecosystems.' },
       { col: 42, row: 44, type: 'rhino', species: 'White Rhinoceros', fact: 'Megaherbivores whose heavy grazing creates natural firebreaks across grasslands.' }
     ]
 
@@ -751,6 +730,7 @@ export class GameScene extends Phaser.Scene {
         leaving: false,
         roamDir: { dx: 0, dy: 0 },
         roamTimer: 0,
+        roamCooldown: 0,
         pauseTimer: 0,
         frameTimer: 0,
         frameIndex: 1,
@@ -764,10 +744,12 @@ export class GameScene extends Phaser.Scene {
     if (!animal || !animal.body || !animal.body.active) return
 
     let dir = animal.dir || 'front'
+    const absX = Math.abs(vx)
+    const absY = Math.abs(vy)
 
-    if (Math.abs(vx) > Math.abs(vy)) {
+    if (absX > absY + 10) {
       dir = vx > 0 ? 'right' : 'left'
-    } else if (Math.abs(vy) > 0) {
+    } else if (absY > absX + 10) {
       dir = vy > 0 ? 'front' : 'back'
     }
 
@@ -807,24 +789,12 @@ export class GameScene extends Phaser.Scene {
   animateAnimalWalk(animal) {
     if (!animal || !animal.body || !animal.body.active) return
 
-    const vx = (animal.body.body && animal.body.body.velocity) ? animal.body.body.velocity.x : 0
-    const vy = (animal.body.body && animal.body.body.velocity) ? animal.body.body.velocity.y : 0
-    const speed = Math.abs(vx) + Math.abs(vy)
-
     const baseSize = animal.type === 'rhino'
       ? this.TILE * 1.3
       : this.TILE * 1.05
 
-    if (speed <= 2) {
-      animal.walkTimer = 0
-      animal.body.setAngle(0)
-      animal.body.setDisplaySize(baseSize, baseSize)
-      return
-    }
-
-    animal.walkTimer = (animal.walkTimer || 0) + 0.2
-    const step = Math.sin(animal.walkTimer)
-    animal.body.setAngle(step * 2.5)
+    // Strictly ensure no rotational wobbling or size fluttering
+    animal.body.setAngle(0)
     animal.body.setDisplaySize(baseSize, baseSize)
   }
   updateAnimals(delta) {
@@ -858,7 +828,18 @@ export class GameScene extends Phaser.Scene {
 
       const centerTileX = curC * this.TILE + this.TILE / 2
       const centerTileY = curR * this.TILE + this.TILE / 2
-      const speed = animal.type === 'rhino' ? 30 : 36
+      const speed = animal.type === 'rhino' ? 24 : 28
+
+      animal.roamCooldown = Math.max(0, (animal.roamCooldown || 0) - 1)
+      animal.roamTimer = (animal.roamTimer || 0) + 1
+
+      // Natural pause (grazing / resting)
+      if (animal.pauseTimer && animal.pauseTimer > 0) {
+        animal.pauseTimer--
+        animal.body.setVelocity(0, 0)
+        this.animateAnimalWalk(animal)
+        return
+      }
 
       if (!animal.roamDir || (animal.roamDir.dx === 0 && animal.roamDir.dy === 0)) {
         const openDirs = [
@@ -869,43 +850,36 @@ export class GameScene extends Phaser.Scene {
           ? openDirs[Phaser.Math.Between(0, openDirs.length - 1)]
           : { dx: 0, dy: 0 }
         animal.roamTimer = 0
+        animal.roamCooldown = 30
         animal.pauseTimer = 0
       }
 
-      // Natural pause (grazing / resting)
-      if (animal.pauseTimer && animal.pauseTimer > 0) {
-        animal.pauseTimer--
-        animal.body.setVelocity(0, 0)
-        this.animateAnimalWalk(animal)
-        return
-      }
-
-      animal.roamTimer = (animal.roamTimer || 0) + 1
-
       // Test if facing a solid wall ahead
       let facingWall = false
-      if (animal.roamDir.dx > 0) {
-        if (this.isWall(curC + 1, curR) && animal.body.x >= centerTileX - 4) facingWall = true
-      } else if (animal.roamDir.dx < 0) {
-        if (this.isWall(curC - 1, curR) && animal.body.x <= centerTileX + 4) facingWall = true
-      } else if (animal.roamDir.dy > 0) {
-        if (this.isWall(curC, curR + 1) && animal.body.y >= centerTileY - 4) facingWall = true
-      } else if (animal.roamDir.dy < 0) {
-        if (this.isWall(curC, curR - 1) && animal.body.y <= centerTileY + 4) facingWall = true
+      if (animal.roamCooldown === 0) {
+        if (animal.roamDir.dx > 0 && this.isWall(curC + 1, curR) && animal.body.x >= centerTileX - 2) {
+          facingWall = true
+        } else if (animal.roamDir.dx < 0 && this.isWall(curC - 1, curR) && animal.body.x <= centerTileX + 2) {
+          facingWall = true
+        } else if (animal.roamDir.dy > 0 && this.isWall(curC, curR + 1) && animal.body.y >= centerTileY - 2) {
+          facingWall = true
+        } else if (animal.roamDir.dy < 0 && this.isWall(curC, curR - 1) && animal.body.y <= centerTileY + 2) {
+          facingWall = true
+        }
       }
 
-      const isLeashed = distFromSpawn > 55
-      const canTurn = facingWall || animal.roamTimer > 100 || isLeashed
+      const isLeashed = distFromSpawn > 40 && animal.roamCooldown === 0
+      const periodicTurn = animal.roamTimer > 100 && animal.roamCooldown === 0
 
-      if (canTurn) {
-        const candidateDirs = [
+      if (facingWall || isLeashed || periodicTurn) {
+        const openDirs = [
           { dx: 1, dy: 0 }, { dx: -1, dy: 0 },
           { dx: 0, dy: 1 }, { dx: 0, dy: -1 }
         ].filter(d => !this.isWall(curC + d.dx, curR + d.dy))
 
-        let validDirs = candidateDirs
+        let validDirs = openDirs
         if (isLeashed) {
-          const homingDirs = candidateDirs.filter(d => {
+          const homingDirs = openDirs.filter(d => {
             const nextX = animal.body.x + d.dx * 16
             const nextY = animal.body.y + d.dy * 16
             return Phaser.Math.Distance.Between(nextX, nextY, spawnX, spawnY) < distFromSpawn
@@ -914,32 +888,46 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (validDirs.length > 0) {
-          // Avoid immediately reversing unless dead end
-          const nonRev = validDirs.filter(d => !(d.dx === -animal.roamDir.dx && d.dy === -animal.roamDir.dy))
-          const pick = nonRev.length > 0 ? nonRev : validDirs
-          const nextDir = pick[Phaser.Math.Between(0, pick.length - 1)]
-
-          // Align to corridor center when turning perpendicular
-          if (nextDir.dx !== 0 && animal.roamDir.dy !== 0) {
-            animal.body.setPosition(animal.body.x, centerTileY)
-          } else if (nextDir.dy !== 0 && animal.roamDir.dx !== 0) {
-            animal.body.setPosition(centerTileX, animal.body.y)
+          let chosenDir = null
+          if (facingWall) {
+            const awayDirs = validDirs.filter(d => !(d.dx === animal.roamDir.dx && d.dy === animal.roamDir.dy))
+            chosenDir = awayDirs.length > 0 ? awayDirs[Phaser.Math.Between(0, awayDirs.length - 1)] : validDirs[0]
+          } else {
+            const nonRev = validDirs.filter(d => !(d.dx === -animal.roamDir.dx && d.dy === -animal.roamDir.dy))
+            chosenDir = nonRev.length > 0 ? nonRev[Phaser.Math.Between(0, nonRev.length - 1)] : validDirs[0]
           }
 
-          animal.roamDir = nextDir
-          animal.roamTimer = 0
+          if (chosenDir) {
+            animal.roamDir = chosenDir
+            animal.roamTimer = 0
+            animal.roamCooldown = 30
 
-          // 20% chance to pause/graze near spawn
-          if (Phaser.Math.Between(0, 100) < 20 && distFromSpawn < 30) {
-            animal.pauseTimer = Phaser.Math.Between(30, 50)
-            animal.body.setVelocity(0, 0)
-            this.animateAnimalWalk(animal)
-            return
+            // 25% chance to pause/graze near spawn
+            if (Phaser.Math.Between(0, 100) < 25 && distFromSpawn < 25) {
+              animal.pauseTimer = Phaser.Math.Between(40, 70)
+              animal.body.setVelocity(0, 0)
+              this.animateAnimalWalk(animal)
+              return
+            }
           }
         } else {
-          // Reverse if completely enclosed
+          // Dead end reverse
           animal.roamDir = { dx: -animal.roamDir.dx, dy: -animal.roamDir.dy }
           animal.roamTimer = 0
+          animal.roamCooldown = 30
+        }
+      }
+
+      // Gentle lane-centering: gently steer perpendicular coordinate toward corridor center without snapping
+      if (animal.roamDir.dx !== 0) {
+        const diffY = centerTileY - animal.body.y
+        if (Math.abs(diffY) > 0.5) {
+          animal.body.y += Math.sign(diffY) * Math.min(Math.abs(diffY), 0.5)
+        }
+      } else if (animal.roamDir.dy !== 0) {
+        const diffX = centerTileX - animal.body.x
+        if (Math.abs(diffX) > 0.5) {
+          animal.body.x += Math.sign(diffX) * Math.min(Math.abs(diffX), 0.5)
         }
       }
 
