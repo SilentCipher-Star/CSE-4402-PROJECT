@@ -175,8 +175,8 @@ Runs on `http://localhost:5173`
 
 ---
 
-## 📸 Screenshots
-*Coming soon*
+## 📸 Video Demonstration link
+https://drive.google.com/file/d/1mRyLTxhnfxos527GFmwAGt1-eqsBBkKX/view
 
 ---
 
