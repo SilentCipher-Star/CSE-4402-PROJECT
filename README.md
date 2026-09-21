@@ -5,6 +5,12 @@ Choose your bird, journey through three biomes — forest, frozen tundra, and th
 rescue stolen saplings and trapped wildlife, evolve into an overpowered bird, defeat hunters,
 and escape through the portal!
 
+#Project Made by :- 
+
+Nazifa Anjum - 230041155
+
+Anika Tahsin Rahman - 230041160
+
 ---
 
 ## 🎮 Story
